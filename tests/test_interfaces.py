@@ -69,7 +69,12 @@ def test_cloud_adapter_requires_opt_in_and_sends_only_context(monkeypatch, tmp_p
 
 
 @pytest.mark.parametrize("trained", [False, True])
-def test_qwen_uses_reference_or_checkpoint_without_cloud(enrolled, monkeypatch, trained):
+def test_qwen_uses_reference_or_checkpoint_without_cloud(enrolled, monkeypatch, trained, tmp_path):
+    scripts = tmp_path / "venv-bin"
+    scripts.mkdir()
+    (scripts / ("sox.exe" if os.name == "nt" else "sox")).write_bytes(b"test executable")
+    monkeypatch.setattr(sys, "executable", str(scripts / "python.exe"))
+    monkeypatch.setattr("yapit.speech.shutil.which", lambda name: None)
     calls = []
     model = SimpleNamespace(
         create_voice_clone_prompt=lambda **kwargs: calls.append(("prompt", kwargs)) or ["cached"],
@@ -110,6 +115,7 @@ def test_qwen_uses_reference_or_checkpoint_without_cloud(enrolled, monkeypatch, 
     assert sum(kind == "load" for kind, _ in calls) == 1
     assert sum(kind == "prompt" for kind, _ in calls) == (0 if trained else 1)
     assert sum(kind == ("trained" if trained else "clone") for kind, _ in calls) == 2
+    assert os.environ["PATH"].split(os.pathsep)[0] == str(scripts)
 
 
 def test_stdio_mcp_handshake_tools_prompt_and_path_confinement(tmp_path):

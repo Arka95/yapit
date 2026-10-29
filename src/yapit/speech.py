@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 import threading
 from contextlib import redirect_stdout
@@ -30,6 +31,10 @@ class QwenSpeech:
     def _load(self) -> None:
         if self.model is not None:
             return
+        scripts = Path(sys.executable).parent
+        sox_binary = scripts / ("sox.exe" if os.name == "nt" else "sox")
+        if shutil.which("sox") is None and sox_binary.is_file():
+            os.environ["PATH"] = str(scripts) + os.pathsep + os.environ.get("PATH", "")
         try:
             import torch
             from qwen_tts import Qwen3TTSModel

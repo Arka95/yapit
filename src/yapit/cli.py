@@ -68,6 +68,14 @@ def voice_enroll(
     )
 
 
+@app.command("enroll-app")
+def enroll_app() -> None:
+    """Open the native Windows microphone enrollment wizard."""
+    from yapit.desktop import main
+
+    main()
+
+
 @app.command()
 def prompt(
     topic: str = "",
