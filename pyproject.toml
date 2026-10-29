@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "yapit"
+version = "0.1.0"
+description = "Local personal-voice narration and vertical reel planning"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = "MIT"
+dependencies = [
+  "pydantic>=2.10,<3",
+  "numpy>=1.26,<3",
+  "soundfile>=0.13,<0.14",
+  "imageio-ffmpeg>=0.6,<0.7",
+  "Pillow>=11,<13",
+  "typer>=0.16,<1",
+  "python-dotenv>=1,<2",
+]
+
+[project.optional-dependencies]
+voice = ["qwen-tts==0.1.1", "torch>=2.6,<3"]
+cloud = ["openai>=1.100,<3"]
+mcp = ["mcp>=1.20,<2"]
+train = ["qwen-tts==0.1.1", "torch>=2.6,<3", "tensorboard>=2.19,<3"]
+dev = ["pytest>=8.3,<10", "ruff>=0.12,<1", "build>=1.2,<2", "mcp>=1.20,<2"]
+
+[project.scripts]
+yapit = "yapit.cli:app"
+yapit-mcp = "yapit.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/yapit"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

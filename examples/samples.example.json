@@ -1,0 +1,12 @@
+{
+  "samples": [
+    {
+      "audio": "recordings\\take-01.wav",
+      "text": "Replace this with the exact words you spoke in your first recording."
+    },
+    {
+      "audio": "recordings\\take-02.wav",
+      "text": "Replace this with the exact words you spoke in your second recording."
+    }
+  ]
+}

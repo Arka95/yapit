@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "yapit": {
+      "command": "C:\\projects\\yapit\\.venv\\Scripts\\yapit-mcp.exe",
+      "env": {
+        "YAPIT_WORKSPACE": "C:\\projects\\yapit\\workspace",
+        "YAPIT_DEVICE": "auto",
+        "YAPIT_ALLOW_CLOUD": "false"
+      }
+    }
+  }
+}

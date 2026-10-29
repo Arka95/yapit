@@ -1,0 +1,20 @@
+{
+  "title": "A calmer weekend plan",
+  "beats": [
+    {
+      "text": "Want a weekend away without spending half of it in transit?",
+      "visual": "Open on a packed bag and a nearby destination on a map.",
+      "pause_ms": 180
+    },
+    {
+      "text": "Pick one base, then group your stops around it.",
+      "visual": "Show a simple route with nearby stops grouped together.",
+      "pause_ms": 250
+    },
+    {
+      "text": "Leave one afternoon unplanned. That's your buffer, not wasted time.",
+      "visual": "A quiet cafe or a slow walk, then the route overview.",
+      "pause_ms": 180
+    }
+  ]
+}
