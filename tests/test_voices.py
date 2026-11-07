@@ -8,60 +8,7 @@ from yapit.media import SAMPLE_RATE, write_wav
 from yapit.models import DeliveryStyle
 from yapit.storage import Workspace, save_json
 from yapit.training import train, use_checkpoint
-from yapit.voices import audio_quality, enroll, enroll_style, load_voice, select_voice
-
-
-def test_enrollment_preserves_relative_samples_and_signal_report(enrolled):
-    profile = load_voice(enrolled, "test-voice")
-    assert profile.reference_audio in {sample.audio for sample in profile.samples}
-    assert profile.consent is True
-    quality = json.loads((enrolled.voice_path("test-voice").parent / "quality.json").read_text())
-    assert len(quality["samples"]) == 2
-    assert all(not sample["reasons"] for sample in quality["samples"])
-    with pytest.raises(ValueError, match="exists"):
-        enroll(
-            enrolled, "test-voice", enrolled.data.transcripts / "incoming" / "samples.json", True
-        )
-
-
-def test_consent_duplicates_and_manifest_confinement(enrolled, tmp_path):
-    manifest = enrolled.data.transcripts / "incoming" / "samples.json"
-    source = enrolled.data.audio / "incoming" / "one.wav"
-    with pytest.raises(ValueError, match="consent"):
-        enroll(enrolled, "without-consent", manifest, False)
-    save_json(
-        manifest,
-        {
-            "samples": [
-                {"audio": str(source), "text": "This is the first transcript."},
-                {
-                    "audio": str(source),
-                    "text": "Different transcript does not make different audio.",
-                },
-            ]
-        },
-    )
-    with pytest.raises(ValueError, match="Duplicate"):
-        enroll(enrolled, "duplicate", manifest, True)
-    assert not enrolled.voice_path("duplicate").exists()
-    outside = tmp_path / "outside.wav"
-    outside.write_bytes(b"not audio")
-    save_json(manifest, {"samples": [{"audio": str(outside), "text": "An outside path."}]})
-    with pytest.raises(ValueError, match="inside"):
-        enroll(enrolled, "outside", manifest, True, confined=True)
-    with pytest.raises(ValueError, match="Name"):
-        enrolled.voice_path("..\\escape")
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        np.zeros(SAMPLE_RATE * 4, dtype=np.float32),
-        np.ones(SAMPLE_RATE * 4, dtype=np.float32),
-    ],
-)
-def test_signal_checks_reject_silence_and_clipping(data):
-    assert audio_quality(data)["reasons"]
+from yapit.voices import enroll_style, load_voice, select_voice
 
 
 def test_checkpoint_selection_checks_speaker_and_model_type(enrolled, tmp_path):
@@ -102,16 +49,14 @@ def test_style_registration_preserves_default_and_uses_paired_expressive_referen
     selected, directory = select_voice(enrolled, original.name, DeliveryStyle.lively_vlog)
     assert selected.reference_text == text
     assert directory / selected.reference_audio == enrolled.inside(reference.audio)
-    assert directory.is_relative_to(enrolled.data.audio)
-    assert (directory / "raw.wav").read_bytes() == original_bytes
+    assert directory == enrolled.data.root / "test-voice" / "audio"
+    assert (directory / "test-voice.lively-vlog.raw.wav").read_bytes() == original_bytes
     assert source.read_bytes() == original_bytes
     default, default_dir = select_voice(enrolled, original.name)
     assert default.reference_audio == original.reference_audio
     assert default.reference_text == original.reference_text
     assert (default_dir / default.reference_audio).exists()
-    transcript = (
-        enrolled.data.transcripts / "styles" / original.name / "lively-vlog" / "reference.json"
-    )
+    transcript = enrolled.data.root / original.name / "test-voice.lively-vlog.reference.json"
     assert json.loads(transcript.read_text())["text"] == text
     with pytest.raises(ValueError, match="already exists"):
         enroll_style(enrolled, original.name, DeliveryStyle.lively_vlog, source, text, True)

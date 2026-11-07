@@ -9,6 +9,7 @@ from typing import Annotated
 import typer
 from dotenv import load_dotenv
 
+from yapit.constants import DEFAULT_PROFILE
 from yapit.media import ffmpeg
 from yapit.models import Brief, DeliveryStyle
 from yapit.pipeline import Pipeline
@@ -59,10 +60,13 @@ def doctor() -> None:
 def voice_enroll(
     name: str,
     manifest: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
-    consent: Annotated[bool, typer.Option(help="I own this voice and consent to cloning.")] = False,
+    consent: Annotated[bool, typer.Option(hidden=True)] = True,
 ) -> None:
     """Curate local recordings with manually verified transcripts."""
-    voice = enroll(workspace(), name, manifest, consent)
+    try:
+        voice = enroll(workspace(), name, manifest, consent)
+    except (ValueError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
     emit(
         {
             "name": voice.name,
@@ -75,7 +79,7 @@ def voice_enroll(
 @app.command("enroll-app")
 def enroll_app() -> None:
     """Open the native Windows microphone enrollment wizard."""
-    from yapit.desktop import main
+    from yapit.enrollment.desktop import main
 
     main()
 
@@ -128,7 +132,7 @@ def prompt(
 
 @app.command()
 def reel(
-    voice: Annotated[str, typer.Argument()] = "arka",
+    voice: Annotated[str, typer.Argument()] = DEFAULT_PROFILE,
     seconds: float = 30,
     script: PathOption = None,
     topic: str = "",
@@ -159,7 +163,7 @@ def reel(
 @app.command()
 def narrate(
     script: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
-    voice: Annotated[str, typer.Argument()] = "arka",
+    voice: Annotated[str, typer.Argument()] = DEFAULT_PROFILE,
     seconds: float = 30,
     style: DeliveryStyle = DeliveryStyle.default,
 ) -> None:

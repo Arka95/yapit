@@ -275,16 +275,17 @@ def test_cli_reports_errors(monkeypatch, tmp_path):
 @pytest.mark.parametrize("suffix", [".wav", ".mp3", ".flac"])
 def test_extract_copies_supported_audio_unchanged(tmp_path, monkeypatch, suffix):
     monkeypatch.chdir(tmp_path)
-    wav = tmp_path / "source.wav"
+    wav = tmp_path / "SOURCE.wav"
     sf.write(wav, np.zeros(24000, dtype=np.float32), 24000)
     source = wav
     if suffix != ".wav":
-        source = tmp_path / f"source{suffix}"
+        source = tmp_path / f"SOURCE{suffix}"
         run_media(["-y", "-i", str(wav), str(source)])
     result = extract_audio(source)
     output = Path(result["audio"])
     assert result["action"] == "copied"
     assert output.parent == tmp_path / "data" / "audio"
+    assert output.name == f"arka.source{suffix}"
     assert output.read_bytes() == source.read_bytes()
     with pytest.raises(ValueError, match="already exists"):
         extract_audio(source)
@@ -385,7 +386,7 @@ def test_transcript_command_and_extract_command_are_registered(monkeypatch, tmp_
 
 def test_default_transcript_store_and_canonical_audio_reuse(tmp_path):
     data = DataStore()
-    source = data.audio / "input.wav"
+    source = data.audio / "arka.input.wav"
     sf.write(source, np.zeros(16000 * 5, dtype=np.float32), 16000)
     result = transcribe(source, backend=SimpleNamespace(recognize=lambda _: segments_at(5)))
     assert Path(result["directory"]).is_relative_to(data.transcripts)

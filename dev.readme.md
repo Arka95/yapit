@@ -226,20 +226,22 @@ checkpoint takes precedence over `YAPIT_MODEL`.
 `models.py` contains Pydantic contracts for briefs, scripts, voices, and
 continuous timelines, rejecting unknown fields and invalid values.
 
-**Native enrollment UI.** `desktop.py` is a Windows Tkinter/ttk wizard with
+**Native enrollment UI.** `enrollment\desktop.py` is a Windows Tkinter/ttk wizard with
 playback through `winsound`. Blocking work runs in worker threads; results return
-through a queue polled by Tk's event loop. `enrollment.py` discovers DirectShow
+through a queue polled by Tk's event loop. `enrollment\recorder.py` discovers DirectShow
 microphones and captures mono 24 kHz WAVs through an FFmpeg subprocess. Record
 opens the microphone; Stop sends FFmpeg `q` so it can finalize the file.
 Capture has a 20-second limit and is never started just by opening the app.
 
 **Enrollment state and curation.** `EnrollmentSession` saves each accepted take
-against the exact displayed passage, with resumable state in `session.json`
-and a manifest in `samples.json`. Raw takes remain intact; optional preparation
+against the exact displayed static passage, with resumable state in
+`<profile>.session.json`, an inventory in `<profile>.journal.json`, and a manifest
+in `<profile>.samples.json`. Five accepted samples make a profile usable; more can
+be added later. There is no consent checkbox. Raw takes remain intact; optional preparation
 trims outer silence and applies constant gain to a separate file.
-`voices.py` checks duration, clipping, loudness, quiet frames, and duplicates,
+`enrollment\profiles.py` checks duration, clipping, loudness, quiet frames, and duplicates,
 preserves original clips and copies accepted mono 24 kHz samples into
-`data\audio\voices\<alias>`, estimates
+`data\<profile>\audio`, estimates
 speaking rate, and ranks one reference by signal characteristics. These checks
 are not transcription, speaker verification, or proof of a noise-free sample.
 
@@ -282,7 +284,12 @@ metadata folder, not a private run folder; use `name`, `status_file`, and return
 artifact paths. MCP paths are resolved
 and confined to the workspace or data root; CLI manifests may intentionally refer
 to external local recordings, which are preserved in the canonical audio store.
-Completed aliases are not overwritten. Generation has no durable job queue or
+Profile creation reuses lowercase names; imports merge and replace matching
+filenames. `constants.py` defines the unified data filename template and default
+profile; `storage.data_filename` normalizes filenames to lowercase. Enrollment has
+its own [README](src/yapit/enrollment/README.md),
+[developer guide](src/yapit/enrollment/dev.readme.md), and local tests.
+Generation has no durable job queue or
 cross-process GPU lock, so do not run competing model-heavy processes on the
 same constrained device.
 
@@ -294,29 +301,30 @@ directories, MCP clients, and WSL.
 
 | Location beneath the data root | Content |
 |---|---|
-| `audio\enrollment\<alias>` | Raw microphone takes and prepared recording copies |
-| `audio\voices\<alias>` | Curated reference WAVs and original imported clips in `raw` |
+| `<profile>\audio\<profile>.audio_sample_<number>.wav` | Prepared static-passage recordings |
+| `<profile>\audio\<profile>.<source>.*` | Imported recordings, raw takes and delivery references |
 | `audio\imports` | Archived external inputs; video soundtrack extraction |
-| `transcripts\enrollment\<alias>` | Draft state, sample manifests and take reports |
-| `transcripts\voices\<alias>` | Curated audio/text sample manifest |
+| `<profile>\<profile>.session.json` / `.samples.json` / `.journal.json` | Draft state, exact sample manifests and inventory |
+| `<profile>\<profile>.profile.json` / `.quality.json` | Usable voice profile and signal-quality reports |
 | `transcripts\<profile>.<source>.script.json` / `.transcript.json` | Recognition scripts and sidecars |
 | `transcripts\<name>.script.json` / `.captions.srt` | Rendering script and captions |
 | `transcripts\<name>.train.jsonl` / `.holdout.jsonl` / `.train_codes.jsonl` | Training text and codec records |
 | `generated_audio\<name>.wav` / `.mp3` / `.raw.wav` / `.fitted.wav` | Final audio and intermediates |
 
-Under `YAPIT_WORKSPACE`, `voices\<alias>` retains `profile.json` and
-`quality.json`; flat `outputs\<name>.*` files hold prompts/frames, timelines,
+Under `YAPIT_WORKSPACE`, legacy `voices\<alias>` profiles remain readable;
+new profiles are stored under `data\<profile>`. Flat `outputs\<name>.*` files hold prompts/frames, timelines,
 provenance, status, guides and logs. Model checkpoints retain the upstream-required
-directory structure beneath `voices\<alias>\checkpoints\<readable-name>`.
+directory structure beneath the selected profile's `checkpoints\<readable-name>`.
 Profiles and draft
 state necessarily embed reference text as metadata; standalone transcript/script
 exports use the transcript store. No new recording or generated WAV/MP3 is saved
 in the workspace. An enrollment draft is not usable for
 generation until **Finish enrollment** creates its voice profile.
 
-Legacy profiles fall back to their original workspace clip directories. Old
-drafts are loaded into canonical transcript state and continue with new takes
-in the audio store; existing files are not moved or deleted. Rescript output
+Legacy profiles fall back to their original workspace clip directories or old
+shared audio directories. Old drafts are loaded into profile-local state and
+continue with new takes under `data\<profile>\audio`; existing files are not
+deleted. Successfully merged profiles use the new layout. Rescript output
 overrides must remain in their appropriate bucket; transcript `--output` must be
 the transcript root, not a new child directory.
 Externally supplied recordings are archived without modifying the source.
@@ -421,7 +429,8 @@ Tk wizard workflow with a fake recorder; they do not capture your microphone.
 Passing these tests does not establish real-model pronunciation or voice quality.
 
 Keep changes focused and preserve the common pipeline, schemas, duration
-checks, explicit consent, workspace/data confinement, and existing-alias protection.
+checks, exact transcript pairing, workspace/data confinement, and filename-based
+profile merging. Do not create duplicate profiles when adding recordings.
 Add focused tests for changed behavior; do not weaken quality gates to make a
 recording pass. For speech changes, also render with a consenting enrolled voice
 and listen to held-out phrases before claiming a voice-quality improvement.

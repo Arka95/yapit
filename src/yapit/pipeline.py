@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
+from yapit.constants import DEFAULT_PROFILE
 from yapit.media import (
     SAMPLE_RATE,
     decode_audio,
@@ -26,7 +27,9 @@ class Pipeline:
     def __init__(self, workspace: Workspace):
         self.workspace = workspace
 
-    def prompt(self, brief: Brief, media: Path | None = None, profile: str = "arka") -> dict:
+    def prompt(
+        self, brief: Brief, media: Path | None = None, profile: str = DEFAULT_PROFILE
+    ) -> dict:
         if not brief.topic and media is None:
             raise ValueError("Provide a topic or a local image/video.")
         job = self.workspace.output(media.stem if media else brief.topic, profile)
@@ -50,7 +53,7 @@ class Pipeline:
     def reel(
         self,
         brief: Brief,
-        voice_name: str = "arka",
+        voice_name: str = DEFAULT_PROFILE,
         script: Script | None = None,
         media: Path | None = None,
         auto_script: bool = False,

@@ -6,13 +6,13 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from conftest import tone
 
 from yapit.enrollment import (
     EnrollmentSession,
     MicrophoneRecorder,
     Reading,
 )
+from yapit.enrollment.tests.conftest import tone
 from yapit.media import SAMPLE_RATE, decode_audio, ffmpeg, write_wav
 from yapit.storage import Workspace, save_json
 from yapit.voices import load_voice
@@ -21,13 +21,11 @@ from yapit.voices import load_voice
 @pytest.fixture
 def session(tmp_path, monkeypatch):
     readings = [
-        Reading(title="First passage", text="Read this first short passage at a natural pace."),
-        Reading(
-            title="Second passage", text="Read this second passage with a clear and relaxed voice."
-        ),
+        Reading(title=f"Passage {index}", text=f"Read passage {index} at a natural pace.")
+        for index in range(1, 7)
     ]
-    monkeypatch.setattr("yapit.enrollment.READINGS", readings)
-    return EnrollmentSession(Workspace(tmp_path / "workspace"), "my-voice", consent=True)
+    monkeypatch.setattr("yapit.enrollment.session.load_readings", lambda: readings)
+    return EnrollmentSession(Workspace(tmp_path / "workspace"), "my-voice")
 
 
 def take(session, seconds=4, frequency=200, volume=1):
@@ -36,13 +34,10 @@ def take(session, seconds=4, frequency=200, volume=1):
     return path
 
 
-def test_alias_consent_and_no_overwrite_guards(enrolled):
-    with pytest.raises(ValueError, match="consent"):
-        EnrollmentSession(enrolled, "new-alias", consent=False)
-    with pytest.raises(ValueError, match="already enrolled"):
-        EnrollmentSession(enrolled, "test-voice", consent=True)
+def test_existing_profile_opens_without_consent_and_alias_escape_rejected(enrolled):
+    assert EnrollmentSession(enrolled, "TEST-VOICE").ready
     with pytest.raises(ValueError, match="Name"):
-        EnrollmentSession(enrolled, "..\\escape", consent=True)
+        EnrollmentSession(enrolled, "..\\escape")
 
 
 def test_saved_text_resume_and_final_enrollment(session):
@@ -52,28 +47,29 @@ def test_saved_text_resume_and_final_enrollment(session):
         session.save_take(raw, confirmed=False, normalize=True)
     first = session.save_take(raw, confirmed=True, normalize=True)
     assert first["quality"]["reasons"] == []
-    assert raw.is_relative_to(session.workspace.data.audio)
-    assert session.folder.is_relative_to(session.workspace.data.transcripts)
+    assert raw.is_relative_to(session.workspace.data.root / session.alias / "audio")
+    assert session.folder == session.workspace.data.root / session.alias
     assert raw.read_bytes() == original
-    resumed = EnrollmentSession(session.workspace, session.alias, consent=True)
+    resumed = EnrollmentSession(session.workspace, session.alias)
     assert resumed.index == 1
     assert resumed.draft.samples[0].text == resumed.draft.readings[0].text
-    assert len(json.loads((resumed.folder / "samples.json").read_text())["samples"]) == 1
-    with pytest.raises(ValueError, match="every passage"):
+    assert len(json.loads((resumed.folder / "my-voice.samples.json").read_text())["samples"]) == 1
+    with pytest.raises(ValueError, match="at least 5"):
         resumed.finish()
-    resumed.save_take(take(resumed, frequency=260), confirmed=True, normalize=True)
-    assert resumed.finished
+    for index in range(1, 5):
+        resumed.save_take(take(resumed, frequency=200 + index * 30), True, True)
+    assert resumed.ready
+    assert not resumed.finished
     voice = resumed.finish()
     assert voice.name == "my-voice"
-    assert len(voice.samples) == 2
+    assert len(voice.samples) == 5
     audio_folder = session.workspace.voice_audio_dir(voice.name)
-    assert audio_folder.is_relative_to(session.workspace.data.audio)
+    assert audio_folder == session.folder / "audio"
     assert all((audio_folder / sample.audio).exists() for sample in voice.samples)
-    assert len(list((audio_folder / "raw").glob("*.wav"))) == 2
-    assert (session.workspace.data.transcripts / "voices" / voice.name / "samples.json").is_file()
+    assert len(list(audio_folder.glob("*.raw.*.wav"))) == 5
+    assert (session.folder / "my-voice.samples.json").is_file()
     assert load_voice(session.workspace, voice.name).consent
-    with pytest.raises(ValueError, match="already enrolled"):
-        EnrollmentSession(session.workspace, voice.name, consent=True)
+    assert EnrollmentSession(session.workspace, voice.name).ready
 
 
 def test_legacy_draft_resumes_without_moving_original_recordings(session):
@@ -87,11 +83,11 @@ def test_legacy_draft_resumes_without_moving_original_recordings(session):
     save_json(legacy / "session.json", draft)
     original = old_audio.read_bytes()
     session.path.unlink()
-    resumed = EnrollmentSession(session.workspace, session.alias, consent=True)
+    resumed = EnrollmentSession(session.workspace, session.alias)
     assert resumed.index == 1
     assert resumed.draft.samples[0].audio == str(old_audio)
-    assert resumed.path.is_relative_to(session.workspace.data.transcripts)
-    assert resumed.new_take().is_relative_to(session.workspace.data.audio)
+    assert resumed.path.is_relative_to(session.workspace.data.root / session.alias)
+    assert resumed.new_take().is_relative_to(session.audio_folder)
     assert old_audio.read_bytes() == original
     assert (legacy / "session.json").exists()
 
@@ -168,7 +164,7 @@ def test_record_stop_flushes_real_wav_without_accessing_a_microphone(session, mo
             **kwargs,
         )
 
-    monkeypatch.setattr("yapit.enrollment.subprocess.Popen", synthetic_capture)
+    monkeypatch.setattr("yapit.enrollment.recorder.subprocess.Popen", synthetic_capture)
     recorder = MicrophoneRecorder()
     output = session.new_take()
     recorder.start("Test device; never opened", output)
@@ -188,9 +184,9 @@ def test_record_stop_flushes_real_wav_without_accessing_a_microphone(session, mo
 def test_real_tk_wizard_advances_after_saving_without_opening_microphone(session, monkeypatch):
     import tkinter as tk
 
-    from yapit.desktop import EnrollmentApp
+    from yapit.enrollment.desktop import EnrollmentApp
 
-    monkeypatch.setattr("yapit.desktop.microphone_devices", lambda: ["Test microphone"])
+    monkeypatch.setattr("yapit.enrollment.desktop.microphone_devices", lambda: ["Test microphone"])
     root = tk.Tk()
     root.withdraw()
     app = EnrollmentApp(root, session.workspace)
@@ -198,11 +194,11 @@ def test_real_tk_wizard_advances_after_saving_without_opening_microphone(session
     playback = []
     notices = []
     monkeypatch.setattr(
-        "yapit.desktop.messagebox.showerror",
+        "yapit.enrollment.desktop.messagebox.showerror",
         lambda *args, **kwargs: errors.append(args),
     )
     monkeypatch.setattr(
-        "yapit.desktop.messagebox.showinfo",
+        "yapit.enrollment.desktop.messagebox.showinfo",
         lambda *args, **kwargs: notices.append(args),
     )
     monkeypatch.setattr("winsound.PlaySound", lambda *args: playback.append(args))
@@ -237,9 +233,9 @@ def test_real_tk_wizard_advances_after_saving_without_opening_microphone(session
     try:
         pump_until(lambda: not app.busy)
         app.alias.set(session.alias)
-        app.consent.set(True)
         app.open_button.invoke()
-        assert "passage 1 of 2" in app.heading.get()
+        assert not hasattr(app, "consent_check")
+        assert "passage 1 of 6" in app.heading.get()
         assert app.passage.get("1.0", "end").strip() == session.draft.readings[0].text
         assert app.recorder.count == 0
         app.record_button.invoke()
@@ -254,25 +250,35 @@ def test_real_tk_wizard_advances_after_saving_without_opening_microphone(session
         app.save_button.invoke()
         pump_until(lambda: not app.busy)
         assert not errors
-        assert "passage 2 of 2" in app.heading.get()
+        assert "passage 2 of 6" in app.heading.get()
         assert app.take is None
         assert not app.confirmed.get()
         assert json.loads(app.session.path.read_text())["samples"][0]["text"] == (
             session.draft.readings[0].text
         )
-        app.record_button.invoke()
-        app.stop_button.invoke()
-        pump_until(lambda: not app.busy)
-        app.confirmed.set(True)
-        app.refresh_controls()
-        app.save_button.invoke()
-        pump_until(lambda: not app.busy)
+        assert str(app.finish_button["state"]) == "disabled"
+        for _ in range(4):
+            app.record_button.invoke()
+            app.stop_button.invoke()
+            pump_until(lambda: not app.busy)
+            app.confirmed.set(True)
+            app.refresh_controls()
+            app.save_button.invoke()
+            pump_until(lambda: not app.busy)
         app.finish_button.invoke()
         pump_until(lambda: not app.busy)
         assert not errors
         assert notices
         assert app.session.draft.completed
         assert session.workspace.voice_path(session.alias).exists()
+        app.alias.set("MY-VOICE")
+        app.open_button.invoke()
+        assert app.alias.get() == "my-voice"
+        assert app.alias_entry["values"] == ("my-voice",)
+        app.reading_picker.current(0)
+        app.select_reading()
+        assert "passage 1 of 6" in app.heading.get()
+        assert str(app.record_button["state"]) == "normal"
     finally:
         app.stop_playback()
         root.destroy()

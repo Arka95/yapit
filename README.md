@@ -115,23 +115,27 @@ Double-click **`Start Enrollment.cmd`**, or run:
 .\.venv\Scripts\yapit enroll-app
 ```
 
-1. Choose a new voice alias, such as `my-voice`, select your microphone, confirm
-   consent, and click **Open / resume alias**.
+1. Create or select a voice profile, such as `arka`, choose your microphone,
+   and click **Create / open profile**. There is no consent checkbox.
 2. Read the displayed passage naturally: **Record -> Stop -> Play take**.
 3. Confirm that you read the text exactly, then click **Save & Next**.
-4. Repeat for all 12 passages, then click **Finish enrollment**.
+4. Save at least **five distinct samples**, then click **Finish enrollment**.
+   The 16 shared static passages are under `src\yapit\enrollment\sampleScripts`;
+   recording the full baseline is recommended, not required.
 
 Aim for 8-15 seconds per passage; recording stops at 20 seconds. Retake a passage
 if you miss words or hear noise. Optional normalization and outer-silence trimming
 preserve the original recording. Unusable signal levels, clipping, excessive
 silence, and duplicate recordings are rejected.
 
-Saved passages resume when you reopen the same unfinished alias. Recordings live
-under `data\audio\enrollment\<alias>` and draft transcripts under
-`data\transcripts\enrollment\<alias>`. Completed profiles live under
-`workspace\voices\<alias>`, with their clips in `data\audio\voices\<alias>`.
-Existing enrolled aliases cannot be overwritten:
-use a new name such as `my-voice-v2`.
+Reopen the same profile to add recordings or select a saved passage to replace
+its audio. Names are always lowercase; `ARKA` and `arka` are one profile.
+Recordings live under `data\<profile>\audio`, with profile metadata, session
+state, manifests and journals under `data\<profile>`. Files use the shared
+`<profile>.<name>.<extension>` format defined in `src\yapit\constants.py`, for example
+`arka.audio_sample_1.wav` and `arka.journal.json`. Imports merge by normalized
+filename and overwrite matching files; they do not create duplicate profiles.
+Legacy recordings are not deleted.
 
 The app is Windows-only and local-only. It needs no speech model or API key,
 and accesses your microphone only after you press **Record**.
@@ -142,17 +146,23 @@ Copy `examples\samples.example.json`, replace the audio paths and exact
 transcripts, then enroll:
 
 ```powershell
-.\.venv\Scripts\yapit voice-enroll my-voice --manifest .\my-samples.json --consent
+.\.venv\Scripts\yapit voice-enroll my-voice --manifest .\my-samples.json
 ```
 
-Paths are relative to the manifest. Use complete 3-20 second clips with one
+The combined profile needs at least five distinct recordings. Paths are relative
+to the manifest. Use complete 3-20 second clips with one
 speaker, a quiet room, consistent microphone placement, and no music or clipping.
 Listen to every clip and check its transcript yourself.
 
 **Enrollment is reference-based voice cloning, not model training.** YapIt keeps
 your samples and selects one reference for narration; it does not combine them
 into an automatically trained voice. Signal checks cannot verify identity,
-consent, background music, or transcript accuracy. Enroll only your own voice.
+background music, or transcript accuracy.
+
+Enrollment is a CPU-only, zero-model module with its own UI, CLI, static scripts,
+and tests. See [the module README](src/yapit/enrollment/README.md) and
+[developer README](src/yapit/enrollment/dev.readme.md). Standalone entry point:
+`python -m yapit.enrollment enroll-app`.
 
 ### Expressive narration from your own delivery
 

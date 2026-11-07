@@ -7,8 +7,9 @@ from pathlib import Path
 
 import soundfile as sf
 
+from yapit.constants import DEFAULT_PROFILE
 from yapit.media import SAMPLE_RATE, run_media
-from yapit.storage import DataStore
+from yapit.storage import DataStore, data_filename
 
 # These audio containers can be passed straight to YapIt's FFmpeg decoder.
 SUPPORTED_AUDIO = {
@@ -33,7 +34,9 @@ def has_video(stderr: bytes) -> bool:
     )
 
 
-def extract_audio(media: Path, *, output_dir: Path | None = None) -> dict:
+def extract_audio(
+    media: Path, *, output_dir: Path | None = None, profile: str = DEFAULT_PROFILE
+) -> dict:
     source = media.resolve()
     if not source.is_file():
         raise ValueError(f"Media file not found: {source}")
@@ -70,7 +73,7 @@ def extract_audio(media: Path, *, output_dir: Path | None = None) -> dict:
             raise ValueError("Cannot extract audio: the audio stream is empty.")
         video = has_video(result.stderr)
         copy_original = not video and source.suffix.lower() in SUPPORTED_AUDIO
-        name = source.name if copy_original else f"{source.stem}.wav"
+        name = data_filename(source.stem, profile, source.suffix if copy_original else ".wav")
         destination = folder / name
         if copy_original and destination == source:
             return {

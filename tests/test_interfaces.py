@@ -218,12 +218,15 @@ def test_stdio_mcp_handshake_tools_prompt_and_path_confinement(tmp_path):
                     assert not status.isError
                     assert json.loads(status.content[0].text)["status"] == "awaiting_script"
                     data = DataStore()
-                    sample = data.audio / "mcp-sample.wav"
-                    write_wav(sample, tone(4))
+                    samples = []
+                    for index in range(5):
+                        sample = data.audio / f"mcp-sample-{index}.wav"
+                        write_wav(sample, tone(4, 180 + 30 * index))
+                        samples.append({"audio": str(sample), "text": f"Clear passage {index}."})
                     manifest = data.transcripts / "mcp-samples.json"
                     save_json(
                         manifest,
-                        {"samples": [{"audio": str(sample), "text": "A clear test recording."}]},
+                        {"samples": samples},
                     )
                     enrolled = await session.call_tool(
                         "enroll_voice",

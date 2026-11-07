@@ -26,6 +26,11 @@ def enrolled(tmp_path: Path) -> Workspace:
     incoming.mkdir(parents=True)
     write_wav(incoming / "one.wav", tone(4))
     write_wav(incoming / "two.wav", tone(5, 210))
+    extra = []
+    for index in range(3):
+        path = incoming / f"extra-{index}.wav"
+        write_wav(path, tone(4, 240 + index * 30))
+        extra.append({"audio": str(path), "text": f"A clear additional passage {index}."})
     manifest = workspace.data.transcripts / "incoming" / "samples.json"
     save_json(
         manifest,
@@ -39,6 +44,7 @@ def enrolled(tmp_path: Path) -> Workspace:
                     "audio": str(incoming / "two.wav"),
                     "text": "A second sentence with a slightly different expressive delivery.",
                 },
+                *extra,
             ]
         },
     )

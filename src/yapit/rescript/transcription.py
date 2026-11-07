@@ -12,6 +12,7 @@ from typing import Annotated, Protocol
 import soundfile as sf
 from pydantic import Field, ValidationError, model_validator
 
+from yapit.constants import DEFAULT_PROFILE
 from yapit.media import run_media
 from yapit.models import Beat, Model, Script
 from yapit.rescript.audio import extract_audio, has_video
@@ -183,7 +184,7 @@ def transcribe(
     language: str = "en",
     offline: bool = False,
     backend: TranscriptionBackend | None = None,
-    profile: str = "arka",
+    profile: str = DEFAULT_PROFILE,
 ) -> dict:
     source = media.resolve()
     if not source.is_file():
@@ -223,10 +224,12 @@ def transcribe(
             raise ValueError("Audio must be nonempty and at most one hour; no truncation allowed.")
         if has_video(decoded.stderr):
             archived = Path(
-                extract_audio(source, output_dir=data.audio / "imports" / uuid.uuid4().hex)["audio"]
+                extract_audio(
+                    source, output_dir=data.audio / "imports" / uuid.uuid4().hex, profile=profile
+                )["audio"]
             )
         else:
-            archived = data.archive_recording(source)
+            archived = data.archive_recording(source, profile)
         segments = recognizer.recognize(audio)
         if any(segment.end > info.duration + 0.1 for segment in segments):
             raise ValueError("Transcript timestamps extend past the decoded audio.")

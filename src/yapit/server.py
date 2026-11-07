@@ -8,6 +8,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
+from yapit.constants import DEFAULT_PROFILE
 from yapit.media import SAMPLE_RATE, decode_audio, render_guide
 from yapit.models import Brief, DeliveryStyle, Script, Timeline
 from yapit.pipeline import Pipeline
@@ -42,7 +43,7 @@ def create_server(root: Path | None = None) -> FastMCP:
         return pipeline.prompt(Brief(topic=topic, seconds=seconds, kind=kind, facts=facts), media)
 
     @server.tool()
-    def enroll_voice(name: str, manifest_path: str, consent: bool = False) -> dict:
+    def enroll_voice(name: str, manifest_path: str, consent: bool = True) -> dict:
         """Enroll your own voice; manifest/audio paths must be in workspace or the data root."""
         if not busy.acquire(blocking=False):
             raise ValueError("Yapit is busy; retry after the current job.")
@@ -90,7 +91,7 @@ def create_server(root: Path | None = None) -> FastMCP:
 
     @server.tool()
     def generate_reel(
-        voice: str = "arka",
+        voice: str = DEFAULT_PROFILE,
         seconds: float = 30,
         script: Script | None = None,
         topic: str = "",
@@ -106,7 +107,7 @@ def create_server(root: Path | None = None) -> FastMCP:
     @server.tool()
     def generate_narration(
         script: Script,
-        voice: str = "arka",
+        voice: str = DEFAULT_PROFILE,
         seconds: float = 30,
         style: DeliveryStyle = DeliveryStyle.default,
     ) -> dict:

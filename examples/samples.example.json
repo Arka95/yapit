@@ -7,6 +7,18 @@
     {
       "audio": "recordings\\take-02.wav",
       "text": "Replace this with the exact words you spoke in your second recording."
+    },
+    {
+      "audio": "recordings\\take-03.wav",
+      "text": "Replace this with the exact words you spoke in your third recording."
+    },
+    {
+      "audio": "recordings\\take-04.wav",
+      "text": "Replace this with the exact words you spoke in your fourth recording."
+    },
+    {
+      "audio": "recordings\\take-05.wav",
+      "text": "Replace this with the exact words you spoke in your fifth recording."
     }
   ]
 }

@@ -10,6 +10,8 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from yapit.constants import DATA_FILENAME_TEMPLATE, DEFAULT_PROFILE
+
 
 def save_json(path: Path, value: BaseModel | dict | list) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -38,6 +40,16 @@ def safe_name(name: str) -> str:
     return name
 
 
+def data_filename(source: str, profile: str = DEFAULT_PROFILE, suffix: str = "") -> str:
+    profile = safe_name(profile.strip().lower())
+    stem = re.sub(r"[^a-z0-9._-]+", "_", source.lower()).strip("._-")[:140] or "narration"
+    stem = stem.removeprefix(f"{profile}.") or "narration"
+    suffix = suffix.lower()
+    if suffix and not re.fullmatch(r"\.[a-z0-9][a-z0-9._-]*", suffix):
+        raise ValueError("Invalid data filename extension.")
+    return DATA_FILENAME_TEMPLATE.format(profile=profile, name=stem, suffix=suffix)
+
+
 def reserve_artifact_name(
     source: str,
     profile: str,
@@ -45,10 +57,7 @@ def reserve_artifact_name(
     reservation: Path,
     suffix: str,
 ) -> str:
-    stem = re.sub(r"[^a-zA-Z0-9._-]+", "_", source).strip("._-")[:140] or "narration"
-    profile = safe_name(profile)
-    stem = stem.removeprefix(f"{profile}.") or "narration"
-    base = f"{profile}.{stem}"
+    base = data_filename(source, profile)
     reservation.mkdir(parents=True, exist_ok=True)
     number = 0
     while True:
@@ -78,7 +87,7 @@ class OutputArtifacts:
         )
 
     def path(self, suffix: str, directory: Path | None = None) -> Path:
-        return (directory or self.metadata) / f"{self.name}.{suffix}"
+        return (directory or self.metadata) / f"{self.name}.{suffix.lower()}"
 
 
 class Workspace:
@@ -97,12 +106,25 @@ class Workspace:
         return path
 
     def voice_path(self, name: str) -> Path:
-        return self.inside(Path("voices") / safe_name(name) / "profile.json", exists=False)
+        folder = self.profile_dir(name)
+        canonical = folder / data_filename("profile", folder.name, ".json")
+        legacy = self.inside(Path("voices") / safe_name(name) / "profile.json", exists=False)
+        return canonical if canonical.exists() or not legacy.exists() else legacy
 
-    def output(self, source: str, profile: str = "arka") -> OutputArtifacts:
+    def profile_dir(self, name: str) -> Path:
+        name = safe_name(name.strip()).lower()
+        if name in {"audio", "transcripts", "generated_audio"}:
+            raise ValueError("Profile name conflicts with a shared data directory.")
+        return self.inside(self.data.root / name, exists=False)
+
+    def output(self, source: str, profile: str = DEFAULT_PROFILE) -> OutputArtifacts:
         return OutputArtifacts(self, source, profile)
 
     def voice_audio_dir(self, name: str) -> Path:
+        canonical = self.profile_dir(name) / "audio"
+        folder = self.profile_dir(name)
+        if (folder / data_filename("profile", folder.name, ".json")).exists():
+            return canonical
         directory = self.data.audio / "voices" / safe_name(name)
         return directory if directory.exists() else self.voice_path(name).parent
 
@@ -127,12 +149,14 @@ class DataStore:
             raise ValueError(f"Output must stay inside {directory}.")
         return path
 
-    def archive_recording(self, source: Path) -> Path:
+    def archive_recording(self, source: Path, profile: str = DEFAULT_PROFILE) -> Path:
         source = source.resolve()
         if source.is_relative_to(self.audio) or source.is_relative_to(self.generated_audio):
             return source
         digest = hashlib.sha256(source.read_bytes()).hexdigest()
-        target = self.audio / "imports" / digest / source.name
+        target = (
+            self.audio / "imports" / digest / data_filename(source.stem, profile, source.suffix)
+        )
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists():
             if hashlib.sha256(target.read_bytes()).hexdigest() != digest:

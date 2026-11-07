@@ -1,8 +1,18 @@
 # YapIt library boundaries and dependency plan
 
-Status: proposal for owner review; no module moves or package split implemented.
+Status: the model-free enrollment module is implemented; the remaining library
+split is a proposal for owner review.
 Inventory date: November 7, 2026. The CosyVoice setup/trial is independent background
 work, not a prerequisite for choosing these boundaries.
+
+Enrollment now owns its UI, static `sampleScripts`, profile/sample management and
+tests under `src\yapit\enrollment`. Profiles require five accepted recordings,
+use `data\<profile>\audio` plus profile-local metadata, and merge matching filenames.
+Lowercase data naming is centralized in `constants.py` and `storage.data_filename`.
+Evidence: `src\yapit\enrollment\session.py:46`;
+`src\yapit\enrollment\profiles.py:107`; `src\yapit\constants.py:1-3`;
+`src\yapit\storage.py:43-50`. The detailed provider-splitting proposal below remains
+unimplemented.
 
 ## Problem Statement
 
@@ -36,7 +46,7 @@ Evidence: `src\yapit\scripts.py:29-71`; `src\yapit\speech.py:31-95`;
 | Load/validate text or Script JSON | `scripts.load_script`, `models.Script` | No | CPU; no model |
 | Build a reusable script prompt | `scripts.build_prompt` | No | CPU template/schema/word-budget composition; another tool may subsequently use the prompt |
 | Automatically write a script | `scripts.generate_script` | **Yes, when chosen** | OpenAI request with brief and optional sampled image frames; explicitly cloud-gated |
-| Enroll/curate a voice or labeled style | `voices`, `enrollment`, `desktop` | No | CPU recording, FFmpeg, NumPy signal checks and profile storage; not training |
+| Enroll/curate a voice or labeled style | `enrollment.profiles`, `enrollment.session`, `enrollment.desktop`; style adapter in `voices` | No | CPU recording, FFmpeg, NumPy signal checks and profile storage; not training |
 | Synthesize the enrolled voice | `speech.QwenSpeech` | No hosted API | Local Qwen model; CPU supported, CUDA preferred for the intended workflow |
 | Fit/encode audio | `media.fit_audio`, `encode_mp3` | No | CPU FFmpeg; standard pipeline applies existing duration/stretching gates |
 | Build timelines/captions/edit guides | `timeline`, `media.render_guide` | No | CPU NumPy/Pillow/FFmpeg; current guide encoder is `libx264`, not a configured GPU encoder |
@@ -48,9 +58,9 @@ Inventory evidence:
 `src\yapit\rescript\audio.py:14-103`;
 `src\yapit\rescript\transcription.py:40-274`;
 `src\yapit\scripts.py:12-71`;
-`src\yapit\voices.py:16-251`;
-`src\yapit\enrollment.py:103-346`;
-`src\yapit\desktop.py:19-51`;
+`src\yapit\enrollment\profiles.py:18-198`;
+`src\yapit\enrollment\session.py:46`;
+`src\yapit\enrollment\desktop.py:25`;
 `src\yapit\speech.py:31-95`;
 `src\yapit\media.py:18-257`;
 `src\yapit\timeline.py:11-68`;
@@ -330,9 +340,10 @@ publication timing and the first extraction are subject to owner review.
 | 5. Thin application workflows and host adapters | 1-2 weeks | 2, 3, 4 | Storage/defaults/permissions owned by YapIt; existing CLI/MCP behavior preserved |
 | 6. Package and release only reusable boundaries | 1 week | 5 | Clean-environment wheel/import smoke tests; separate optional training; no unused public packages |
 
-No source refactor is authorized by writing this proposal. Recommended first step
-after review: deterministic contracts/media/transcript extraction, not training
-or adding another model.
+Writing this proposal did not authorize the remaining provider/package split.
+The owner subsequently authorized the enrollment-module refactor described above.
+Recommended next step after review: deterministic contracts/media/transcript
+extraction, not training or adding another model.
 
 ## Reference Links
 
@@ -343,12 +354,12 @@ or adding another model.
 - Deterministic vs hosted script generation: `src\yapit\scripts.py:12-71`.
 - Local synthesis and protocol: `src\yapit\speech.py:19-95`.
 - Media/timeline: `src\yapit\media.py:18-257`; `src\yapit\timeline.py:11-68`.
-- Enrollment/reference selection: `src\yapit\voices.py:16-251`;
-  `src\yapit\enrollment.py:103-346`.
+- Enrollment/reference selection: `src\yapit\enrollment\profiles.py:18-198`;
+  `src\yapit\enrollment\session.py:46`; `src\yapit\enrollment\README.md`.
 - Orchestration/storage/hosted permission: `src\yapit\pipeline.py:25-164`;
   `src\yapit\storage.py:14-157`.
 - Interfaces: `src\yapit\cli.py:23-198`; `src\yapit\server.py:18-167`;
-  `src\yapit\desktop.py:19-51`.
+  `src\yapit\enrollment\desktop.py:25`.
 - Training prerequisites: `src\yapit\training.py:16-175`.
 - Experimental Cosy runtime: `requirements-cosyvoice.txt`;
   `scripts\cosyvoice-trial.py`. Separate from production backend selection.
