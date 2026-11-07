@@ -253,7 +253,7 @@ requiring Torch/device discovery for all media actions.
 `scripts\run-mode.py:23-56`; `src\rescript\audio.py:36-103`.
 
 Keep canonical storage/default profile/numeric duplicate handling in YapIt:
-`data\audio`, `data\transcripts`, `data\generated_audio`, flat run metadata and
+`data\audio`, `data\transcripts`, `data\generated_audio`, `data\generated_video`, flat run metadata and
 `<profile>.<source>` names with default `arka`. Libraries receive explicit paths;
 they must not enforce this particular application's folders or default speaker.
 Do not migrate old files or change standard narration duration behavior as a

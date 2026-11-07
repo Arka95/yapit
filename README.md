@@ -51,7 +51,7 @@ CPU mode explicitly selects CPU, regardless of the shared `.env`. Switch per com
 ```
 
 Rescript uses CPU/int8 or GPU/float16 in the selected mode. Both modes share
-`data\audio`, `data\transcripts`, `data\generated_audio`, workspace metadata,
+`data\audio`, `data\transcripts`, `data\generated_audio`, `data\generated_video`, workspace metadata,
 and reusable model assets under `models` (`YAPIT_MODELS_DIR`), with the shared
 SDK cache under `models\hub`; setup does not download model weights.
 The launcher changes only the child process environment and runs from the checkout.
@@ -290,7 +290,7 @@ An existing related artifact can also reserve a name. For example:
 | `data\generated_audio\arka.trip.raw.wav` / `arka.trip.fitted.wav` | Synthesis and fitting intermediates |
 | `data\transcripts\arka.trip.script.json` | The script used for this render |
 | `workspace\outputs\arka.trip.timeline.json` | Measured timing and suggested cuts |
-| `workspace\outputs\arka.trip.guide.mp4` | 9:16 placeholder video with narration |
+| `data\generated_video\arka.trip.guide.mp4` | 9:16 placeholder video with narration |
 | `data\transcripts\arka.trip.captions.srt` | Approximate phrase captions |
 | `workspace\outputs\arka.trip.provenance.json` / `arka.trip.status.json` | Voice mode, synthetic notice, and result |
 
@@ -329,14 +329,16 @@ for the workflow above. Setup and commands are in [dev.readme.md](docs/dev.readm
 All modules use one data layout: **`data\audio`** for imported recordings,
 **`data\transcripts`** for scripts,
 transcripts, training text, and captions, and **`data\generated_audio`** for
-synthesized WAV/MP3 files and their audio intermediates. New generation and
+synthesized WAV/MP3 files and their audio intermediates, and **`data\generated_video`**
+for completed generated videos. New generation and
 Rescript artifacts have readable flat filenames, without job-ID folders.
 Voice/enrollment storage retains its existing alias subfolders. Rescript stores
 `arka.<source>.script.json` and `arka.<source>.transcript.json` directly in `data\transcripts`
 and archives externally supplied audio under `data\audio\imports`.
 Set `YAPIT_DATA_DIR` to choose a different data root; by default it is `data`
 beside the configured workspace. Set absolute workspace/data paths when launching
-from another directory. Job metadata and video guides remain in `workspace\outputs`;
+from another directory. Job metadata and temporary render slates/playlists remain
+in `workspace\outputs`; completed videos go to `data\generated_video`.
 voice profiles and accepted enrollment recordings belong to `data\<profile>`.
 Enrollment independently defaults to `.\data`; `YAPIT_WORKSPACE` controls only its
 temporary session files. There is no old-profile/draft lookup. The explicitly selected

@@ -103,7 +103,8 @@ Outputs are flat under `data\transcripts`; no run-ID directory is created.
 Names use `arka.<source>` (an existing `arka.` prefix is reused), with numeric
 suffixes on duplicates. All modules use `YAPIT_DATA_DIR`, which
 defaults to `data` beside the configured workspace. Generated narration belongs
-in `data\generated_audio`; job metadata and video guides remain in the workspace.
+in `data\generated_audio`; completed videos belong in `data\generated_video`,
+while job metadata and rendering intermediates remain in the workspace.
 The module can also run as `python -m yapit.rescript.cli`.
 
 ## Review and regenerate

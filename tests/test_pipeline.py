@@ -60,8 +60,11 @@ def test_real_mp3_vertical_video_and_contiguous_timeline(enrolled):
     assert Path(result["wav"]).is_relative_to(enrolled.data.generated_audio)
     assert Path(result["script"]).is_relative_to(enrolled.data.transcripts)
     assert Path(result["captions"]).is_relative_to(enrolled.data.transcripts)
+    assert Path(result["video"]).parent == enrolled.data.generated_video
+    assert Path(result["video"]).name.endswith(".guide.mp4")
     assert not list(Path(result["job"]).rglob("*.wav"))
     assert not list(Path(result["job"]).rglob("*.mp3"))
+    assert not list(Path(result["job"]).rglob("*.mp4"))
     assert speech.calls == [beat.text for beat in script().beats]
     decoded = decode_audio(Path(result["audio"]))
     assert abs(len(decoded) / SAMPLE_RATE - 7) < 0.15
@@ -95,6 +98,7 @@ def test_narration_only_skips_video(enrolled):
     )
     assert Path(result["audio"]).exists()
     assert result["video"] is None
+    assert not list(enrolled.data.generated_video.iterdir())
     assert not (Path(result["job"]) / "video").exists()
 
 

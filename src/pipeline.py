@@ -132,6 +132,7 @@ class Pipeline:
                     timeline,
                     final_mp3,
                     job.metadata,
+                    video=job.path("guide.mp4", job.video),
                     captions=job.path("captions.srt", transcript_dir),
                     prefix=job.name,
                 )
@@ -145,7 +146,7 @@ class Pipeline:
                 "audio": str(final_mp3),
                 "wav": str(final_wav),
                 "script": str(script_path),
-                "video": str(job.path("guide.mp4")) if render_video else None,
+                "video": str(job.path("guide.mp4", job.video)) if render_video else None,
                 "timeline": str(job.path("timeline.json")),
                 "captions": str(job.path("captions.srt", transcript_dir)) if render_video else None,
                 "seconds": seconds,

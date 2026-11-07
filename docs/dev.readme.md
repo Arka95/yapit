@@ -76,6 +76,7 @@ yapit\
     audio\
     transcripts\
     generated_audio\
+    generated_video\
   workspace\
     enrollment\<profile>\
     outputs\
@@ -424,6 +425,9 @@ encoded narration, splits longer beats, and prefers quiet windows near suggested
 sub-cuts. Phrase captions are proportional word groups, not forced alignment.
 The guide is numbered placeholder slates at 1080x1920 and 30 fps, not generated
 travel footage or automatic editing of the source video.
+Rendering uses workspace slates/playlists and a temporary encoded video;
+only a successful completed video is copied into `data\generated_video`,
+without overwriting an existing file. The temporary encoded copy is then removed.
 
 **Storage.** `storage.py` owns workspace/data paths and confinement; common file
 utilities provide naming, reservations, copying and atomic JSON replacement.
@@ -435,7 +439,8 @@ and confined to the workspace or data root; CLI manifests may intentionally refe
 to external local recordings, which are preserved in the canonical audio store.
 Profile creation reuses lowercase names; imports merge and replace matching
 filenames. `constants.py` defines the unified data filename template and default
-profile; `common_utils.fileutils.data_filename` normalizes filenames to lowercase.
+profile; `GENERATED_VIDEO_DIRECTORY` defines the generated-video bucket.
+`common_utils.fileutils.data_filename` normalizes filenames to lowercase.
 Enrollment has its own [README](enrollment/README.md),
 [developer guide](enrollment/dev.readme.md), and local tests.
 Generation has no durable job queue or
@@ -459,6 +464,7 @@ directories, MCP clients, and WSL.
 | `transcripts\<name>.script.json` / `.captions.srt` | Rendering script and captions |
 | `transcripts\<name>.train.jsonl` / `.holdout.jsonl` / `.train_codes.jsonl` | Training text and codec records |
 | `generated_audio\<name>.wav` / `.mp3` / `.raw.wav` / `.fitted.wav` | Final audio and intermediates |
+| `generated_video\<name>.guide.mp4` | Completed placeholder video with narration |
 
 Profiles are stored only under `data\<profile>`. Enrollment receives a `DataStore`
 directly; canonical profiles are never read from the workspace. Temporary

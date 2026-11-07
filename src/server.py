@@ -134,12 +134,19 @@ def create_server(root: Path | None = None) -> FastMCP:
             job = workspace.output(audio.stem)
             captions = job.path("captions.srt", job.transcripts)
             try:
-                render_guide(timeline, audio, job.metadata, captions=captions, prefix=job.name)
+                render_guide(
+                    timeline,
+                    audio,
+                    job.metadata,
+                    video=job.path("guide.mp4", job.video),
+                    captions=captions,
+                    prefix=job.name,
+                )
                 result = {
                     "status": "complete",
                     "name": job.name,
                     "status_file": str(job.path("status.json")),
-                    "video": str(job.path("guide.mp4")),
+                    "video": str(job.path("guide.mp4", job.video)),
                     "captions": str(captions),
                 }
                 save_json(job.path("status.json"), result)

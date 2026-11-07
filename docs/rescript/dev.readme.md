@@ -128,11 +128,13 @@ passes Whisper's `download_root` as `YAPIT_MODELS_DIR\hub`; model folder/default
 are centralized in `constants.py`. No API keys or cloud permission
 flags are used. `YAPIT_FFMPEG` retains its existing meaning.
 `YAPIT_WORKSPACE` holds temporary session files, job metadata and video guides,
-not new audio or transcript exports. Metadata and guide outputs are flat. Model checkpoints and existing
+not completed audio, transcript or video exports. Metadata and generated outputs
+are flat. Model checkpoints and existing
 voice/enrollment storage retain their required structure under the profile's
 data directory. `YAPIT_DATA_DIR` is the shared root for all modules, defaulting to `data`
 beside the configured workspace. Its buckets are `audio`, `transcripts`, and
-`generated_audio`. Audio overrides must remain in their bucket; transcript
+`generated_audio` and `generated_video`; the latter is configured by
+`GENERATED_VIDEO_DIRECTORY` in `constants.py`. Audio overrides must remain in their bucket; transcript
 overrides must be exactly the transcript root.
 Tests isolate the data root with an environment override and verify output
 placement as well as transcription behavior. Existing exports are left

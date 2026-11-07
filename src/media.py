@@ -4,6 +4,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+from yapit.common_utils.fileutils import copy_file_exclusive
 from yapit.common_utils.mediautils import run_media, srt_time
 from yapit.models import Timeline
 
@@ -13,6 +14,7 @@ def render_guide(
     audio: Path,
     output: Path,
     *,
+    video: Path,
     captions: Path | None = None,
     prefix: str = "",
 ) -> None:
@@ -82,3 +84,7 @@ def render_guide(
             str(output / f"{stem}guide.mp4"),
         ]
     )
+    video.parent.mkdir(parents=True, exist_ok=True)
+    rendered = output / f"{stem}guide.mp4"
+    copy_file_exclusive(rendered, video)
+    rendered.unlink()

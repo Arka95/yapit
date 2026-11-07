@@ -60,6 +60,18 @@ def test_recording_archive_preserves_original_and_reuses_exact_copy(tmp_path):
     assert source.read_bytes() == b"original recording bytes"
 
 
+def test_persistent_video_reserves_output_name_and_cannot_be_a_profile(tmp_path):
+    workspace = Workspace(tmp_path / "workspace")
+    existing = workspace.data.generated_video / "arka.trip.guide.mp4"
+    existing.write_bytes(b"existing video")
+    job = workspace.output("trip")
+    assert job.name == "arka.trip.1"
+    assert job.path("guide.mp4", job.video).parent == workspace.data.generated_video
+    assert existing.read_bytes() == b"existing video"
+    with pytest.raises(ValueError, match="shared data directory"):
+        workspace.data.profile_dir("GENERATED_VIDEO")
+
+
 def test_flat_output_reservation_is_safe_and_concurrent(tmp_path):
     workspace = Workspace(tmp_path / "workspace")
     existing = workspace.data.generated_audio / "arka.trip.wav"

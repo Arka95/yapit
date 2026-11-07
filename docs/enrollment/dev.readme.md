@@ -34,7 +34,7 @@ Normal enrollment does not require a flag, and the UI has no consent control.
 ## Storage and updates
 
 Profiles are normalized to lowercase. Shared bucket names (`audio`, `transcripts`,
-`generated_audio`) cannot be profile names. All new files use
+`generated_audio`, `generated_video`) cannot be profile names. All new files use
 `common_utils.fileutils.data_filename` and the template in `constants.py`.
 
 Prepared recording filenames use the static passage's stable number; importing

@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import anyio
@@ -16,7 +17,7 @@ from yapit.cli import app
 from yapit.common_utils.fileutils import save_json
 from yapit.common_utils.mediautils import write_wav
 from yapit.common_utils.modelutils import load_model
-from yapit.models import Beat, Brief, DeliveryStyle, Script
+from yapit.models import Beat, Brief, Cue, DeliveryStyle, Script, Timeline
 from yapit.scripts import build_prompt, generate_script
 from yapit.speech import QwenSpeech
 from yapit.storage import DataStore
@@ -249,6 +250,27 @@ def test_stdio_mcp_handshake_tools_prompt_and_path_confinement(tmp_path):
                         {"name": "mcp-data", "manifest_path": str(manifest), "consent": True},
                     )
                     assert not enrolled.isError
+                    render_audio = data.generated_audio / "renderer-input.wav"
+                    write_wav(render_audio, tone(5))
+                    render_plan = data.transcripts / "renderer-timeline.json"
+                    save_json(
+                        render_plan,
+                        Timeline(
+                            seconds=5,
+                            cues=[
+                                Cue(start=0, end=5, text="Test narration.", visual="Test", beat=0)
+                            ],
+                        ),
+                    )
+                    rendered = await session.call_tool(
+                        "render_timeline",
+                        {"timeline_path": str(render_plan), "audio_path": str(render_audio)},
+                    )
+                    assert not rendered.isError
+                    video = json.loads(rendered.content[0].text)
+                    assert Path(video["video"]).parent == data.generated_video
+                    assert Path(video["video"]).is_file()
+                    assert not list((tmp_path / "outputs").glob("*.mp4"))
                     denied = await session.call_tool(
                         "prepare_script_prompt",
                         {"media_path": "..\\outside.jpg"},
