@@ -45,6 +45,9 @@ No system CUDA/cuDNN reinstall is needed for PyTorch's bundled CUDA runtime.
 The older single-environment commands below remain supported; substitute
 `.\yapit-mode.cmd cpu` or `.\yapit-mode.cmd gpu` for `.\.venv\Scripts\yapit`.
 See [dev.readme.md](dev.readme.md) for exact dependencies and MCP configuration.
+The current responsibility map and proposed reusable-library boundaries are in
+[docs\module-architecture.md](docs/module-architecture.md); this is a plan, not an
+implemented package split.
 
 ### VPN-restricted Windows machine: `DESKTOP-A05R1KA`
 
