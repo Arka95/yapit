@@ -193,8 +193,8 @@ inference works.
 
 | Variable | Purpose / default |
 |---|---|
-| `YAPIT_WORKSPACE` | Metadata, voice profiles, video guides and checkpoints; defaults to `workspace` |
-| `YAPIT_DATA_DIR` | Shared data root; defaults to `data` beside the workspace |
+| `YAPIT_WORKSPACE` | Generation metadata and edit guides; defaults to `workspace`; not used by enrollment |
+| `YAPIT_DATA_DIR` | Data/profile root; enrollment defaults independently to `.\data`; generation defaults beside the workspace |
 | `YAPIT_MODEL` | Base Hub model ID or local model directory; defaults to `Qwen/Qwen3-TTS-12Hz-1.7B-Base` |
 | `YAPIT_DEVICE` | `auto` selects CUDA when available, otherwise CPU; can be set explicitly |
 | `YAPIT_ASR_DEVICE` | Rescript device; defaults to `cpu` without a mode launcher |
@@ -332,8 +332,9 @@ directories, MCP clients, and WSL.
 | `transcripts\<name>.train.jsonl` / `.holdout.jsonl` / `.train_codes.jsonl` | Training text and codec records |
 | `generated_audio\<name>.wav` / `.mp3` / `.raw.wav` / `.fitted.wav` | Final audio and intermediates |
 
-Under `YAPIT_WORKSPACE`, legacy `voices\<alias>` profiles remain readable;
-new profiles are stored under `data\<profile>`. Flat `outputs\<name>.*` files hold prompts/frames, timelines,
+Profiles are stored only under `data\<profile>`. Enrollment receives a `DataStore`
+directly and never initializes or scans `YAPIT_WORKSPACE`.
+Under `YAPIT_WORKSPACE`, flat `outputs\<name>.*` files hold prompts/frames, timelines,
 provenance, status, guides and logs. Model checkpoints retain the upstream-required
 directory structure beneath the selected profile's `checkpoints\<readable-name>`.
 Profiles and draft
@@ -342,10 +343,8 @@ exports use the transcript store. No new recording or generated WAV/MP3 is saved
 in the workspace. An enrollment draft is not usable for
 generation until **Finish enrollment** creates its voice profile.
 
-Legacy profiles fall back to their original workspace clip directories or old
-shared audio directories. Old drafts are loaded into profile-local state and
-continue with new takes under `data\<profile>\audio`; existing files are not
-deleted. Successfully merged profiles use the new layout. Rescript output
+There are no old profile/draft fallback paths. Application voice paths delegate
+to the canonical data store. Rescript output
 overrides must remain in their appropriate bucket; transcript `--output` must be
 the transcript root, not a new child directory.
 Externally supplied recordings are archived without modifying the source.

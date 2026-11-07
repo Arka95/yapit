@@ -12,10 +12,10 @@ from yapit.enrollment import (
     MicrophoneRecorder,
     Reading,
 )
+from yapit.enrollment.profiles import load_voice
 from yapit.enrollment.tests.conftest import tone
 from yapit.media import SAMPLE_RATE, decode_audio, ffmpeg, write_wav
-from yapit.storage import Workspace, save_json
-from yapit.voices import load_voice
+from yapit.storage import DataStore
 
 
 @pytest.fixture
@@ -25,7 +25,7 @@ def session(tmp_path, monkeypatch):
         for index in range(1, 7)
     ]
     monkeypatch.setattr("yapit.enrollment.session.load_readings", lambda: readings)
-    return EnrollmentSession(Workspace(tmp_path / "workspace"), "my-voice")
+    return EnrollmentSession(DataStore(tmp_path / "data"), "my-voice")
 
 
 def take(session, seconds=4, frequency=200, volume=1):
@@ -47,10 +47,10 @@ def test_saved_text_resume_and_final_enrollment(session):
         session.save_take(raw, confirmed=False, normalize=True)
     first = session.save_take(raw, confirmed=True, normalize=True)
     assert first["quality"]["reasons"] == []
-    assert raw.is_relative_to(session.workspace.data.root / session.alias / "audio")
-    assert session.folder == session.workspace.data.root / session.alias
+    assert raw.is_relative_to(session.store.root / session.alias / "audio")
+    assert session.folder == session.store.root / session.alias
     assert raw.read_bytes() == original
-    resumed = EnrollmentSession(session.workspace, session.alias)
+    resumed = EnrollmentSession(session.store, session.alias)
     assert resumed.index == 1
     assert resumed.draft.samples[0].text == resumed.draft.readings[0].text
     assert len(json.loads((resumed.folder / "my-voice.samples.json").read_text())["samples"]) == 1
@@ -63,33 +63,24 @@ def test_saved_text_resume_and_final_enrollment(session):
     voice = resumed.finish()
     assert voice.name == "my-voice"
     assert len(voice.samples) == 5
-    audio_folder = session.workspace.voice_audio_dir(voice.name)
+    audio_folder = session.store.voice_audio_dir(voice.name)
     assert audio_folder == session.folder / "audio"
     assert all((audio_folder / sample.audio).exists() for sample in voice.samples)
     assert len(list(audio_folder.glob("*.raw.*.wav"))) == 5
     assert (session.folder / "my-voice.samples.json").is_file()
-    assert load_voice(session.workspace, voice.name).consent
-    assert EnrollmentSession(session.workspace, voice.name).ready
+    assert load_voice(session.store, voice.name).consent
+    assert EnrollmentSession(session.store, voice.name).ready
 
 
-def test_legacy_draft_resumes_without_moving_original_recordings(session):
-    session.save_take(take(session), confirmed=True, normalize=True)
-    legacy = session.workspace.root / "enrollment" / session.alias
-    legacy.mkdir(parents=True)
-    old_audio = legacy / "sample.wav"
-    write_wav(old_audio, tone(4))
-    draft = session.draft.model_copy(deep=True)
-    draft.samples[0].audio = "sample.wav"
-    save_json(legacy / "session.json", draft)
-    original = old_audio.read_bytes()
-    session.path.unlink()
-    resumed = EnrollmentSession(session.workspace, session.alias)
-    assert resumed.index == 1
-    assert resumed.draft.samples[0].audio == str(old_audio)
-    assert resumed.path.is_relative_to(session.workspace.data.root / session.alias)
-    assert resumed.new_take().is_relative_to(session.audio_folder)
-    assert old_audio.read_bytes() == original
-    assert (legacy / "session.json").exists()
+def test_workspace_recording_is_not_an_enrollment_input(session):
+    outside = session.store.root.parent / "workspace" / "enrollment" / session.alias
+    outside.mkdir(parents=True)
+    recording = outside / "sample.wav"
+    write_wav(recording, tone(4))
+    with pytest.raises(ValueError, match="inside"):
+        session.save_take(recording, True, True)
+    assert session.index == 0
+    assert session.path.is_relative_to(session.store.root)
 
 
 def test_low_level_cleanup_does_not_change_raw_and_silence_never_passes(session):
@@ -189,7 +180,7 @@ def test_real_tk_wizard_advances_after_saving_without_opening_microphone(session
     monkeypatch.setattr("yapit.enrollment.desktop.microphone_devices", lambda: ["Test microphone"])
     root = tk.Tk()
     root.withdraw()
-    app = EnrollmentApp(root, session.workspace)
+    app = EnrollmentApp(root, session.store)
     errors = []
     playback = []
     notices = []
@@ -270,7 +261,7 @@ def test_real_tk_wizard_advances_after_saving_without_opening_microphone(session
         assert not errors
         assert notices
         assert app.session.draft.completed
-        assert session.workspace.voice_path(session.alias).exists()
+        assert session.store.voice_path(session.alias).exists()
         app.alias.set("MY-VOICE")
         app.open_button.invoke()
         assert app.alias.get() == "my-voice"

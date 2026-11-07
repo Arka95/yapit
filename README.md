@@ -135,7 +135,7 @@ state, manifests and journals under `data\<profile>`. Files use the shared
 `<profile>.<name>.<extension>` format defined in `src\constants.py`, for example
 `arka.audio_sample_1.wav` and `arka.journal.json`. Imports merge by normalized
 filename and overwrite matching files; they do not create duplicate profiles.
-Legacy recordings are not deleted.
+Enrollment uses only the data root and does not create or scan a workspace.
 
 The app is Windows-only and local-only. It needs no speech model or API key,
 and accesses your microphone only after you press **Record**.
@@ -314,9 +314,10 @@ Voice/enrollment storage retains its existing alias subfolders. Rescript stores
 and archives externally supplied audio under `data\audio\imports`.
 Set `YAPIT_DATA_DIR` to choose a different data root; by default it is `data`
 beside the configured workspace. Set absolute workspace/data paths when launching
-from another directory. Job metadata, voice profiles, and video guides remain
-in `workspace`. Existing artifacts are not moved or deleted; legacy voice
-profiles and enrollment drafts remain readable. The explicitly selected
+from another directory. Job metadata and video guides remain in `workspace\outputs`;
+voice profiles and enrollment recordings belong only to `data\<profile>`.
+Enrollment independently defaults to `.\data`, ignores `YAPIT_WORKSPACE`, and has
+no old-profile/draft lookup. The explicitly selected
 audio/transcript fixture under `tests\data` is a versionable test-only exception.
 
 Recordings and narration are processed locally. Model/dependency downloads need

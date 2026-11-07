@@ -10,17 +10,16 @@ pairing. `sample_scripts.py` loads numbered static JSON files in numeric order.
 `desktop.py` owns Tkinter UI and playback; blocking recording checks and writes
 run off the Tk thread. `cli.py` and `__main__.py` expose the module independently.
 
-The core accepts an explicit `Workspace`. Only application entry points load
+The core accepts an explicit `DataStore`. Only application entry points load
 `.env`. Shared contracts are in `models.py`, filename constants in `constants.py`,
 and path/atomic JSON helpers in `storage.py`. Audio decoding and WAV writing use
 the existing deterministic media helpers. There are no imports or calls to model
 providers, script-writing APIs, transcription, inference, or training.
 
-`yapit.voices` re-exports the former enrollment helpers for existing callers.
+`yapit.voices` adapts application workflows to the data-only enrollment helpers.
 `yapit.desktop` remains a compatibility launcher. Main CLI and MCP enrollment
 delegate to this module; the module CLI avoids importing unrelated pipelines.
-The old explicit consent argument remains a compatibility API field, but normal
-enrollment does not require a flag, and the UI has no consent control.
+Normal enrollment does not require a flag, and the UI has no consent control.
 
 ## Storage and updates
 
@@ -41,9 +40,11 @@ differs from imported profile text, the slot is not silently relabeled as matchi
 the static passage. Finishing exports a compatible `Voice`, retaining selected
 checkpoint/speaker/style settings; no model weights are changed.
 
-Legacy profile lookup remains in `Workspace.voice_path` and
-`Workspace.voice_audio_dir`. Legacy drafts resolve audio against their original
-location before writing new profile-local state. No legacy files are deleted.
+There are no legacy lookup or migration paths. `DataStore` owns canonical profile
+paths and confines enrollment recordings to the data root. The application
+`Workspace` delegates profile paths to this store for generation/training; it is
+not constructed or used by enrollment. UI and CLI factories use `data` or the
+explicit `YAPIT_DATA_DIR`, never `YAPIT_WORKSPACE`.
 
 ## Tests and packaging
 
@@ -58,7 +59,8 @@ discovery:
 
 Coverage includes five-sample readiness, case-insensitive profile reuse,
 filename replacement, retained unrelated audio/settings, inventories and hashes,
-rejected duplicate/bad audio, legacy reads, isolated no-model/no-network imports,
+rejected duplicate/bad audio, ignored workspace profiles/recordings,
+workspace-free CLI operations, isolated no-model/no-network imports,
 real FFmpeg graceful stopping with synthetic input, and actual Tk UI actions
 without opening a microphone. These tests do not assess voice identity or model
 quality. Static JSON baseline files must be present in the built wheel.

@@ -9,11 +9,11 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
 from yapit.constants import DEFAULT_PROFILE
+from yapit.enrollment import enroll
 from yapit.media import SAMPLE_RATE, decode_audio, render_guide
 from yapit.models import Brief, DeliveryStyle, Script, Timeline
 from yapit.pipeline import Pipeline
 from yapit.storage import Workspace, safe_name, save_json
-from yapit.voices import enroll
 
 
 def create_server(root: Path | None = None) -> FastMCP:
@@ -49,9 +49,9 @@ def create_server(root: Path | None = None) -> FastMCP:
             raise ValueError("Yapit is busy; retry after the current job.")
         try:
             voice = enroll(
-                workspace,
+                workspace.data,
                 name,
-                workspace.inside(manifest_path),
+                workspace.data.inside(manifest_path),
                 consent,
                 confined=True,
             )

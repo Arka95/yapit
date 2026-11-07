@@ -10,6 +10,8 @@ import typer
 from dotenv import load_dotenv
 
 from yapit.constants import DEFAULT_PROFILE
+from yapit.enrollment import enroll
+from yapit.enrollment.cli import data_store
 from yapit.media import ffmpeg
 from yapit.models import Brief, DeliveryStyle
 from yapit.pipeline import Pipeline
@@ -17,7 +19,7 @@ from yapit.rescript.cli import app as rescript_app
 from yapit.scripts import load_script
 from yapit.storage import Workspace
 from yapit.training import train, use_checkpoint
-from yapit.voices import STYLE_GUIDES, enroll, enroll_style, select_voice
+from yapit.voices import STYLE_GUIDES, enroll_style, select_voice
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 PathOption = Annotated[Path | None, typer.Option()]
@@ -64,7 +66,7 @@ def voice_enroll(
 ) -> None:
     """Curate local recordings with manually verified transcripts."""
     try:
-        voice = enroll(workspace(), name, manifest, consent)
+        voice = enroll(data_store(), name, manifest, consent)
     except (ValueError, OSError) as exc:
         raise typer.BadParameter(str(exc)) from exc
     emit(

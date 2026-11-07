@@ -3,7 +3,7 @@ import pytest
 
 from yapit.enrollment import enroll
 from yapit.media import SAMPLE_RATE, write_wav
-from yapit.storage import Workspace, save_json
+from yapit.storage import DataStore, save_json
 
 
 @pytest.fixture(autouse=True)
@@ -19,7 +19,7 @@ def tone(seconds=4, frequency=180):
 
 @pytest.fixture
 def enrolled(tmp_path):
-    workspace = Workspace(tmp_path / "workspace")
+    store = DataStore(tmp_path / "data")
     samples = []
     for index in range(5):
         path = tmp_path / f"take-{index + 1}.wav"
@@ -27,5 +27,5 @@ def enrolled(tmp_path):
         samples.append({"audio": str(path), "text": f"This is clear test passage {index + 1}."})
     manifest = tmp_path / "samples.json"
     save_json(manifest, {"samples": samples})
-    enroll(workspace, "test-voice", manifest)
-    return workspace
+    enroll(store, "test-voice", manifest)
+    return store

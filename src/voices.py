@@ -5,12 +5,29 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from yapit.enrollment.profiles import audio_quality, enroll, load_voice
+from yapit.enrollment.profiles import audio_quality
+from yapit.enrollment.profiles import enroll as enroll_profile
+from yapit.enrollment.profiles import load_voice as load_profile
 from yapit.media import decode_audio, write_wav
 from yapit.models import DeliveryStyle, StyleReference, Voice
 from yapit.storage import Workspace, data_filename, save_json
 
 __all__ = ["audio_quality", "enroll", "enroll_style", "load_voice", "select_voice", "STYLE_GUIDES"]
+
+
+def enroll(
+    workspace: Workspace,
+    name: str,
+    manifest_path: Path,
+    consent: bool = True,
+    *,
+    confined: bool = False,
+) -> Voice:
+    return enroll_profile(workspace.data, name, manifest_path, consent, confined=confined)
+
+
+def load_voice(workspace: Workspace, name: str) -> Voice:
+    return load_profile(workspace.data, name)
 
 
 STYLE_GUIDES = {

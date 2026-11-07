@@ -18,14 +18,14 @@ from yapit.enrollment import (
     profile_names,
 )
 from yapit.media import decode_audio
-from yapit.storage import Workspace
+from yapit.storage import DataStore
 from yapit.voices import audio_quality
 
 
 class EnrollmentApp:
-    def __init__(self, root: tk.Tk, workspace: Workspace):
+    def __init__(self, root: tk.Tk, store: DataStore):
         self.root = root
-        self.workspace = workspace
+        self.store = store
         self.session: EnrollmentSession | None = None
         self.recorder = MicrophoneRecorder()
         self.take: Path | None = None
@@ -141,7 +141,7 @@ class EnrollmentApp:
         self.work(microphone_devices, self.devices_loaded)
 
     def show_existing(self) -> None:
-        names = profile_names(self.workspace)
+        names = profile_names(self.store)
         self.alias_entry.configure(values=names)
         self.existing.configure(text="Profiles: " + (", ".join(names) or "none yet"))
 
@@ -208,7 +208,7 @@ class EnrollmentApp:
 
     def open_alias(self) -> None:
         try:
-            session = EnrollmentSession(self.workspace, self.alias.get())
+            session = EnrollmentSession(self.store, self.alias.get())
         except Exception as exc:
             messagebox.showerror("Cannot open alias", str(exc), parent=self.root)
             return
@@ -359,7 +359,7 @@ class EnrollmentApp:
         self.show_existing()
         self.status.set(
             f"Enrolled '{voice.name}' with {len(voice.samples)} samples. "
-            f"Use this alias for narration. Files: {self.workspace.voice_path(voice.name).parent}"
+            f"Use this alias for narration. Files: {self.store.voice_path(voice.name).parent}"
         )
         messagebox.showinfo(
             "Voice enrolled",
@@ -395,7 +395,7 @@ def main() -> None:
         raise RuntimeError("The native enrollment app currently supports Windows only.")
     load_dotenv()
     root = tk.Tk()
-    EnrollmentApp(root, Workspace(os.environ.get("YAPIT_WORKSPACE", "workspace")))
+    EnrollmentApp(root, DataStore(Path("data")))
     root.mainloop()
 
 

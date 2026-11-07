@@ -20,7 +20,7 @@ from yapit.enrollment.profiles import (
 from yapit.enrollment.sample_scripts import Reading, load_readings
 from yapit.media import SAMPLE_RATE, decode_audio, write_wav
 from yapit.models import Model, Sample, Voice
-from yapit.storage import Workspace, data_filename, save_json
+from yapit.storage import DataStore, data_filename, save_json
 
 
 class Draft(Model):
@@ -28,13 +28,6 @@ class Draft(Model):
     readings: list[Reading] = Field(min_length=1, max_length=100)
     samples: list[Sample | None]
     completed: bool = False
-
-    @model_validator(mode="before")
-    @classmethod
-    def legacy_consent(cls, value):
-        if isinstance(value, dict):
-            value = {key: item for key, item in value.items() if key != "consent"}
-        return value
 
     @model_validator(mode="after")
     def matching_samples(self) -> Draft:
@@ -44,27 +37,21 @@ class Draft(Model):
 
 
 class EnrollmentSession:
-    def __init__(self, workspace: Workspace, alias: str):
-        self.workspace = workspace
-        self.folder = workspace.profile_dir(alias)
+    def __init__(self, store: DataStore, alias: str):
+        self.store = store
+        self.folder = store.profile_dir(alias)
         self.alias = self.folder.name
         self.audio_folder = self.folder / "audio"
         self.path = self.folder / data_filename("session", self.alias, ".json")
         self._selected: int | None = None
-        candidates = [
-            self.path,
-            workspace.data.transcripts / "enrollment" / self.alias / "session.json",
-            workspace.root / "enrollment" / self.alias / "session.json",
-        ]
-        existing = next((path for path in candidates if path.exists()), None)
-        if existing:
-            self.draft = Draft.model_validate_json(existing.read_text(encoding="utf-8"))
+        if self.path.exists():
+            self.draft = Draft.model_validate_json(self.path.read_text(encoding="utf-8"))
             if self.draft.alias.lower() != self.alias:
                 raise ValueError("The saved enrollment alias does not match this folder.")
             self.draft.alias = self.alias
             for sample in self.draft.samples:
                 if sample:
-                    sample.audio = str(workspace.inside(existing.parent / sample.audio))
+                    sample.audio = str(store.inside(self.folder / sample.audio))
         else:
             readings = load_readings()
             self.draft = Draft(
@@ -72,9 +59,9 @@ class EnrollmentSession:
                 readings=readings,
                 samples=[None] * len(readings),
             )
-        if workspace.voice_path(self.alias).exists():
-            voice = load_voice(workspace, self.alias)
-            directory = workspace.voice_audio_dir(self.alias)
+        if store.voice_path(self.alias).exists():
+            voice = load_voice(store, self.alias)
+            directory = store.voice_audio_dir(self.alias)
             available = {
                 audio_name(self.alias, Path(sample.audio)): sample for sample in voice.samples
             }
@@ -111,7 +98,7 @@ class EnrollmentSession:
     @property
     def samples(self) -> list[Sample]:
         return merged_samples(
-            self.workspace, self.alias, [sample for sample in self.draft.samples if sample]
+            self.store, self.alias, [sample for sample in self.draft.samples if sample]
         )
 
     @property
@@ -155,13 +142,8 @@ class EnrollmentSession:
             )
         if self.index == len(self.draft.readings):
             raise ValueError("Choose a passage to record another sample.")
-        source = self.workspace.inside(source)
-        allowed = [
-            self.audio_folder,
-            self.workspace.data.audio / "enrollment" / self.alias,
-            self.workspace.root / "enrollment" / self.alias,
-        ]
-        if not any(source.is_relative_to(folder.resolve()) for folder in allowed):
+        source = self.store.inside(source)
+        if not source.is_relative_to(self.audio_folder.resolve()):
             raise ValueError("The recording does not belong to this enrollment session.")
         data = decode_audio(source, max_seconds=20)
         original_quality = audio_quality(data)
@@ -234,7 +216,7 @@ class EnrollmentSession:
             raise ValueError(f"Save at least {MIN_SAMPLES} distinct samples before enrollment.")
         self.persist()
         voice = enroll(
-            self.workspace,
+            self.store,
             self.alias,
             self.folder / data_filename("samples", self.alias, ".json"),
             confined=True,

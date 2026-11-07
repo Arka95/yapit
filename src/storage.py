@@ -106,27 +106,16 @@ class Workspace:
         return path
 
     def voice_path(self, name: str) -> Path:
-        folder = self.profile_dir(name)
-        canonical = folder / data_filename("profile", folder.name, ".json")
-        legacy = self.inside(Path("voices") / safe_name(name) / "profile.json", exists=False)
-        return canonical if canonical.exists() or not legacy.exists() else legacy
+        return self.data.voice_path(name)
 
     def profile_dir(self, name: str) -> Path:
-        name = safe_name(name.strip()).lower()
-        if name in {"audio", "transcripts", "generated_audio"}:
-            raise ValueError("Profile name conflicts with a shared data directory.")
-        return self.inside(self.data.root / name, exists=False)
+        return self.data.profile_dir(name)
 
     def output(self, source: str, profile: str = DEFAULT_PROFILE) -> OutputArtifacts:
         return OutputArtifacts(self, source, profile)
 
     def voice_audio_dir(self, name: str) -> Path:
-        canonical = self.profile_dir(name) / "audio"
-        folder = self.profile_dir(name)
-        if (folder / data_filename("profile", folder.name, ".json")).exists():
-            return canonical
-        directory = self.data.audio / "voices" / safe_name(name)
-        return directory if directory.exists() else self.voice_path(name).parent
+        return self.data.voice_audio_dir(name)
 
 
 class DataStore:
@@ -141,6 +130,28 @@ class DataStore:
         self.generated_audio = self.root / "generated_audio"
         for directory in (self.audio, self.transcripts, self.generated_audio):
             directory.mkdir(parents=True, exist_ok=True)
+
+    def inside(self, value: str | Path, *, exists: bool = True) -> Path:
+        path = Path(value)
+        path = (self.root / path).resolve() if not path.is_absolute() else path.resolve()
+        if not path.is_relative_to(self.root):
+            raise ValueError("Paths must stay inside YAPIT_DATA_DIR.")
+        if exists and not path.is_file():
+            raise ValueError(f"File not found: {path}")
+        return path
+
+    def profile_dir(self, name: str) -> Path:
+        name = safe_name(name.strip()).lower()
+        if name in {"audio", "transcripts", "generated_audio"}:
+            raise ValueError("Profile name conflicts with a shared data directory.")
+        return self.inside(self.root / name, exists=False)
+
+    def voice_path(self, name: str) -> Path:
+        folder = self.profile_dir(name)
+        return folder / data_filename("profile", folder.name, ".json")
+
+    def voice_audio_dir(self, name: str) -> Path:
+        return self.profile_dir(name) / "audio"
 
     @staticmethod
     def within(directory: Path, output: Path | None = None) -> Path:

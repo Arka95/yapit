@@ -85,8 +85,9 @@ audio and update its transcript. The merged profile must contain at least five
 distinct recordings. Invalid inputs are checked before imported files replace
 existing ones. Original external input files are not changed.
 
-Legacy workspace profiles and enrollment drafts remain readable. On successful
-profile merging, accepted audio and profile metadata are written to the new
-profile layout without deleting the old files.
+Enrollment reads and writes only this data layout. It neither initializes a
+workspace nor searches old workspace/profile directories. Entry points use
+`YAPIT_DATA_DIR`, or `data` beneath the current working directory independently
+of `YAPIT_WORKSPACE`. Library callers pass an explicit `DataStore`.
 
 See [dev.readme.md](dev.readme.md) for boundaries, tests, and implementation details.

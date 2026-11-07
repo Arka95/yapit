@@ -11,11 +11,10 @@ from typer.testing import CliRunner
 
 from yapit.enrollment import EnrollmentSession, audio_quality, enroll, load_readings, profile_names
 from yapit.enrollment.cli import app
+from yapit.enrollment.profiles import load_voice
 from yapit.enrollment.tests.conftest import tone
 from yapit.media import SAMPLE_RATE, write_wav
-from yapit.models import Sample
-from yapit.storage import Workspace, data_filename, save_json
-from yapit.voices import load_voice
+from yapit.storage import DataStore, data_filename, save_json
 
 
 def test_profile_merge_replaces_same_filename_preserves_settings_and_lowercases(enrolled, tmp_path):
@@ -36,9 +35,7 @@ def test_profile_merge_replaces_same_filename_preserves_settings_and_lowercases(
     assert unchanged.read_bytes() == old
     changed = next(sample for sample in result.samples if sample.audio == "test-voice.take-1.wav")
     assert changed.text == "The replacement text."
-    journal = json.loads(
-        (enrolled.data.root / "test-voice" / "test-voice.journal.json").read_text()
-    )
+    journal = json.loads((enrolled.root / "test-voice" / "test-voice.journal.json").read_text())
     assert journal["sample_count"] == 5
     row = next(row for row in journal["samples"] if row["audio"].endswith(changed.audio))
     assert (
@@ -50,7 +47,7 @@ def test_profile_merge_replaces_same_filename_preserves_settings_and_lowercases(
     assert profile_names(enrolled) == ["test-voice"]
     assert all(
         path.name == path.name.lower() and path.name.startswith("test-voice.")
-        for path in (enrolled.data.root / "test-voice").rglob("*")
+        for path in (enrolled.root / "test-voice").rglob("*")
         if path.is_file()
     )
 
@@ -99,47 +96,25 @@ def test_recorded_sample_replacement_reuses_filename_and_updates_journal(enrolle
     assert source.exists()
 
 
-def test_legacy_profile_merges_into_data_without_deleting_originals(tmp_path):
-    workspace = Workspace(tmp_path / "workspace")
-    legacy = workspace.root / "voices" / "legacy"
-    legacy.mkdir(parents=True)
-    samples = []
-    for index in range(5):
-        path = legacy / f"sample-{index}.wav"
-        write_wav(path, tone(frequency=180 + index * 30))
-        samples.append(Sample(audio=path.name, text=f"Legacy passage {index}."))
-    from yapit.models import Voice
-
-    voice = Voice(
-        name="legacy",
-        consent=True,
-        samples=samples,
-        reference_audio=samples[0].audio,
-        reference_text=samples[0].text,
-        words_per_minute=150,
-    )
-    save_json(legacy / "profile.json", voice)
-    old = (legacy / samples[0].audio).read_bytes()
-    manifest = tmp_path / "addition.json"
-    extra = tmp_path / "extra.wav"
-    write_wav(extra, tone(frequency=410))
-    save_json(manifest, {"samples": [{"audio": str(extra), "text": "One more clear passage."}]})
-    result = enroll(workspace, "legacy", manifest)
-    assert len(result.samples) == 6
-    assert workspace.voice_path("legacy") == workspace.data.root / "legacy" / "legacy.profile.json"
-    assert (legacy / samples[0].audio).read_bytes() == old
-    assert all(
-        (workspace.voice_audio_dir("legacy") / sample.audio).exists() for sample in result.samples
-    )
+def test_profiles_are_read_only_from_data(tmp_path, monkeypatch):
+    old = tmp_path / "workspace" / "voices" / "arka"
+    old.mkdir(parents=True)
+    save_json(old / "profile.json", {"unused": "not a current profile"})
+    monkeypatch.setenv("YAPIT_WORKSPACE", str(tmp_path / "workspace"))
+    store = DataStore(tmp_path / "data")
+    assert profile_names(store) == []
+    with pytest.raises(FileNotFoundError):
+        load_voice(store, "arka")
+    assert store.voice_path("arka") == tmp_path / "data" / "arka" / "arka.profile.json"
 
 
 def test_static_scripts_are_shared_and_sorted_numerically(tmp_path):
     readings = load_readings()
     assert readings[9].sample_id == "sample_10"
-    workspace = Workspace(tmp_path / "workspace")
-    first, second = EnrollmentSession(workspace, "first"), EnrollmentSession(workspace, "second")
+    store = DataStore(tmp_path / "data")
+    first, second = EnrollmentSession(store, "first"), EnrollmentSession(store, "second")
     assert first.draft.readings == second.draft.readings == readings
-    assert not list(workspace.data.root.rglob("sampleScripts"))
+    assert not list(store.root.rglob("sampleScripts"))
     assert json.loads(first.path.read_text())["readings"][0]["text"] == readings[0].text
 
 
@@ -164,8 +139,8 @@ socket.create_connection = lambda *args, **kwargs: (_ for _ in ()).throw(
     AssertionError('Network accessed')
 )
 from yapit.enrollment import EnrollmentSession
-from yapit.storage import Workspace
-session = EnrollmentSession(Workspace(sys.argv[1]), 'ARKA')
+from yapit.storage import DataStore
+session = EnrollmentSession(DataStore(sys.argv[1]), 'ARKA')
 assert session.alias == 'arka'
 assert not session.ready
 import numpy as np
@@ -180,9 +155,16 @@ from yapit.enrollment.cli import app
 from typer.testing import CliRunner
 result = CliRunner().invoke(app, ['profiles'])
 assert result.exit_code == 0, result.output
+from yapit.cli import app as main_app
+from pathlib import Path
+result = CliRunner().invoke(main_app, [
+    'voice-enroll', 'arka', '--manifest', str(session.folder / 'arka.samples.json')
+])
+assert result.exit_code == 0, result.output
+assert not Path(sys.argv[2]).exists()
 """
     result = subprocess.run(
-        [sys.executable, "-c", script, str(tmp_path / "workspace")],
+        [sys.executable, "-c", script, str(tmp_path / "data"), str(tmp_path / "workspace")],
         env={**os.environ, "YAPIT_WORKSPACE": str(tmp_path / "workspace")},
         capture_output=True,
         text=True,

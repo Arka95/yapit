@@ -10,7 +10,7 @@ import numpy as np
 
 from yapit.media import SAMPLE_RATE, decode_audio, write_wav
 from yapit.models import Sample, SampleManifest, Voice
-from yapit.storage import Workspace, data_filename, save_json
+from yapit.storage import DataStore, data_filename, save_json
 
 MIN_SAMPLES = 5
 
@@ -43,20 +43,19 @@ def audio_quality(data: np.ndarray) -> dict:
     }
 
 
-def profile_names(workspace: Workspace) -> list[str]:
-    folders = [*workspace.data.root.iterdir(), *(workspace.root / "voices").glob("*")]
+def profile_names(store: DataStore) -> list[str]:
+    folders = store.root.iterdir()
     names = set()
     for path in folders:
         if not path.is_dir():
             continue
         try:
-            workspace.profile_dir(path.name)
+            store.profile_dir(path.name)
         except ValueError:
             continue
         if any(
             (path / filename).exists()
             for filename in (
-                "profile.json",
                 data_filename("profile", path.name, ".json"),
                 data_filename("session", path.name, ".json"),
             )
@@ -69,14 +68,14 @@ def audio_name(name: str, source: Path) -> str:
     return data_filename(source.stem, name, ".wav")
 
 
-def merged_samples(workspace: Workspace, name: str, additions: list[Sample]) -> list[Sample]:
+def merged_samples(store: DataStore, name: str, additions: list[Sample]) -> list[Sample]:
     samples = {}
-    if workspace.voice_path(name).exists():
-        voice = load_voice(workspace, name)
-        directory = workspace.voice_audio_dir(name)
+    if store.voice_path(name).exists():
+        voice = load_voice(store, name)
+        directory = store.voice_audio_dir(name)
         for sample in voice.samples:
             samples[audio_name(name, Path(sample.audio))] = Sample(
-                audio=str(workspace.inside(directory / sample.audio)), text=sample.text
+                audio=str(store.inside(directory / sample.audio)), text=sample.text
             )
     for sample in additions:
         samples[audio_name(name, Path(sample.audio))] = sample
@@ -105,7 +104,7 @@ def save_journal(folder: Path, name: str, samples: list[Sample]) -> None:
 
 
 def enroll(
-    workspace: Workspace,
+    store: DataStore,
     name: str,
     manifest_path: Path,
     consent: bool = True,
@@ -114,23 +113,23 @@ def enroll(
 ) -> Voice:
     if not consent:
         raise ValueError("Explicit consent is required; enroll only your own authorized voice.")
-    target = workspace.profile_dir(name)
+    target = store.profile_dir(name)
     name = target.name
-    existing = load_voice(workspace, name) if workspace.voice_path(name).exists() else None
+    existing = load_voice(store, name) if store.voice_path(name).exists() else None
     manifest_path = manifest_path.resolve()
     manifest = SampleManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
     additions = {}
     for sample in manifest.samples:
         source = (manifest_path.parent / sample.audio).resolve()
         if confined:
-            source = workspace.inside(source)
+            source = store.inside(source)
         if not source.is_file():
             raise ValueError(f"Missing sample: {source}")
         filename = audio_name(name, source)
         additions[filename] = Sample(audio=str(source), text=sample.text)
-    combined = merged_samples(workspace, name, list(additions.values()))
+    combined = merged_samples(store, name, list(additions.values()))
     audio_target = target / "audio"
-    with tempfile.TemporaryDirectory(prefix=".curate-", dir=workspace.data.root) as temp:
+    with tempfile.TemporaryDirectory(prefix=".curate-", dir=store.root) as temp:
         staged = Path(temp)
         samples, report, seen = [], [], set()
         for sample in combined:
@@ -194,5 +193,5 @@ def enroll(
     return voice
 
 
-def load_voice(workspace: Workspace, name: str) -> Voice:
-    return Voice.model_validate_json(workspace.voice_path(name).read_text(encoding="utf-8"))
+def load_voice(store: DataStore, name: str) -> Voice:
+    return Voice.model_validate_json(store.voice_path(name).read_text(encoding="utf-8"))
