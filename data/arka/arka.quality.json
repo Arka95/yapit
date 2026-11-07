@@ -1,0 +1,165 @@
+{
+  "samples": [
+    {
+      "audio": "arka.audio_sample_1.wav",
+      "sha256": "8440e8d12c82c3a553488531d9bbce1e6cbb47ab7f456cf5645097c8dd71fd69",
+      "seconds": 11.24,
+      "peak": 0.5,
+      "clipped_fraction": 0.0,
+      "quiet_fraction": 0.2900355871886121,
+      "rms_dbfs": -28.205250613711833,
+      "reasons": []
+    },
+    {
+      "audio": "arka.audio_sample_2.wav",
+      "sha256": "bcfc148cf466544305450950552d1c8d657d9daa6292727ae5c64b9948614e33",
+      "seconds": 13.12,
+      "peak": 0.5,
+      "clipped_fraction": 0.0,
+      "quiet_fraction": 0.2896341463414634,
+      "rms_dbfs": -25.45495649850407,
+      "reasons": []
+    },
+    {
+      "audio": "arka.audio_sample_3.wav",
+      "sha256": "3b69bd593ed8ea920e3f02c7b95a780d9b608b72a35f74fe42e739055fb280cb",
+      "seconds": 14.46,
+      "peak": 0.5,
+      "clipped_fraction": 0.0,
+      "quiet_fraction": 0.33195020746887965,
+      "rms_dbfs": -27.538367805705626,
+      "reasons": []
+    },
+    {
+      "audio": "arka.audio_sample_4.wav",
+      "sha256": "9d401f24c3a57bb4f6d21928496c3bfd9fec32bb9652b057a4ae8defe0ccc756",
+      "seconds": 11.18,
+      "peak": 0.5,
+      "clipped_fraction": 0.0,
+      "quiet_fraction": 0.29159212880143115,
+      "rms_dbfs": -28.00380301868281,
+      "reasons": []
+    },
+    {
+      "audio": "arka.audio_sample_5.wav",
+      "sha256": "e6d1e90e81305b40b956f4cb71ab9c3d1ad4af053dd0ee817ade00c674bb9da7",
+      "seconds": 12.88,
+      "peak": 0.5,
+      "clipped_fraction": 0.0,
+      "quiet_fraction": 0.38819875776397517,
+      "rms_dbfs": -31.203845922550876,
+      "reasons": []
+    },
+    {
+      "audio": "arka.audio_sample_6.wav",
+      "sha256": "eb9227dd34f93094ce44f019cf3f037c6fb29e5e7e62c8d4737873ba5a538f51",
+      "seconds": 14.74,
+      "peak": 0.5,
+      "clipped_fraction": 0.0,
+      "quiet_fraction": 0.3283582089552239,
+      "rms_dbfs": -26.591343512095165,
+      "reasons": []
+    },
+    {
+      "audio": "arka.audio_sample_7.wav",
+      "sha256": "e33d021db28a855c273d6e0f7cb64f969c8a5adf7e3da47e281f6e42c556068f",
+      "seconds": 16.06,
+      "peak": 0.5,
+      "clipped_fraction": 0.0,
+      "quiet_fraction": 0.32004981320049813,
+      "rms_dbfs": -27.108165144687703,
+      "reasons": []
+    },
+    {
+      "audio": "arka.audio_sample_8.wav",
+      "sha256": "aa28d3a6e0a68d2ecafb382cf4933b530460b7d668d3010bf1baa8a81898833f",
+      "seconds": 12.1,
+      "peak": 0.5,
+      "clipped_fraction": 0.0,
+      "quiet_fraction": 0.30578512396694213,
+      "rms_dbfs": -27.382215274235655,
+      "reasons": []
+    },
+    {
+      "audio": "arka.audio_sample_9.wav",
+      "sha256": "defeeed7d7e4cfa6f3f84fd9c1f966ca48ae3c4eca352dc81d5f799924de0235",
+      "seconds": 16.44,
+      "peak": 0.5,
+      "clipped_fraction": 0.0,
+      "quiet_fraction": 0.29318734793187345,
+      "rms_dbfs": -24.388974721303214,
+      "reasons": []
+    },
+    {
+      "audio": "arka.audio_sample_10.wav",
+      "sha256": "bfd75b571bc2099d1aedb25488645b6f6fa8177591c122a0bfea157f6159853b",
+      "seconds": 15.32,
+      "peak": 0.5,
+      "clipped_fraction": 0.0,
+      "quiet_fraction": 0.2963446475195822,
+      "rms_dbfs": -26.16132961892109,
+      "reasons": []
+    },
+    {
+      "audio": "arka.audio_sample_11.wav",
+      "sha256": "a2e648ba279c36c0ff3e3af46e07b56edf8e7471ee7e2f94f2deb099f41dfb07",
+      "seconds": 15.1,
+      "peak": 0.499969482421875,
+      "clipped_fraction": 0.0,
+      "quiet_fraction": 0.3390728476821192,
+      "rms_dbfs": -29.189627578330732,
+      "reasons": []
+    },
+    {
+      "audio": "arka.audio_sample_12.wav",
+      "sha256": "e3b9a176d2b970b4b5ae6e4728e7cc6e51cffc8790bb35fead17c59797700d66",
+      "seconds": 14.7,
+      "peak": 0.5,
+      "clipped_fraction": 0.0,
+      "quiet_fraction": 0.28435374149659864,
+      "rms_dbfs": -24.865667216214447,
+      "reasons": []
+    },
+    {
+      "audio": "arka.audio_sample_13.wav",
+      "sha256": "14045dd9df635c27df20d5a0e55a30ad850e24915f4a6a69ad449b0bcf7f9889",
+      "seconds": 14.98,
+      "peak": 0.5,
+      "clipped_fraction": 0.0,
+      "quiet_fraction": 0.2870493991989319,
+      "rms_dbfs": -27.355746158195686,
+      "reasons": []
+    },
+    {
+      "audio": "arka.audio_sample_14.wav",
+      "sha256": "474d94fe8d2807f43b104700d5a6086feffb69a1428d74d0b6c5ea2ca4d619a6",
+      "seconds": 14.5,
+      "peak": 0.5,
+      "clipped_fraction": 0.0,
+      "quiet_fraction": 0.32689655172413795,
+      "rms_dbfs": -30.48092864609481,
+      "reasons": []
+    },
+    {
+      "audio": "arka.audio_sample_15.wav",
+      "sha256": "7d421242e94ef0b448dd302534f8a2003b996594e66bd22085dd6aabfed19966",
+      "seconds": 13.55,
+      "peak": 0.499969482421875,
+      "clipped_fraction": 0.0,
+      "quiet_fraction": 0.29394387001477107,
+      "rms_dbfs": -28.281910600952052,
+      "reasons": []
+    },
+    {
+      "audio": "arka.audio_sample_16.wav",
+      "sha256": "a6403c85ae66936dc82f36c1bb1a04ba01921cc4c67a6a421c1d09366b5f6af0",
+      "seconds": 15.54,
+      "peak": 0.5,
+      "clipped_fraction": 0.0,
+      "quiet_fraction": 0.24324324324324326,
+      "rms_dbfs": -23.941404174667,
+      "reasons": []
+    }
+  ],
+  "notice": "Signal checks only."
+}
