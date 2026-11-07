@@ -70,6 +70,7 @@ class EnrollmentApp:
         self.alias_entry = ttk.Combobox(setup, textvariable=self.alias, width=23)
         self.alias_entry.grid(row=1, column=0, sticky="ew", pady=(4, 8))
         self.devices = ttk.Combobox(setup, textvariable=self.device, state="readonly")
+        self.devices.bind("<<ComboboxSelected>>", self.prepare_microphone)
         self.devices.grid(row=1, column=1, sticky="ew", padx=(16, 0), pady=(4, 8))
         setup.columnconfigure(1, weight=1)
         self.open_button = ttk.Button(frame, text="Create / open profile", command=self.open_alias)
@@ -155,7 +156,7 @@ class EnrollmentApp:
         active = self.session is not None and self.session.index < len(self.session.draft.readings)
         for button, enabled in [
             (self.open_button, idle),
-            (self.record_button, idle and active and bool(self.device.get())),
+            (self.record_button, idle and active and self.recorder.ready),
             (self.stop_button, self.recording and not self.busy),
             (self.play_button, idle and self.take_ready),
             (self.save_button, idle and active and self.take_ready),
@@ -199,6 +200,8 @@ class EnrollmentApp:
                     messagebox.showerror("Yapit", str(error), parent=self.root)
                 else:
                     callback(value)
+                if not self.root.winfo_exists():
+                    return
                 self.refresh_controls()
         except queue.Empty:
             pass
@@ -208,7 +211,10 @@ class EnrollmentApp:
         self.devices.configure(values=devices)
         if devices:
             self.device.set(devices[0])
-            self.status.set("Create or select a profile. Profile names are always lowercase.")
+            if self.session:
+                self.prepare_microphone()
+            else:
+                self.status.set("Create or select a profile to prepare the microphone.")
         else:
             self.status.set("No microphone found. Connect a microphone and reopen the app.")
 
@@ -231,13 +237,29 @@ class EnrollmentApp:
         self.take = None
         self.take_ready = False
         self.confirmed.set(False)
-        self.recording_hint.set("Ready. Press Record and wait for 'Recording - speak now'.")
+        self.recording_hint.set("Preparing microphone...")
         self.show_passage()
         self.status.set(
             f"Editing '{session.alias}'. Save at least {MIN_SAMPLES} samples. "
             "Choose a saved passage to replace its audio."
         )
         self.refresh_controls()
+        self.prepare_microphone()
+
+    def prepare_microphone(self, event=None) -> None:
+        if self.session is None or not self.device.get() or self.busy or self.recording:
+            return
+        device, directory = self.device.get(), self.session.scratch
+        self.recording_hint.set("Preparing microphone - Record will enable when ready.")
+        self.status.set("Microphone stays active between takes; only Record saves audio.")
+        self.work(
+            lambda: self.recorder.prepare(device, directory),
+            self.microphone_prepared,
+        )
+
+    def microphone_prepared(self, value=None) -> None:
+        self.recording_hint.set("Microphone ready. Record starts immediately.")
+        self.status.set("Record to save audio. Stop ends the take; Close releases the microphone.")
 
     def show_passage(self) -> None:
         session = self.session
@@ -270,9 +292,10 @@ class EnrollmentApp:
             self.take = None
             self.take_ready = False
             self.confirmed.set(False)
-            self.recording_hint.set("Ready. Press Record and wait for 'Recording - speak now'.")
+            self.recording_hint.set("Microphone ready. Record starts immediately.")
             self.show_passage()
             self.refresh_controls()
+            self.prepare_microphone()
 
     @staticmethod
     def stop_playback() -> None:
@@ -289,6 +312,9 @@ class EnrollmentApp:
     def start_recording(self) -> None:
         if self.session is None:
             return
+        if not self.recorder.ready:
+            self.prepare_microphone()
+            return
         self.stop_playback()
         self.confirmed.set(False)
         self.take_ready = False
@@ -302,9 +328,9 @@ class EnrollmentApp:
             return
         self.started = time.monotonic()
         self.recording = True
-        self.record_button.configure(text="Starting...")
-        self.recording_hint.set("Starting microphone - wait before speaking.")
-        self.status.set("Starting microphone... wait for 'Recording' before speaking.")
+        self.record_button.configure(text="Recording")
+        self.recording_hint.set("Recording - speak now. Press Stop when finished.")
+        self.status.set("Recording. The microphone was already prepared.")
         self.refresh_controls()
         self.root.after(100, self.recording_tick)
 
@@ -313,11 +339,7 @@ class EnrollmentApp:
             return
         elapsed = time.monotonic() - self.started
         captured = self.recorder.captured_seconds
-        if (
-            self.recorder.process.poll() is not None
-            or captured >= 20
-            or (captured == 0 and elapsed >= 20)
-        ):
+        if not self.recorder.ready or captured >= 20 or (captured == 0 and elapsed >= 20):
             self.stop_recording()
             return
         if captured > 0:
@@ -375,7 +397,7 @@ class EnrollmentApp:
         self.take = None
         self.take_ready = False
         self.confirmed.set(False)
-        self.recording_hint.set("Ready. Press Record and wait for 'Recording - speak now'.")
+        self.recording_hint.set("Microphone ready. Record starts immediately.")
         self.show_passage()
         self.status.set(
             f"Saved {report['quality']['seconds']:.1f}s. "
@@ -390,10 +412,17 @@ class EnrollmentApp:
         if self.session is not None:
             self.stop_playback()
             self.status.set("Curating samples and creating the voice alias...")
-            self.work(self.session.finish, self.enrollment_finished)
+            session = self.session
+
+            def finish():
+                self.recorder.close()
+                return session.finish()
+
+            self.work(finish, self.enrollment_finished)
 
     def enrollment_finished(self, voice) -> None:
         self.show_existing()
+        self.recording_hint.set("Enrollment completed; microphone released.")
         self.status.set(
             f"Enrolled '{voice.name}' with {len(voice.samples)} samples. "
             f"Temporary takes and session files removed. "
@@ -420,12 +449,8 @@ class EnrollmentApp:
             ):
                 return
             self.recording = False
-            try:
-                self.recorder.stop()
-            except Exception:
-                pass
         self.stop_playback()
-        self.root.destroy()
+        self.work(self.recorder.close, lambda _: self.root.destroy())
 
 
 def main() -> None:

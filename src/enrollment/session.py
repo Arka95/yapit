@@ -129,8 +129,9 @@ class EnrollmentSession:
     def new_take(self) -> Path:
         if self.index == len(self.draft.readings):
             raise ValueError("Choose a passage to record another sample.")
-        self.draft.completed = False
-        self.persist()
+        if self.draft.completed:
+            self.draft.completed = False
+            self.persist()
         return self.scratch / data_filename(
             self.sample_name,
             self.alias,

@@ -13,12 +13,19 @@ train weights or automatically verify spoken words.
 ```
 
 Create or select a profile, choose the microphone, and record the displayed
-passage. Wait for the bold **Recording - speak now** cue before speaking; opening
-the microphone takes time. The timer measures captured audio, not launch time.
+passage. Opening a profile prepares the selected microphone once. **Record**
+enables when the microphone is ready, then starts saving immediately without
+reopening it. A 250 ms in-memory pre-roll preserves speech beginning at the click.
+The timer measures saved audio, not device startup time.
 Replay the take, check **Confirm before saving**, and save. If the confirmation
 is unchecked, **Save & Next** explains what is needed instead of staying grey.
 There is no consent checkbox. Save **at least five distinct recordings**, then finish enrollment;
 you can finish without recording the entire baseline and add more later.
+
+The microphone stays active between takes; audio is not saved until **Record**.
+**Stop** ends the take, not the microphone stream. **Finish enrollment** and
+closing the window release the microphone. Changing the selected microphone
+prepares the new device before enabling Record again.
 
 The passage selector lets you revisit a saved passage. Saving a new take replaces
 that passage's prepared audio at the same filename; raw takes remain temporary.

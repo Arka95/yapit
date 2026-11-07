@@ -250,11 +250,12 @@ continuous timelines, rejecting unknown fields and invalid values.
 **Native enrollment UI.** `enrollment\desktop.py` is a Windows Tkinter/ttk wizard with
 playback through `winsound`. Blocking work runs in worker threads; results return
 through a queue polled by Tk's event loop. `enrollment\recorder.py` discovers DirectShow
-microphones and captures mono 24 kHz WAVs through an FFmpeg subprocess. Record
-opens the microphone; Stop sends FFmpeg `q` so it can finalize the file.
-Capture has a 20-second audio limit and is never started just by opening the app.
-The UI waits for captured-audio progress before showing **Recording - speak now**;
-startup time is not deducted from the take. DirectShow uses a requested 50 ms buffer.
+microphones and prepares a continuous mono 24 kHz PCM stream when a profile is opened.
+Record saves that already-running stream to WAV immediately, including 250 ms of
+in-memory pre-roll; unrecorded audio is otherwise discarded. Stop finalizes the
+take while retaining the prepared stream. The WAV writer enforces the 20-second
+audio limit. Finish/Close send FFmpeg `q` and release the microphone.
+DirectShow uses a requested 50 ms buffer; device startup happens once, not per take.
 
 **Enrollment state and curation.** `EnrollmentSession` saves each accepted take
 against the exact displayed static passage, with resumable state in

@@ -9,10 +9,13 @@ pairing. `sample_scripts.py` loads numbered static JSON files in numeric order.
 `artifacts.py` confines temporary files to the enrollment workspace and removes
 profile-owned scratch files only after successful enrollment.
 `recorder.py` controls Windows DirectShow recording through FFmpeg.
-It requests a 50 ms device buffer and reads captured-audio timestamps from FFmpeg
-progress in the workspace capture log. The UI announces readiness only after
-positive captured audio, not a WAV header or elapsed launch time. FFmpeg enforces
-the 20-second audio limit; startup time does not shorten a take.
+It requests a 50 ms device buffer and reads a continuous mono 24 kHz PCM stream
+from FFmpeg. Profile/device selection prepares the stream in a worker thread;
+readiness requires received PCM, not a WAV header. Record reuses the prepared
+process and writes PCM to a raw WAV, including 250 ms of in-memory pre-roll.
+The WAV writer caps each take at exactly 20 seconds while the stream stays ready
+for the next take. Stop flushes the WAV; Finish and Close stop the FFmpeg process.
+Unrecorded audio is discarded except for the small rolling memory buffer.
 `desktop.py` owns Tkinter UI and playback; blocking recording checks and writes
 run off the Tk thread. `cli.py` and `__main__.py` expose the module independently.
 
@@ -78,6 +81,7 @@ filename replacement, retained unrelated audio/settings, inventories and hashes,
 rejected duplicate/bad audio, rejected other-session recordings, successful
 scratch cleanup, retained incomplete sessions/external inputs, clean data roots,
 isolated no-model/no-network imports,
-real FFmpeg progress/graceful stopping with synthetic input, and actual Tk UI actions
+real FFmpeg prepared-stream reuse, WAV flushing and frame limits with synthetic input,
+and actual Tk UI actions
 without opening a microphone. These tests do not assess voice identity or model
 quality. Static JSON baseline files must be present in the built wheel.

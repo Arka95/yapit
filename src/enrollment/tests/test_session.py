@@ -166,15 +166,32 @@ def test_duplicates_short_clipped_and_outside_takes_rejected(session, tmp_path):
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Native Windows process control")
-def test_record_stop_flushes_real_wav_without_accessing_a_microphone(session, monkeypatch):
+def test_prepare_failure_closes_workspace_log_without_starting_a_microphone(session, monkeypatch):
+    def fail_start(*args, **kwargs):
+        raise FileNotFoundError("Recorder executable not found")
+
+    monkeypatch.setattr("yapit.enrollment.recorder.subprocess.Popen", fail_start)
+    recorder = MicrophoneRecorder()
+    with pytest.raises(FileNotFoundError, match="not found"):
+        recorder.prepare("Test microphone", session.scratch)
+    assert recorder.log.closed
+    assert not recorder.ready
+    assert not list(session.store.root.rglob("*.log"))
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Native Windows process control")
+def test_prepared_microphone_reuses_stream_and_caps_flushed_raw_wavs(session, monkeypatch):
     original_popen = subprocess.Popen
+    captures = []
+    real_time = True
 
     def synthetic_capture(command, **kwargs):
         if "-f" not in command or command[command.index("-f") + 1] != "dshow":
             return original_popen(command, **kwargs)
         assert command[command.index("-f") + 1] == "dshow"
-        assert command[command.index("-t") + 1] == "20"
         assert kwargs["stdin"] == subprocess.PIPE
+        assert kwargs["stdout"] == subprocess.PIPE
+        captures.append(command)
         return original_popen(
             [
                 ffmpeg(),
@@ -182,21 +199,18 @@ def test_record_stop_flushes_real_wav_without_accessing_a_microphone(session, mo
                 "-loglevel",
                 "error",
                 "-nostats",
-                "-stats_period",
-                "0.1",
-                "-progress",
-                "pipe:2",
-                "-n",
-                "-re",
+                *(["-re"] if real_time else []),
                 "-f",
                 "lavfi",
                 "-i",
                 "sine=frequency=220:sample_rate=24000",
-                "-t",
-                "20",
                 "-c:a",
                 "pcm_s16le",
-                command[-1],
+                "-flush_packets",
+                "1",
+                "-f",
+                "s16le",
+                "pipe:1",
             ],
             **kwargs,
         )
@@ -205,23 +219,48 @@ def test_record_stop_flushes_real_wav_without_accessing_a_microphone(session, mo
     recorder = MicrophoneRecorder()
     assert recorder.captured_seconds == 0
     output = session.new_take()
-    recorder.start("Test device; never opened", output)
+    recorder.prepare("Test device; never opened", session.scratch)
     try:
-        deadline = time.monotonic() + 10
-        while recorder.captured_seconds == 0:
-            assert recorder.process.poll() is None
-            assert time.monotonic() < deadline, "Capture did not become ready."
-            time.sleep(0.02)
+        assert recorder.ready
+        assert not output.exists()
+        assert recorder.captured_seconds == 0
+        process = recorder.process
+        recorder.start("Test device; never opened", output)
         time.sleep(0.35)
         assert recorder.stop() == output
-        assert recorder.process.poll() == 0
+        assert recorder.ready
+        assert recorder.process is process
+        assert recorder.process.poll() is None
         samples = decode_audio(output)
         assert 0.2 < len(samples) / SAMPLE_RATE < 4
         assert recorder.captured_seconds == pytest.approx(len(samples) / SAMPLE_RATE, abs=1e-5)
+        assert np.any(samples[: SAMPLE_RATE // 20] != 0)
+        second = session.new_take()
+        recorder.start("Test device; never opened", second)
+        time.sleep(0.2)
+        recorder.stop()
+        assert len(captures) == 1
+        assert recorder.process is process
+        assert second.exists()
+        recorder.close()
+        assert process.poll() == 0
+        real_time = False
+        recorder.prepare("Test device; never opened", session.scratch)
+        process = recorder.process
+        third = session.new_take()
+        recorder.start("Test device; never opened", third)
+        deadline = time.monotonic() + 10
+        while recorder.captured_seconds < 20:
+            assert time.monotonic() < deadline, "Recording did not reach its frame limit."
+            time.sleep(0.02)
+        assert recorder.stop() == third
+        assert len(decode_audio(third, max_seconds=20)) == 20 * SAMPLE_RATE
+        assert recorder.ready
     finally:
-        if recorder.process.poll() is None:
-            recorder.process.kill()
-            recorder.process.wait(timeout=3)
+        recorder.close()
+    assert not recorder.ready
+    assert process.poll() == 0
+    assert not list(session.store.root.rglob("*.log"))
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Native Windows GUI")
@@ -252,6 +291,14 @@ def test_real_tk_wizard_advances_after_saving_without_opening_microphone(session
             self.process = None
             self.count = 0
             self.captured_seconds = 0.0
+            self.ready = False
+            self.prepares = 0
+
+        def prepare(self, device, directory):
+            assert device == "Test microphone"
+            self.ready = True
+            self.prepares += 1
+            self.process = SimpleNamespace(poll=lambda: None)
 
         def start(self, device, output):
             assert device == "Test microphone"
@@ -262,8 +309,11 @@ def test_real_tk_wizard_advances_after_saving_without_opening_microphone(session
             self.captured_seconds = 4.0
 
         def stop(self):
-            self.process = SimpleNamespace(poll=lambda: 0)
             return self.output
+
+        def close(self):
+            self.ready = False
+            self.process = None
 
     app.recorder = FakeRecorder()
 
@@ -280,17 +330,17 @@ def test_real_tk_wizard_advances_after_saving_without_opening_microphone(session
         pump_until(lambda: not app.busy)
         app.alias.set(session.alias)
         app.open_button.invoke()
+        pump_until(lambda: not app.busy)
         assert not hasattr(app, "consent_check")
         assert "passage 1 of 6" in app.heading.get()
         assert app.passage.get("1.0", "end").strip() == session.draft.readings[0].text
         assert app.recorder.count == 0
+        assert app.recorder.prepares == 1
         app.record_button.invoke()
         assert app.recording
         assert str(app.save_button["state"]) == "disabled"
-        app.recorder.captured_seconds = 0
-        app.recording_tick()
         assert app.take.stat().st_size > 44
-        assert app.recording_hint.get().startswith("Starting microphone")
+        assert app.recording_hint.get().startswith("Recording - speak now")
         app.started = time.monotonic() - 21
         app.recorder.captured_seconds = 0.1
         app.recording_tick()
@@ -331,15 +381,19 @@ def test_real_tk_wizard_advances_after_saving_without_opening_microphone(session
         assert not errors
         assert notices
         assert app.session.draft.completed
+        assert not app.recorder.ready
         assert session.store.voice_path(session.alias).exists()
         app.alias.set("MY-VOICE")
         app.open_button.invoke()
+        pump_until(lambda: not app.busy)
         assert app.alias.get() == "my-voice"
         assert app.alias_entry["values"] == ("my-voice",)
         app.reading_picker.current(0)
         app.select_reading()
+        pump_until(lambda: not app.busy)
         assert "passage 1 of 6" in app.heading.get()
         assert str(app.record_button["state"]) == "normal"
     finally:
         app.stop_playback()
+        app.recorder.close()
         root.destroy()

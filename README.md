@@ -117,7 +117,7 @@ Double-click **`Start Enrollment.cmd`**, or run:
 
 1. Create or select a voice profile, such as `arka`, choose your microphone,
    and click **Create / open profile**. There is no consent checkbox.
-2. Press **Record**, wait for **Recording - speak now**, then read the passage.
+2. Wait for **Microphone ready**, then press **Record** and read the passage.
    Press **Stop**, then **Play take**.
 3. Check **Confirm before saving**, then click **Save & Next**.
 4. Save at least **five distinct samples**, then click **Finish enrollment**.
@@ -140,8 +140,10 @@ Temporary raw takes, logs, preparation reports, and draft state live under
 `workspace\enrollment\<profile>` and are removed after successful **Finish enrollment**.
 Incomplete sessions retain them for retry; data contains no enrollment logs.
 
-The app is Windows-only and local-only. It needs no speech model or API key,
-and accesses your microphone only after you press **Record**.
+The app is Windows-only and local-only. It needs no speech model or API key.
+Opening a profile prepares the microphone once; it stays active between takes,
+but saves audio only after **Record**. Stop ends the take; Finish or Close releases
+the microphone. A short in-memory pre-roll protects the opening words.
 
 ### Already have recordings?
 
