@@ -1,4 +1,9 @@
 .venv/
+.venv-cpu/
+.venv-gpu/
+.venv-cosyvoice/
+.venv-cosyvoice-bootstrap/
+.runtime-wheel-cache/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -22,3 +27,7 @@ data/
 *.ckpt
 *.onnx
 *.jsonl
+
+# Keep this explicitly selected regression fixture; other media stays ignored.
+!tests/data/
+!tests/data/arka.ladakhi_marmots.wav

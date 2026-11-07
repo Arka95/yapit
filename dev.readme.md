@@ -23,10 +23,137 @@ voice-model weights. Tkinter is supplied by a Tk-enabled Python installation,
 not a new Python dependency.
 
 Run commands from the repository root so relative workspace paths and local
-configuration resolve consistently. Use an absolute `YAPIT_WORKSPACE` when
+configuration resolve consistently. Use absolute `YAPIT_WORKSPACE` and
+`YAPIT_DATA_DIR` when
 launching from another directory or an MCP client.
 
+Completed work in this checkout should be validated, committed, and pushed to the
+configured remote as `Arka95`. Use the owner's local `arka95git` SSH key or an
+unlocked SSH agent; never store its passphrase in documentation, scripts, Git
+configuration, or commits. Stage only the task's changes, preserving unrelated
+worktree edits. If authentication or the push fails, report that explicitly rather
+than claiming the work was published.
+
 ## Configuration and dependencies
+
+### Isolated CPU/GPU runtimes on Windows
+
+`setup-mode.cmd cpu` and `setup-mode.cmd gpu` use normal isolated venvs,
+preserving the old `.venv`. `scripts\setup-mode.py` installs the selected
+`requirements-cpu.txt` / `requirements-gpu.txt` first without transitive dependency
+resolution on the PyTorch index, then resolves dependencies from PyPI with the editable project
+with `[voice,rescript,mcp]` under the same wheel constraints and
+`requirements-runtime.txt`. Torch and torchaudio are both exactly 2.9.1+cpu
+or 2.9.1+cu128, respectively. Runtime pins are transformers 4.57.3,
+accelerate 1.12.0, faster-whisper 1.2.1, and CTranslate2 4.8.4.
+Qwen 0.1.1 supplies gradio, librosa, soundfile, sox, onnxruntime, einops and
+the remaining speech dependencies. Other transitive versions are resolved by
+pip, not a complete lockfile. No global Python packages are installed.
+
+Setup installs Hatchling/editables into the selected environment and uses them
+for the editable build without another isolated build dependency download.
+If package downloads fail, do not bypass TLS validation. For a trusted local
+wheel directory, `.\setup-mode.cmd cpu --wheelhouse .\verified-wheels` (or `gpu`)
+resolves runtime/build dependencies offline. PyTorch still uses its official
+index/cache, and the SoX archive still comes from its checksum-verified mirror.
+Only use public wheels whose upstream hashes or provenance you have verified.
+
+### Dependency management on `DESKTOP-A05R1KA`
+
+The owner reports that this Windows machine's VPN restricts PyPI access.
+Direct wheel/metadata requests have produced TLS `HandshakeFailure`; a successful
+index lookup is not proof that its redirected artifact host is reachable.
+The configured organization feed is
+`https://packagefeedproxy.microsoft.io/pypi/simple/`. pip successfully downloaded
+the bootstrap uv wheel from that feed, while uv dependency resolution still
+attempted blocked `files.pythonhosted.org` downloads. These are observations from
+this machine, not a claim that either installer always works.
+
+Prefer approved feeds and existing verified caches. If the feed lacks a wheel,
+prepare a wheelhouse on an authorized Windows machine/network using the exact
+backend requirements and matching interpreter/architecture. For the isolated
+CosyVoice trial, clone its source first, then collect/install its dependencies:
+
+```powershell
+# Authorized matching Windows/Python 3.10 environment:
+python -m pip download --dest .\verified-wheels -r .\requirements-cosyvoice.txt
+
+# Restricted machine, after verifying wheel provenance and hashes:
+.\.venv-cosyvoice-bootstrap\Scripts\python -m pip --python .\.venv-cosyvoice\Scripts\python.exe install --no-index --find-links .\verified-wheels -r .\requirements-cosyvoice.txt
+```
+
+Source distributions can require additional build tools/dependencies; a wheelhouse
+is complete only after installation succeeds without network access in a fresh,
+matching environment. Include the matching CUDA wheels, build requirements where
+needed, and all transitive dependencies. Record resolved versions and trusted
+SHA256 hashes. Model files, SoX archives, and managed Python downloads are separate
+artifacts and need their own approved provisioning paths.
+
+Do not disable certificate validation, change VPN policy, or substitute an
+unreviewed public mirror. Where corporate TLS inspection requires a CA certificate,
+use only the organization's supplied trust configuration. Keep index choices
+local to a command/environment, never embed credentials in tracked files, and
+do not modify the working Qwen `.venv-cpu`/`.venv-gpu` while resolving CosyVoice's
+different requirements.
+
+The initial CosyVoice source revision is
+`074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc`; its Matcha-TTS submodule is
+`dd9105b34bf2be2230f4aa1e4769fb586a3c824e`. Model files are downloaded separately
+to `models\cosyvoice3-2512`. `scripts\cosyvoice-trial.py` runs orchestration in the
+normal YapIt environment, then starts a Python 3.10 worker for the incompatible
+upstream dependencies. The worker explicitly checks CUDA placement of the
+language model, flow decoder, and vocoder. The upstream Windows ONNX frontend may
+remain CPU-only; reported PyTorch memory excludes other runtimes.
+
+One verified alternative worked for the blocked NetworkX 3.1 wheel: download it
+through the existing approved feed's artifact endpoint, verify its SHA256 against
+the feed's published link, and install that local wheel with `--no-index --no-deps`
+before continuing normal dependency resolution. Merely adding `--find-links`
+did not prevent pip from selecting blocked remote metadata. This is a targeted
+cache workaround, not proof that the entire CosyVoice environment is provisioned.
+
+The wheel choices follow the official
+[PyTorch previous-versions matrix](https://pytorch.org/get-started/previous-versions/).
+The CUDA wheel supplies its own runtime and cuDNN. The installed NVIDIA
+driver must support CUDA 12.8; the RTX 4070 SUPER supports this build.
+Thea's `docs\setup.gpu.md` describes **OpenCV CUDA**, not Yapit/PyTorch:
+do not reinstall its CUDA toolkit or cuDNN to configure these environments.
+GPU wheels occupy several GB; the model cache remains shared and unchanged.
+
+`scripts\run-mode.py`, wrapped by `yapit-mode.cmd`, sets child-only
+`YAPIT_DEVICE`, `YAPIT_ASR_DEVICE`, and `YAPIT_ASR_COMPUTE_TYPE`.
+CPU uses cpu/int8 for ASR; GPU uses cuda/float16. GPU mode validates CUDA
+availability before dispatch and never falls back. ASR's explicit `--device`
+and `--compute-type` override its mode defaults. An explicit ASR device alone selects the corresponding
+default precision instead of retaining an incompatible mode precision.
+`python <arguments>` runs
+the selected interpreter; `mcp` runs its stdio server. Torch's environment-local
+DLL directory is added to the GPU child's PATH for CTranslate2's CUDA 12/cuDNN 9
+dependencies. No activation, process-global environment mutation, or execution
+policy bypass is used.
+
+```powershell
+.\yapit-mode.cmd cpu python -m pip check
+.\yapit-mode.cmd gpu python -c "import torch; x=torch.ones(2,device='cuda'); print(x+x)"
+.\yapit-mode.cmd gpu python -m pip check
+.\yapit-mode.cmd gpu mcp
+```
+
+To add developer tools, use the selected interpreter and retain constraints:
+`.\yapit-mode.cmd cpu python -m pip install -c requirements-cpu.txt -c requirements-runtime.txt -e ".[dev]"`.
+Use GPU constraints for GPU development. Neither setup downloads model weights;
+`--offline` ASR reuses a previously cached model.
+
+SoX setup downloads only the official 14.4.2 Windows archive, verifies SHA256
+`8072cc147cf1a3b3713b8b97d6844bb9389e211ab9e1101e432193fad6ae6662`,
+and installs only `sox.exe` and its DLLs into each environment's Scripts folder.
+Existing different tool binaries are not overwritten. Source:
+[SoX distribution](https://sourceforge.net/projects/sox/files/sox/14.4.2/).
+The download is verified in memory; no user files or credentials are copied.
+
+The supplied MCP config uses the mode launcher with absolute workspace/data roots.
+Change its `gpu` argument to `cpu` when travelling. With direct MCP executables,
+set device variables explicitly and ensure CUDA DLL discovery for GPU ASR.
 
 CLI, desktop, and MCP entry points load `.env` through `python-dotenv`.
 Existing process environment variables take precedence. `doctor` reports
@@ -36,9 +163,12 @@ inference works.
 
 | Variable | Purpose / default |
 |---|---|
-| `YAPIT_WORKSPACE` | Private data and jobs; defaults to `workspace` |
+| `YAPIT_WORKSPACE` | Metadata, voice profiles, video guides and checkpoints; defaults to `workspace` |
+| `YAPIT_DATA_DIR` | Shared data root; defaults to `data` beside the workspace |
 | `YAPIT_MODEL` | Base Hub model ID or local model directory; defaults to `Qwen/Qwen3-TTS-12Hz-1.7B-Base` |
 | `YAPIT_DEVICE` | `auto` selects CUDA when available, otherwise CPU; can be set explicitly |
+| `YAPIT_ASR_DEVICE` | Rescript device; defaults to `cpu` without a mode launcher |
+| `YAPIT_ASR_COMPUTE_TYPE` | Rescript precision; mode launcher sets `int8` (CPU) or `float16` (GPU) |
 | `YAPIT_FFMPEG` | Optional FFmpeg executable override; otherwise uses `imageio-ffmpeg` |
 | `YAPIT_ALLOW_CLOUD` | Must be `true` for automatic cloud scripts; otherwise disabled |
 | `OPENAI_API_KEY` | Needed only for automatic cloud scripts |
@@ -61,6 +191,20 @@ to work around package-installation failures.
 **Offline inference.** First provision the complete base model and speech
 tokenizer, then set `YAPIT_MODEL` to their local model directory.
 `HF_HUB_OFFLINE=1` prevents Hub network access for cached/local inference.
+
+**Reference-conditioned delivery (provisional Qwen baseline).** No head-to-head
+model selection or expressive-quality benchmark has been measured. Environment
+separation does not commit the project to this backend. Base cloning uses user recordings for
+`lively-vlog`, `relaxed-travel`, and `asmr-travel`; it does not accept the native
+emotion `instruct` supported by different CustomVoice/VoiceDesign model paths.
+`voice-style-prompt` gives recording direction and an exact passage;
+`voice-style-enroll` applies the normal consent, transcript, and 3-20 second
+signal checks. Recordings live in `data\audio\styles\<voice>\<style>`;
+`data\transcripts\styles\<voice>\<style>\reference.json` holds the sidecar,
+and the voice profile maps the references. Default identity references remain
+unchanged. Missing styles fail before model load; custom-voice checkpoints
+cannot use this Base reference selection. There is no training, classifier,
+or guaranteed emotion quality: real listening review remains mandatory.
 The normal default can download weights on first use; installing the Python
 packages alone is not an offline-ready setup. An explicitly selected voice
 checkpoint takes precedence over `YAPIT_MODEL`.
@@ -85,7 +229,8 @@ against the exact displayed passage, with resumable state in `session.json`
 and a manifest in `samples.json`. Raw takes remain intact; optional preparation
 trims outer silence and applies constant gain to a separate file.
 `voices.py` checks duration, clipping, loudness, quiet frames, and duplicates,
-copies accepted mono 24 kHz samples into the voice profile directory, estimates
+preserves original clips and copies accepted mono 24 kHz samples into
+`data\audio\voices\<alias>`, estimates
 speaking rate, and ranks one reference by signal characteristics. These checks
 are not transcription, speaker verification, or proof of a noise-free sample.
 
@@ -103,12 +248,13 @@ pool all enrolled recordings or update model weights. A selected fine-tuned
 checkpoint switches generation to its named custom speaker. The `SpeechBackend`
 protocol lets tests inject deterministic speech without loading Qwen.
 
-**Orchestration and timing.** `pipeline.py` creates a job, saves the brief,
-script, provenance, and status, synthesizes each beat, and inserts explicit
+**Orchestration and timing.** `pipeline.py` reserves a readable output name, saves flat
+brief/provenance/status files under `workspace\outputs` and the script under `data\transcripts`,
+synthesizes each beat, and inserts explicit
 pauses. `media.py` joins audio and uses FFmpeg's pitch-preserving `atempo` only
 within 0.90-1.10x. A larger adjustment is refused unless the unadjusted audio
 already fits the +/-5 second tolerance. The encoded MP3 is decoded and checked
-again before the job can complete. Failure writes `status.json` and `error.log`
+again before the run can complete. Failure writes `<name>.status.json` and `<name>.error.log`
 for render jobs inside the pipeline's error-handling block.
 
 **Media and edit guidance.** `media.py` handles decoding/resampling, 192 kb/s
@@ -119,20 +265,53 @@ sub-cuts. Phrase captions are proportional word groups, not forced alignment.
 The guide is numbered placeholder slates at 1080x1920 and 30 fps, not generated
 travel footage or automatic editing of the source video.
 
-**Storage.** `storage.py` centralizes workspace paths, safe aliases, unique job
-IDs, and atomic JSON replacement. MCP paths are resolved and confined to the
-workspace; CLI manifests may intentionally refer to external local recordings.
+**Storage.** `storage.py` centralizes workspace paths, the shared `DataStore`,
+safe aliases, exclusive readable-name reservations, numeric duplicate suffixes,
+and atomic JSON replacement. All new generated files are flat; `arka` is the
+default generation voice. Existing `job` response fields identify the shared
+metadata folder, not a private run folder; use `name`, `status_file`, and returned
+artifact paths. MCP paths are resolved
+and confined to the workspace or data root; CLI manifests may intentionally refer
+to external local recordings, which are preserved in the canonical audio store.
 Completed aliases are not overwritten. Generation has no durable job queue or
 cross-process GPU lock, so do not run competing model-heavy processes on the
 same constrained device.
 
 ## Data locations and supported boundaries
 
-Under `YAPIT_WORKSPACE`, `enrollment\<alias>` holds draft state, original takes,
-prepared samples, and per-take reports. `voices\<alias>` holds curated WAVs,
-`profile.json`, and `quality.json`. `outputs\<job-id>` holds prompt/render/training
-artifacts and available status files. An enrollment draft is not usable for
+All modules share `DataStore` and `YAPIT_DATA_DIR` (default: the `data` directory
+beside `YAPIT_WORKSPACE`). Set both roots to absolute paths for alternate working
+directories, MCP clients, and WSL.
+
+| Location beneath the data root | Content |
+|---|---|
+| `audio\enrollment\<alias>` | Raw microphone takes and prepared recording copies |
+| `audio\voices\<alias>` | Curated reference WAVs and original imported clips in `raw` |
+| `audio\imports` | Archived external inputs; video soundtrack extraction |
+| `transcripts\enrollment\<alias>` | Draft state, sample manifests and take reports |
+| `transcripts\voices\<alias>` | Curated audio/text sample manifest |
+| `transcripts\<profile>.<source>.script.json` / `.transcript.json` | Recognition scripts and sidecars |
+| `transcripts\<name>.script.json` / `.captions.srt` | Rendering script and captions |
+| `transcripts\<name>.train.jsonl` / `.holdout.jsonl` / `.train_codes.jsonl` | Training text and codec records |
+| `generated_audio\<name>.wav` / `.mp3` / `.raw.wav` / `.fitted.wav` | Final audio and intermediates |
+
+Under `YAPIT_WORKSPACE`, `voices\<alias>` retains `profile.json` and
+`quality.json`; flat `outputs\<name>.*` files hold prompts/frames, timelines,
+provenance, status, guides and logs. Model checkpoints retain the upstream-required
+directory structure beneath `voices\<alias>\checkpoints\<readable-name>`.
+Profiles and draft
+state necessarily embed reference text as metadata; standalone transcript/script
+exports use the transcript store. No new recording or generated WAV/MP3 is saved
+in the workspace. An enrollment draft is not usable for
 generation until **Finish enrollment** creates its voice profile.
+
+Legacy profiles fall back to their original workspace clip directories. Old
+drafts are loaded into canonical transcript state and continue with new takes
+in the audio store; existing files are not moved or deleted. Rescript output
+overrides must remain in their appropriate bucket; transcript `--output` must be
+the transcript root, not a new child directory.
+Externally supplied recordings are archived without modifying the source.
+The selected `tests\data` golden fixture is the explicit versioned exception.
 
 Briefs currently support English, `travel` or `product`, and 5-180 seconds.
 Scripts contain 1-40 beats, at most 650 words overall, and pauses of 0-1200 ms.
@@ -164,7 +343,7 @@ source, examples, logs, or commits.
 
 Install `.[mcp]` and adapt `examples\mcp.config.json` in your client's settings.
 It launches `yapit-mcp` over stdio, not a public HTTP listener. Set absolute
-executable/workspace paths and explicit model/device configuration as needed;
+executable/workspace/data paths and explicit model/device configuration as needed;
 do not depend on the client's working directory to find your `.env`.
 
 The tools are `prepare_script_prompt`, `enroll_voice`, `generate_narration`,
@@ -175,10 +354,12 @@ For example, `generate_reel` takes `voice: "my-voice"`, `seconds: 30`, and a
 scripting, it returns a prompt awaiting approval.
 
 All MCP file inputs, including recordings referenced inside sample manifests,
-must be inside `YAPIT_WORKSPACE`. Mutating/generation calls use a per-server lock
+must be inside `YAPIT_WORKSPACE` or `YAPIT_DATA_DIR`. Relative paths still resolve
+against the workspace; use absolute paths for the data root. Mutating/generation calls use a per-server lock
 and reject concurrent work as busy. Calls are synchronous: configure a generous
-client timeout and use one server per GPU. `get_job_status` reads persisted status
-by the output directory's basename; it does not schedule background jobs.
+client timeout and use one server per GPU. `get_job_status` accepts the returned
+readable `name` through its compatibility argument `job_id`; legacy job directories
+remain readable. It does not schedule background jobs.
 Keep model/library output on stderr so stdout remains valid MCP protocol data.
 
 ## Optional dedicated fine-tuning
@@ -200,7 +381,7 @@ yapit voice-train my-voice --upstream <reviewed-Qwen3-TTS-directory> --epochs 3 
 yapit voice-use-checkpoint my-voice --checkpoint <selected-checkpoint-directory>
 ```
 
-Use the same workspace; re-enroll if moving recordings between filesystems
+Use the same workspace and data root; re-enroll if moving recordings between filesystems
 invalidates their paths. Project guardrails require at least ten distinct clips
 and 60 seconds; 5-15 clean minutes is a recommendation, not a quality guarantee.
 The wrapper deterministically holds out about 10%, prepares codec tokens, and
@@ -231,13 +412,15 @@ Tk wizard workflow with a fake recorder; they do not capture your microphone.
 Passing these tests does not establish real-model pronunciation or voice quality.
 
 Keep changes focused and preserve the common pipeline, schemas, duration
-checks, explicit consent, workspace confinement, and existing-alias protection.
+checks, explicit consent, workspace/data confinement, and existing-alias protection.
 Add focused tests for changed behavior; do not weaken quality gates to make a
 recording pass. For speech changes, also render with a consenting enrolled voice
 and listen to held-out phrases before claiming a voice-quality improvement.
 Documentation-only changes do not need an inference run.
 
-Never commit recordings, model weights, generated media, `.env`, or credentials.
+Never commit private recordings, model weights, generated media, `.env`, or credentials.
+Only explicitly selected test fixtures such as `tests\data\arka.ladakhi_marmots.wav`
+are exempt from the media-ignore policy.
 These are covered by `.gitignore`, but review `git diff` and staged paths before
 committing. Do not remove private workspaces or user recordings as test cleanup,
 and do not add automatic uploads or checkpoint promotion.

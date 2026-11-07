@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from enum import StrEnum
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -62,6 +63,20 @@ class SampleManifest(Model):
     samples: Annotated[list[Sample], Field(min_length=1, max_length=300)]
 
 
+class DeliveryStyle(StrEnum):
+    default = "default"
+    lively_vlog = "lively-vlog"
+    relaxed_travel = "relaxed-travel"
+    asmr_travel = "asmr-travel"
+
+
+class StyleReference(Model):
+    audio: str
+    text: Text
+    words_per_minute: Annotated[float, Field(ge=80, le=240)]
+    consent: Literal[True]
+
+
 class Voice(Model):
     name: str
     consent: Literal[True]
@@ -71,6 +86,7 @@ class Voice(Model):
     words_per_minute: float
     checkpoint: str | None = None
     speaker: str | None = None
+    styles: dict[DeliveryStyle, StyleReference] = Field(default_factory=dict)
 
 
 class Cue(Model):

@@ -1,0 +1,4 @@
+# Separate Python 3.10 environment; clone the official source before installing.
+-r "models\cosyvoice_source\requirements.txt"
+# Upstream Gradio 5.4 imports APIs removed in huggingface-hub 1.x.
+huggingface-hub>=0.34,<1

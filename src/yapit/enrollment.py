@@ -111,13 +111,23 @@ class EnrollmentSession:
                 f"Alias '{self.alias}' is already enrolled. Choose a new alias, such as "
                 f"'{self.alias}-v2'; existing recordings will not be overwritten."
             )
-        self.folder = workspace.inside(Path("enrollment") / self.alias, exists=False)
+        self.folder = workspace.inside(
+            workspace.data.transcripts / "enrollment" / self.alias, exists=False
+        )
+        self.audio_folder = workspace.inside(
+            workspace.data.audio / "enrollment" / self.alias, exists=False
+        )
+        legacy_folder = workspace.root / "enrollment" / self.alias
         self.folder.mkdir(parents=True, exist_ok=True)
         self.path = self.folder / "session.json"
-        if self.path.exists():
-            self.draft = Draft.model_validate_json(self.path.read_text(encoding="utf-8"))
+        existing = self.path if self.path.exists() else legacy_folder / "session.json"
+        if existing.exists():
+            self.draft = Draft.model_validate_json(existing.read_text(encoding="utf-8"))
             if self.draft.alias != self.alias:
                 raise ValueError("The saved enrollment alias does not match this folder.")
+            for sample in self.draft.samples:
+                if sample:
+                    sample.audio = str((existing.parent / sample.audio).resolve())
         else:
             self.draft = Draft(
                 alias=self.alias,
@@ -142,8 +152,8 @@ class EnrollmentSession:
     def new_take(self) -> Path:
         if self.finished:
             raise ValueError("All passages are saved; finish enrollment or choose another alias.")
-        directory = self.folder / "takes"
-        directory.mkdir(exist_ok=True)
+        directory = self.audio_folder / "takes"
+        directory.mkdir(parents=True, exist_ok=True)
         return directory / f"raw-{self.index + 1:02}-{uuid.uuid4().hex[:12]}.wav"
 
     def save_take(self, source: Path, confirmed: bool, normalize: bool) -> dict:
@@ -154,7 +164,10 @@ class EnrollmentSession:
         if self.finished:
             raise ValueError("All passages are already saved.")
         source = self.workspace.inside(source)
-        if not source.is_relative_to(self.folder):
+        legacy_folder = self.workspace.root / "enrollment" / self.alias
+        if not source.is_relative_to(self.audio_folder) and not source.is_relative_to(
+            legacy_folder
+        ):
             raise ValueError("The recording does not belong to this enrollment session.")
         data = decode_audio(source, max_seconds=20)
         original_quality = audio_quality(data)
@@ -196,7 +209,8 @@ class EnrollmentSession:
         if quality["reasons"]:
             raise ValueError(" ".join(quality["reasons"]))
         index = self.index
-        prepared = source.with_name(f"sample-{index + 1:02}-{uuid.uuid4().hex[:12]}.wav")
+        self.audio_folder.mkdir(parents=True, exist_ok=True)
+        prepared = self.audio_folder / f"sample-{index + 1:02}-{uuid.uuid4().hex[:12]}.wav"
         write_wav(prepared, data)
         prepared_digest = hashlib.sha256(prepared.read_bytes()).hexdigest()
         for sample in self.draft.samples:
@@ -210,7 +224,7 @@ class EnrollmentSession:
                 prepared.unlink()
                 raise ValueError("This duplicates a saved recording. Read the current passage.")
         self.draft.samples[index] = Sample(
-            audio=str(prepared.relative_to(self.folder)),
+            audio=str(prepared),
             text=self.draft.readings[index].text,
         )
         report = {
@@ -223,7 +237,7 @@ class EnrollmentSession:
             "transcript_confirmed": True,
             "notice": "Signal checks only. Listen for pronunciation, speaker identity and noise.",
         }
-        save_json(prepared.with_suffix(".quality.json"), report)
+        save_json(self.folder / prepared.with_suffix(".quality.json").name, report)
         save_json(self.path, self.draft)
         save_json(
             self.folder / "samples.json",

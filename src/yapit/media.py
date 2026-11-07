@@ -133,7 +133,7 @@ def encode_mp3(source: Path, destination: Path) -> None:
     )
 
 
-def media_frames(source: Path, destination: Path) -> list[Path]:
+def media_frames(source: Path, destination: Path, *, prefix: str = "") -> list[Path]:
     if source.stat().st_size > 250 * 1024 * 1024:
         raise ValueError("Media limit is 250 MB; supply a smaller local file.")
     destination.mkdir(parents=True, exist_ok=True)
@@ -141,7 +141,7 @@ def media_frames(source: Path, destination: Path) -> list[Path]:
         with Image.open(source) as image:
             image = image.convert("RGB")
             image.thumbnail((1280, 1280))
-            output = destination / "image.jpg"
+            output = destination / f"{prefix + '.' if prefix else ''}image.jpg"
             image.save(output, quality=85)
         return [output]
     if source.suffix.lower() not in {".mp4", ".mov", ".mkv", ".webm"}:
@@ -160,10 +160,10 @@ def media_frames(source: Path, destination: Path) -> list[Path]:
             "vfr",
             "-frames:v",
             "6",
-            str(destination / "frame-%02d.jpg"),
+            str(destination / f"{prefix + '.' if prefix else ''}frame-%02d.jpg"),
         ]
     )
-    frames = sorted(destination.glob("frame-*.jpg"))
+    frames = sorted(destination.glob(f"{prefix + '.' if prefix else ''}frame-*.jpg"))
     if not frames:
         raise ValueError("No video frames could be extracted.")
     return frames
@@ -177,10 +177,16 @@ def srt_time(seconds: float) -> str:
     return f"{hours:02}:{minutes:02}:{secs:02},{ms:03}"
 
 
-def render_guide(timeline: Timeline, audio: Path, output: Path) -> None:
+def render_guide(
+    timeline: Timeline,
+    audio: Path,
+    output: Path,
+    *,
+    captions: Path | None = None,
+    prefix: str = "",
+) -> None:
     output.mkdir(parents=True, exist_ok=True)
-    slate_dir = output / "slates"
-    slate_dir.mkdir()
+    stem = f"{prefix}." if prefix else ""
     srt = []
     concat = []
     total_frames = 0
@@ -195,17 +201,22 @@ def render_guide(timeline: Timeline, audio: Path, output: Path) -> None:
         draw.text((64, 160), f"CLIP {index:02} / {len(timeline.cues):02}", font=font, fill="white")
         draw.text((64, 220), f"{cue.start:.2f}s - {cue.end:.2f}s", font=font, fill="#aaaaaa")
         draw.text((64, timeline.height - 230), "Replace with your footage", font=font, fill="white")
-        slate = slate_dir / f"clip-{index:03}.png"
+        slate = output / f"{stem}clip-{index:03}.png"
         image.save(slate)
         end_frame = max(total_frames + 1, round(cue.end * timeline.fps))
         frames = end_frame - total_frames
         total_frames = end_frame
-        concat += [f"file 'slates/{slate.name}'", f"duration {frames / timeline.fps:.9f}"]
+        concat += [f"file '{slate.name}'", f"duration {frames / timeline.fps:.9f}"]
         srt.append(f"{index}\n{srt_time(cue.start)} --> {srt_time(cue.end)}\n{cue.text}\n")
-    concat.append(f"file 'slates/{slate.name}'")
-    playlist = output / "slates.txt"
+    concat.append(f"file '{slate.name}'")
+    playlist = output / f"{stem}slates.txt"
     playlist.write_text("\n".join(concat) + "\n", encoding="ascii")
-    (output / "captions.srt").write_text("\n".join(srt), encoding="utf-8")
+    if captions is None:
+        from yapit.storage import DataStore
+
+        captions = DataStore().transcripts / f"{stem}captions.srt"
+    captions.parent.mkdir(parents=True, exist_ok=True)
+    captions.write_text("\n".join(srt), encoding="utf-8")
     run_media(
         [
             "-y",
@@ -237,7 +248,7 @@ def render_guide(timeline: Timeline, audio: Path, output: Path) -> None:
             f"{timeline.seconds:.6f}",
             "-movflags",
             "+faststart",
-            str(output / "guide.mp4"),
+            str(output / f"{stem}guide.mp4"),
         ]
     )
 

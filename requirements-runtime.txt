@@ -1,0 +1,4 @@
+transformers==4.57.3
+accelerate==1.12.0
+faster-whisper==1.2.1
+ctranslate2==4.8.4

@@ -1,0 +1,4 @@
+# PyTorch wheels bundle the CUDA runtime; no system CUDA toolkit install is needed.
+# Install from https://download.pytorch.org/whl/cu128 (see setup-mode.py).
+torch==2.9.1+cu128
+torchaudio==2.9.1+cu128

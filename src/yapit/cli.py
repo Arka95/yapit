@@ -10,15 +10,18 @@ import typer
 from dotenv import load_dotenv
 
 from yapit.media import ffmpeg
-from yapit.models import Brief
+from yapit.models import Brief, DeliveryStyle
 from yapit.pipeline import Pipeline
+from yapit.rescript.cli import app as rescript_app
 from yapit.scripts import load_script
 from yapit.storage import Workspace
 from yapit.training import train, use_checkpoint
-from yapit.voices import enroll, load_voice
+from yapit.voices import STYLE_GUIDES, enroll, enroll_style, select_voice
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 PathOption = Annotated[Path | None, typer.Option()]
+
+app.add_typer(rescript_app, name="rescript")
 
 
 def workspace() -> Workspace:
@@ -36,6 +39,7 @@ def doctor() -> None:
     root = workspace()
     report = {
         "workspace": str(root.root),
+        "data": str(root.data.root),
         "ffmpeg": ffmpeg(),
         "dependencies": {
             module: importlib.util.find_spec(module) is not None
@@ -76,6 +80,39 @@ def enroll_app() -> None:
     main()
 
 
+@app.command("voice-style-prompt")
+def voice_style_prompt(style: DeliveryStyle = DeliveryStyle.lively_vlog) -> None:
+    """Get a short passage and direction for recording your own expressive reference."""
+    if style == DeliveryStyle.default:
+        raise typer.BadParameter("Choose a named style, not default.")
+    emit(
+        {
+            "style": style.value,
+            **STYLE_GUIDES[style],
+            "recording_seconds": "3-20; aim for 8-15",
+            "next": "Record your own voice, verify the exact text, then use voice-style-enroll.",
+        }
+    )
+
+
+@app.command("voice-style-enroll")
+def voice_style_enroll(
+    name: str,
+    audio: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
+    text: Annotated[str, typer.Option(help="Exact manually verified words in the recording.")],
+    style: DeliveryStyle = DeliveryStyle.lively_vlog,
+    consent: Annotated[
+        bool, typer.Option(help="This is my own voice, and I verified the exact transcript.")
+    ] = False,
+) -> None:
+    """Register an expressive recording for an existing voice, without training."""
+    try:
+        reference = enroll_style(workspace(), name, style, audio, text, consent)
+    except (ValueError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    emit({"voice": name, "style": style.value, **reference.model_dump(mode="json")})
+
+
 @app.command()
 def prompt(
     topic: str = "",
@@ -91,7 +128,7 @@ def prompt(
 
 @app.command()
 def reel(
-    voice: str,
+    voice: Annotated[str, typer.Argument()] = "arka",
     seconds: float = 30,
     script: PathOption = None,
     topic: str = "",
@@ -99,12 +136,13 @@ def reel(
     facts: str = "",
     media: PathOption = None,
     auto_script: bool = False,
+    style: DeliveryStyle = DeliveryStyle.default,
 ) -> None:
     """Orchestrate script -> local narration -> 1080x1920 edit guide."""
     root = workspace()
     if script is not None and auto_script:
         raise typer.BadParameter("Choose --script or --auto-script, not both.")
-    rate = load_voice(root, voice).words_per_minute if script or auto_script else 150
+    rate = select_voice(root, voice, style)[0].words_per_minute if script or auto_script else 150
     brief = Brief(topic=topic, seconds=seconds, kind=kind, facts=facts, words_per_minute=rate)
     result = Pipeline(root).reel(
         brief,
@@ -112,15 +150,18 @@ def reel(
         load_script(script) if script else None,
         media,
         auto_script,
+        style=style,
+        source_name=media.stem if media else script.stem if script else None,
     )
     emit(result)
 
 
 @app.command()
 def narrate(
-    voice: str,
     script: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
+    voice: Annotated[str, typer.Argument()] = "arka",
     seconds: float = 30,
+    style: DeliveryStyle = DeliveryStyle.default,
 ) -> None:
     """Render only narration MP3 and the measured clip timeline."""
     root = workspace()
@@ -130,6 +171,8 @@ def narrate(
             voice,
             load_script(script),
             render_video=False,
+            style=style,
+            source_name=script.stem,
         )
     )
 

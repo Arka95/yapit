@@ -65,8 +65,10 @@ def train(
         raise ValueError(
             "Fine-tuning needs at least 10 curated distinct clips (project guardrail)."
         )
-    voice_dir = workspace.voice_path(name).parent
-    job = workspace.job()
+    voice_dir = workspace.voice_audio_dir(name)
+    job = workspace.output("training", name)
+    transcript_dir = job.transcripts
+    checkpoint_dir = workspace.voice_path(name).parent / "checkpoints" / job.name
     records = []
     for sample in voice.samples:
         audio = workspace.inside(voice_dir / sample.audio)
@@ -84,7 +86,7 @@ def train(
     heldout = max(1, len(ordered) // 10)
     splits = {"train": ordered[heldout:], "holdout": ordered[:heldout]}
     for split, rows in splits.items():
-        (job / f"{split}.jsonl").write_text(
+        job.path(f"{split}.jsonl", transcript_dir).write_text(
             "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
             encoding="utf-8",
         )
@@ -93,7 +95,7 @@ def train(
         raise ValueError(
             "Fine-tuning needs at least 60 seconds; 5-15 clean minutes is recommended."
         )
-    save_json(job / "status.json", {"status": "training", "upstream_commit": revision})
+    save_json(job.path("status.json"), {"status": "training", "upstream_commit": revision})
     try:
         # Upstream saves checkpoints by copying a local model directory, not a Hub identifier.
         local_model = snapshot_download(repo_id=MODEL_ID)
@@ -108,7 +110,7 @@ def train(
             "training_clips": len(splits["train"]),
             "automatic_quality_approval": False,
         }
-        save_json(job / "training.json", provenance)
+        save_json(job.path("training.json"), provenance)
         commands = [
             [
                 sys.executable,
@@ -116,9 +118,9 @@ def train(
                 "--device",
                 "cuda:0",
                 "--input_jsonl",
-                str(job / "train.jsonl"),
+                str(job.path("train.jsonl", transcript_dir)),
                 "--output_jsonl",
-                str(job / "train_codes.jsonl"),
+                str(job.path("train_codes.jsonl", transcript_dir)),
             ],
             [
                 sys.executable,
@@ -126,9 +128,9 @@ def train(
                 "--init_model_path",
                 local_model,
                 "--output_model_path",
-                str(job / "checkpoints"),
+                str(checkpoint_dir),
                 "--train_jsonl",
-                str(job / "train_codes.jsonl"),
+                str(job.path("train_codes.jsonl", transcript_dir)),
                 "--num_epochs",
                 str(epochs),
                 "--batch_size",
@@ -139,7 +141,7 @@ def train(
                 name,
             ],
         ]
-        with (job / "training.log").open("w", encoding="utf-8") as log:
+        with job.path("training.log").open("w", encoding="utf-8") as log:
             for command in commands:
                 subprocess.run(
                     command,
@@ -151,21 +153,24 @@ def train(
                 )
         checkpoints = [
             str(path)
-            for path in sorted((job / "checkpoints").glob("checkpoint-epoch-*"))
+            for path in sorted(checkpoint_dir.glob("checkpoint-epoch-*"))
             if (path / "model.safetensors").is_file() and (path / "config.json").is_file()
         ]
         if not checkpoints:
             raise RuntimeError("Training produced no usable checkpoint.")
         result = {
             "status": "trained_needs_listening_review",
-            "job": str(job),
+            "job": str(job.metadata),
+            "name": job.name,
+            "status_file": str(job.path("status.json")),
             "checkpoints": checkpoints,
+            "transcripts": str(transcript_dir),
             "next": "Listen to held-out phrases and run voice-use-checkpoint to select an epoch.",
         }
-        save_json(job / "status.json", result)
+        save_json(job.path("status.json"), result)
         return result
     except Exception as exc:
-        save_json(job / "status.json", {"status": "failed", "error": str(exc)})
+        save_json(job.path("status.json"), {"status": "failed", "error": str(exc)})
         raise
 
 

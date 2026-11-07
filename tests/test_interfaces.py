@@ -13,10 +13,12 @@ from pydantic import ValidationError
 from typer.testing import CliRunner
 
 from yapit.cli import app
-from yapit.models import Beat, Brief, Script
+from yapit.media import write_wav
+from yapit.models import Beat, Brief, DeliveryStyle, Script
 from yapit.scripts import build_prompt, generate_script
 from yapit.speech import QwenSpeech
-from yapit.voices import load_voice
+from yapit.storage import DataStore, save_json
+from yapit.voices import enroll_style, load_voice, select_voice
 
 
 def test_cli_prompt_and_input_validation(tmp_path, monkeypatch):
@@ -68,8 +70,10 @@ def test_cloud_adapter_requires_opt_in_and_sends_only_context(monkeypatch, tmp_p
     assert "voice" not in json.dumps(calls[0]["input"])
 
 
-@pytest.mark.parametrize("trained", [False, True])
-def test_qwen_uses_reference_or_checkpoint_without_cloud(enrolled, monkeypatch, trained, tmp_path):
+@pytest.mark.parametrize("trained,styled", [(False, False), (True, False), (False, True)])
+def test_qwen_uses_reference_or_checkpoint_without_cloud(
+    enrolled, monkeypatch, trained, styled, tmp_path
+):
     scripts = tmp_path / "venv-bin"
     scripts.mkdir()
     (scripts / ("sox.exe" if os.name == "nt" else "sox")).write_bytes(b"test executable")
@@ -106,16 +110,86 @@ def test_qwen_uses_reference_or_checkpoint_without_cloud(enrolled, monkeypatch, 
     )
     monkeypatch.setenv("YAPIT_DEVICE", "cpu")
     voice = load_voice(enrolled, "test-voice")
+    voice_dir = enrolled.voice_audio_dir(voice.name)
+    if styled:
+        source = tmp_path / "lively.wav"
+        write_wav(source, tone(4, 260))
+        enroll_style(
+            enrolled,
+            voice.name,
+            DeliveryStyle.lively_vlog,
+            source,
+            "What a lovely surprise!",
+            True,
+        )
+        voice, voice_dir = select_voice(enrolled, voice.name, DeliveryStyle.lively_vlog)
     if trained:
         voice.checkpoint = "local-checkpoint"
         voice.speaker = voice.name
-    backend = QwenSpeech(voice, enrolled.voice_path(voice.name).parent)
+    backend = QwenSpeech(voice, voice_dir)
     assert np.isfinite(backend.synthesize("First sentence.")).all()
     backend.synthesize("Second sentence.")
     assert sum(kind == "load" for kind, _ in calls) == 1
     assert sum(kind == "prompt" for kind, _ in calls) == (0 if trained else 1)
     assert sum(kind == ("trained" if trained else "clone") for kind, _ in calls) == 2
+    if styled:
+        prompt = next(kwargs for kind, kwargs in calls if kind == "prompt")
+        assert prompt["ref_text"] == "What a lovely surprise!"
+        assert prompt["ref_audio"] == str(voice_dir / voice.reference_audio)
     assert os.environ["PATH"].split(os.pathsep)[0] == str(scripts)
+
+
+def test_style_cli_registration_requires_consent_and_forwards_style(
+    enrolled, monkeypatch, tmp_path
+):
+    monkeypatch.setenv("YAPIT_WORKSPACE", str(enrolled.root))
+    source = tmp_path / "lively.wav"
+    write_wav(source, tone(4, 260))
+    runner = CliRunner()
+    arguments = [
+        "voice-style-enroll",
+        "test-voice",
+        "--style",
+        "lively-vlog",
+        "--audio",
+        str(source),
+        "--text",
+        "What a lovely surprise!",
+    ]
+    refused = runner.invoke(app, arguments)
+    assert refused.exit_code != 0
+    assert "own voice" in refused.output
+    accepted = runner.invoke(app, [*arguments, "--consent"])
+    assert accepted.exit_code == 0, accepted.output
+    assert json.loads(accepted.stdout)["style"] == "lively-vlog"
+    calls = []
+    monkeypatch.setattr(
+        "yapit.cli.Pipeline.reel",
+        lambda *args, **kwargs: calls.append(kwargs) or {"status": "complete"},
+    )
+    script = enrolled.data.transcripts / "test-script.json"
+    save_json(script, Script(title="Test", beats=[Beat(text="Look at these little faces!")]))
+    result = runner.invoke(
+        app,
+        ["narrate", "test-voice", "--script", str(script), "--style", "lively-vlog"],
+    )
+    assert result.exit_code == 0, result.output
+    assert calls[0]["style"] == DeliveryStyle.lively_vlog
+
+
+def test_narration_defaults_to_arka_and_preserves_source_filename(enrolled, monkeypatch):
+    monkeypatch.setattr("yapit.cli.workspace", lambda: enrolled)
+    calls = []
+    monkeypatch.setattr(
+        "yapit.cli.Pipeline.reel",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or {"status": "complete"},
+    )
+    path = enrolled.data.transcripts / "trip.json"
+    save_json(path, Script(title="A different title", beats=[Beat(text="A short test.")]))
+    result = CliRunner().invoke(app, ["narrate", "--script", str(path)])
+    assert result.exit_code == 0, result.output
+    assert calls[0][0][2] == "arka"
+    assert calls[0][1]["source_name"] == "trip"
 
 
 def test_stdio_mcp_handshake_tools_prompt_and_path_confinement(tmp_path):
@@ -140,6 +214,22 @@ def test_stdio_mcp_handshake_tools_prompt_and_path_confinement(tmp_path):
                     assert not result.isError
                     response = json.loads(result.content[0].text)
                     assert response["status"] == "awaiting_script"
+                    status = await session.call_tool("get_job_status", {"job_id": response["name"]})
+                    assert not status.isError
+                    assert json.loads(status.content[0].text)["status"] == "awaiting_script"
+                    data = DataStore()
+                    sample = data.audio / "mcp-sample.wav"
+                    write_wav(sample, tone(4))
+                    manifest = data.transcripts / "mcp-samples.json"
+                    save_json(
+                        manifest,
+                        {"samples": [{"audio": str(sample), "text": "A clear test recording."}]},
+                    )
+                    enrolled = await session.call_tool(
+                        "enroll_voice",
+                        {"name": "mcp-data", "manifest_path": str(manifest), "consent": True},
+                    )
+                    assert not enrolled.isError
                     denied = await session.call_tool(
                         "prepare_script_prompt",
                         {"media_path": "..\\outside.jpg"},

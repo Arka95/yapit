@@ -8,6 +8,11 @@ from yapit.storage import Workspace, save_json
 from yapit.voices import enroll
 
 
+@pytest.fixture(autouse=True)
+def isolated_data_root(tmp_path, monkeypatch):
+    monkeypatch.setenv("YAPIT_DATA_DIR", str(tmp_path / "data"))
+
+
 def tone(seconds: float, frequency: float = 180) -> np.ndarray:
     time = np.arange(round(seconds * SAMPLE_RATE)) / SAMPLE_RATE
     envelope = 0.6 + 0.4 * np.sin(2 * np.pi * 3 * time) ** 2
@@ -17,18 +22,21 @@ def tone(seconds: float, frequency: float = 180) -> np.ndarray:
 @pytest.fixture
 def enrolled(tmp_path: Path) -> Workspace:
     workspace = Workspace(tmp_path / "workspace")
-    incoming = workspace.root / "incoming"
-    incoming.mkdir()
+    incoming = workspace.data.audio / "incoming"
+    incoming.mkdir(parents=True)
     write_wav(incoming / "one.wav", tone(4))
     write_wav(incoming / "two.wav", tone(5, 210))
-    manifest = incoming / "samples.json"
+    manifest = workspace.data.transcripts / "incoming" / "samples.json"
     save_json(
         manifest,
         {
             "samples": [
-                {"audio": "one.wav", "text": "A calm first sentence to explain the weekend plan."},
                 {
-                    "audio": "two.wav",
+                    "audio": str(incoming / "one.wav"),
+                    "text": "A calm first sentence to explain the weekend plan.",
+                },
+                {
+                    "audio": str(incoming / "two.wav"),
                     "text": "A second sentence with a slightly different expressive delivery.",
                 },
             ]

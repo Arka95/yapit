@@ -1,8 +1,6 @@
 @echo off
-cd /d "%~dp0"
-if not exist ".venv\Scripts\pythonw.exe" (
-  echo Set up the Python environment first. See README.md.
-  pause
-  exit /b 1
-)
-start "Yapit Voice Enrollment" ".venv\Scripts\pythonw.exe" -m yapit.desktop
+setlocal
+set "mode=cpu"
+if not "%~1"=="" set "mode=%~1"
+call "%~dp0yapit-mode.cmd" %mode% enroll-app
+exit /b %errorlevel%

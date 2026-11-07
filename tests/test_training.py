@@ -22,7 +22,7 @@ def test_training_uses_local_snapshot_holdout_and_never_promotes_automatically(
     fail_sft,
 ):
     profile = load_voice(enrolled, "test-voice")
-    voice_dir = enrolled.voice_path(profile.name).parent
+    voice_dir = enrolled.voice_audio_dir(profile.name)
     for index in range(10):
         relative = f"training-{index}.wav"
         write_wav(voice_dir / relative, tone(7, 250 + index * 10))
@@ -82,12 +82,20 @@ def test_training_uses_local_snapshot_holdout_and_never_promotes_automatically(
         result = train(enrolled, profile.name, upstream, epochs=1)
         assert result["status"] == "trained_needs_listening_review"
         assert Path(result["checkpoints"][0]).exists()
-    jobs = list((enrolled.root / "outputs").iterdir())
-    assert len(jobs) == 1
-    status = json.loads((jobs[0] / "status.json").read_text())
+    statuses = list((enrolled.root / "outputs").glob("*.status.json"))
+    assert len(statuses) == 1
+    status = json.loads(statuses[0].read_text())
     assert status["status"] == ("failed" if fail_sft else "trained_needs_listening_review")
-    train_rows = [json.loads(row) for row in (jobs[0] / "train.jsonl").read_text().splitlines()]
-    heldout = [json.loads(row) for row in (jobs[0] / "holdout.jsonl").read_text().splitlines()]
+    transcript_dir = enrolled.data.transcripts
+    prefix = statuses[0].name.removesuffix(".status.json")
+    train_rows = [
+        json.loads(row)
+        for row in (transcript_dir / f"{prefix}.train.jsonl").read_text().splitlines()
+    ]
+    heldout = [
+        json.loads(row)
+        for row in (transcript_dir / f"{prefix}.holdout.jsonl").read_text().splitlines()
+    ]
     assert not {row["audio"] for row in train_rows} & {row["audio"] for row in heldout}
     assert len({row["ref_audio"] for row in train_rows + heldout}) == 1
     sft = calls[1]

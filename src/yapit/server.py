@@ -9,9 +9,9 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
 from yapit.media import SAMPLE_RATE, decode_audio, render_guide
-from yapit.models import Brief, Script, Timeline
+from yapit.models import Brief, DeliveryStyle, Script, Timeline
 from yapit.pipeline import Pipeline
-from yapit.storage import Workspace, safe_name
+from yapit.storage import Workspace, safe_name, save_json
 from yapit.voices import enroll
 
 
@@ -43,7 +43,7 @@ def create_server(root: Path | None = None) -> FastMCP:
 
     @server.tool()
     def enroll_voice(name: str, manifest_path: str, consent: bool = False) -> dict:
-        """Enroll your own consenting voice. Manifest and every audio path must be in workspace."""
+        """Enroll your own voice; manifest/audio paths must be in workspace or the data root."""
         if not busy.acquire(blocking=False):
             raise ValueError("Yapit is busy; retry after the current job.")
         try:
@@ -68,6 +68,7 @@ def create_server(root: Path | None = None) -> FastMCP:
         media_path: str | None,
         auto_script: bool,
         video: bool,
+        style: DeliveryStyle,
     ) -> dict:
         if script is not None and auto_script:
             raise ValueError("Choose script or auto_script, not both.")
@@ -82,13 +83,14 @@ def create_server(root: Path | None = None) -> FastMCP:
                 media,
                 auto_script,
                 render_video=video,
+                style=style,
             )
         finally:
             busy.release()
 
     @server.tool()
     def generate_reel(
-        voice: str,
+        voice: str = "arka",
         seconds: float = 30,
         script: Script | None = None,
         topic: str = "",
@@ -96,18 +98,24 @@ def create_server(root: Path | None = None) -> FastMCP:
         facts: str = "",
         media_path: str | None = None,
         auto_script: bool = False,
+        style: DeliveryStyle = DeliveryStyle.default,
     ) -> dict:
         """Generate local MP3, measured timeline and 1080x1920 guide; or return a script prompt."""
-        return run(voice, seconds, script, topic, kind, facts, media_path, auto_script, True)
+        return run(voice, seconds, script, topic, kind, facts, media_path, auto_script, True, style)
 
     @server.tool()
-    def generate_narration(voice: str, script: Script, seconds: float = 30) -> dict:
+    def generate_narration(
+        script: Script,
+        voice: str = "arka",
+        seconds: float = 30,
+        style: DeliveryStyle = DeliveryStyle.default,
+    ) -> dict:
         """Generate only local cloned-voice MP3 and measured clip timeline."""
-        return run(voice, seconds, script, "", "travel", "", None, False, False)
+        return run(voice, seconds, script, "", "travel", "", None, False, False, style)
 
     @server.tool()
     def render_timeline(timeline_path: str, audio_path: str) -> dict:
-        """Render a guide from an existing timeline and matching narration inside workspace."""
+        """Render a guide from a timeline/audio inside the workspace or data root."""
         if not busy.acquire(blocking=False):
             raise ValueError("Yapit is busy; retry after the current job.")
         try:
@@ -120,16 +128,34 @@ def create_server(root: Path | None = None) -> FastMCP:
                 raise ValueError("Timeline and audio duration differ by more than 100 ms.")
             if (timeline.width, timeline.height, timeline.fps) != (1080, 1920, 30):
                 raise ValueError("Only 1080x1920 at 30 fps is currently supported.")
-            job = workspace.job()
-            render_guide(timeline, audio, job / "video")
-            return {"video": str(job / "video" / "guide.mp4")}
+            job = workspace.output(audio.stem)
+            captions = job.path("captions.srt", job.transcripts)
+            try:
+                render_guide(timeline, audio, job.metadata, captions=captions, prefix=job.name)
+                result = {
+                    "status": "complete",
+                    "name": job.name,
+                    "status_file": str(job.path("status.json")),
+                    "video": str(job.path("guide.mp4")),
+                    "captions": str(captions),
+                }
+                save_json(job.path("status.json"), result)
+                return result
+            except Exception as exc:
+                save_json(job.path("status.json"), {"status": "failed", "error": str(exc)})
+                raise
         finally:
             busy.release()
 
     @server.tool()
     def get_job_status(job_id: str) -> dict:
-        """Read a persisted job status; job_id is the output directory's basename."""
-        path = workspace.inside(Path("outputs") / safe_name(job_id) / "status.json")
+        """Read status by the returned readable name; legacy job IDs remain readable."""
+        if Path(job_id).name != job_id or "/" in job_id or "\\" in job_id:
+            raise ValueError("Supply the returned output name, not a path.")
+        flat = workspace.root / "outputs" / f"{job_id}.status.json"
+        path = workspace.inside(
+            flat if flat.is_file() else Path("outputs") / safe_name(job_id) / "status.json"
+        )
         return json.loads(path.read_text(encoding="utf-8"))
 
     return server

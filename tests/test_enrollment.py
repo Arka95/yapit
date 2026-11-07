@@ -14,7 +14,7 @@ from yapit.enrollment import (
     Reading,
 )
 from yapit.media import SAMPLE_RATE, decode_audio, ffmpeg, write_wav
-from yapit.storage import Workspace
+from yapit.storage import Workspace, save_json
 from yapit.voices import load_voice
 
 
@@ -52,6 +52,8 @@ def test_saved_text_resume_and_final_enrollment(session):
         session.save_take(raw, confirmed=False, normalize=True)
     first = session.save_take(raw, confirmed=True, normalize=True)
     assert first["quality"]["reasons"] == []
+    assert raw.is_relative_to(session.workspace.data.audio)
+    assert session.folder.is_relative_to(session.workspace.data.transcripts)
     assert raw.read_bytes() == original
     resumed = EnrollmentSession(session.workspace, session.alias, consent=True)
     assert resumed.index == 1
@@ -64,9 +66,34 @@ def test_saved_text_resume_and_final_enrollment(session):
     voice = resumed.finish()
     assert voice.name == "my-voice"
     assert len(voice.samples) == 2
+    audio_folder = session.workspace.voice_audio_dir(voice.name)
+    assert audio_folder.is_relative_to(session.workspace.data.audio)
+    assert all((audio_folder / sample.audio).exists() for sample in voice.samples)
+    assert len(list((audio_folder / "raw").glob("*.wav"))) == 2
+    assert (session.workspace.data.transcripts / "voices" / voice.name / "samples.json").is_file()
     assert load_voice(session.workspace, voice.name).consent
     with pytest.raises(ValueError, match="already enrolled"):
         EnrollmentSession(session.workspace, voice.name, consent=True)
+
+
+def test_legacy_draft_resumes_without_moving_original_recordings(session):
+    session.save_take(take(session), confirmed=True, normalize=True)
+    legacy = session.workspace.root / "enrollment" / session.alias
+    legacy.mkdir(parents=True)
+    old_audio = legacy / "sample.wav"
+    write_wav(old_audio, tone(4))
+    draft = session.draft.model_copy(deep=True)
+    draft.samples[0].audio = "sample.wav"
+    save_json(legacy / "session.json", draft)
+    original = old_audio.read_bytes()
+    session.path.unlink()
+    resumed = EnrollmentSession(session.workspace, session.alias, consent=True)
+    assert resumed.index == 1
+    assert resumed.draft.samples[0].audio == str(old_audio)
+    assert resumed.path.is_relative_to(session.workspace.data.transcripts)
+    assert resumed.new_take().is_relative_to(session.workspace.data.audio)
+    assert old_audio.read_bytes() == original
+    assert (legacy / "session.json").exists()
 
 
 def test_low_level_cleanup_does_not_change_raw_and_silence_never_passes(session):

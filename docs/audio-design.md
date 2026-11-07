@@ -4,7 +4,7 @@
 |---|---|
 | Owner | Arka |
 | Status | Implemented baseline; real voice/GPU quality validation pending |
-| Last updated | 2026-10-29 |
+| Last updated | 2026-11-07 |
 | Services in scope | CLI, stdio MCP, script prompt, local Qwen speech, media renderer |
 | Reviewers | Owner listening review required |
 
@@ -101,7 +101,7 @@ Solid arrows are synchronous local calls/file access; the dotted edge is optiona
 
 **Entry** consists of Typer CLI commands and the stdio MCP server. They validate
 structured parameters and synchronously invoke Pipeline. MCP confines local file
-access to its configured workspace and admits one heavy job per server process.
+access to its configured workspace and data root and admits one heavy job per server process.
 The maintained MCP SDK v1 API is deliberately bounded below v2 for this implementation
 and tested through a real stdio client, rather than relying on v2 compatibility [R8].
 
@@ -146,8 +146,14 @@ Audio normalization targets -16 LUFS and -1.5 dBTP, with a limiter; these are pr
 delivery choices, not claimed Instagram requirements or a measured mastering certificate.
 FFmpeg documents `atempo` and `loudnorm` filter semantics [R9].
 
-**Output** is a unique directory per job with JSON status and atomic JSON writes.
-Original WAV, fitted WAV and provenance remain available for diagnosis.
+**Storage/output** uses `storage.py:DataStore` across all modules. Under the
+shared `YAPIT_DATA_DIR` (default `data` beside the workspace), `audio` holds raw
+and imported recordings, `transcripts` holds transcript/script/caption exports,
+and `generated_audio` holds synthesized WAV/MP3 files, including intermediates.
+Aliases/jobs get subdirectories. Voice profiles, timelines, provenance, status,
+video guides, and checkpoints remain under `YAPIT_WORKSPACE`. Raw synthesized
+WAV, fitted WAV and provenance remain available for diagnosis.
+Legacy artifacts are not automatically moved or deleted.
 Failures may leave private partial artifacts; delete only those specific job directories
 when no longer needed. No automatic uploads, commits, publication or remote deletion.
 

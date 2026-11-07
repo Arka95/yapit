@@ -1,10 +1,11 @@
 {
   "mcpServers": {
     "yapit": {
-      "command": "C:\\projects\\yapit\\.venv\\Scripts\\yapit-mcp.exe",
+      "command": "C:\\Windows\\System32\\cmd.exe",
+      "args": ["/d", "/c", "C:\\projects\\yapit\\yapit-mode.cmd", "gpu", "mcp"],
       "env": {
         "YAPIT_WORKSPACE": "C:\\projects\\yapit\\workspace",
-        "YAPIT_DEVICE": "auto",
+        "YAPIT_DATA_DIR": "C:\\projects\\yapit\\data",
         "YAPIT_ALLOW_CLOUD": "false"
       }
     }
