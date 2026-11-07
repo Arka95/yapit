@@ -11,12 +11,13 @@ From the repository root:
 
 ```powershell
 .\.venv\Scripts\python -m pip install -e ".[dev,rescript]"
-.\.venv\Scripts\python -m pytest tests\test_rescript.py
+.\.venv\Scripts\python -m pytest src\rescript\tests tests\test_interfaces.py
 .\.venv\Scripts\python -m ruff check src tests scripts
 .\.venv\Scripts\python -m ruff format --check src tests scripts
 ```
 
-Unit tests use an injected recognizer or a fake Whisper module; they do not
+Module-owned tests live in `src\rescript\tests`; root CLI dispatch/error checks
+remain in `tests\test_interfaces.py`. Unit tests use an injected recognizer or a fake Whisper module; they do not
 download models or require a GPU. FFmpeg integration tests exercise real audio
 decoding and video audio-stream extraction. A subprocess regression blocks
 model SDK imports and network calls while exercising extraction, even with
@@ -28,8 +29,8 @@ recognition quality separately from deterministic partitioning.
 
 ## Components and contracts
 
-`src\rescript` contains only `__init__.py`, `cli.py`, `audio.py` and
-`transcription.py`; there is no desktop UI. The public initializer exports
+`src\rescript` owns extraction, transcription and CLI adapters, with local
+tests in its `tests` subfolder; there is no desktop UI. The public initializer exports
 `extract_audio` and `transcribe`.
 
 Root `cli.py` registers the Rescript command functions directly as

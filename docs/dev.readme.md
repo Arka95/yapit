@@ -25,7 +25,7 @@ and module-local tests belong in the linked developer guides.
 | `docs\` | Project guidance, module user/developer guides and design/research documents |
 | `scripts\` | Runtime setup/launch helpers, packaging support and experimental worker tools |
 | `examples\` | Example scripts and voice-sample manifests; MCP client examples belong to its module |
-| `tests\` | Cross-module integration and shared-utility tests; modules also own their local test folders |
+| `tests\` | Application integration, shared storage and setup/cache-tool tests; implementation tests belong to modules |
 | `models\` | Downloaded model assets and reusable caches |
 | `data\<profile>\` | Accepted baseline/style recordings, voice metadata and training checkpoints |
 | `data\audio\` | Imported/extracted source audio |
@@ -39,6 +39,10 @@ and module-local tests belong in the linked developer guides.
 There are no Python files at the repository root. Shared contracts, configuration,
 storage and thin application adapters still live directly under `src`; this
 refactor does not move those into additional packages.
+
+Each source module owns its implementation tests under its `tests` subfolder,
+including Rescript and `common_utils`. Root `tests` covers application CLI
+integration, reel orchestration, shared storage and project setup/cache tooling.
 
 Only `README.md` remains at the repository root; all project Markdown is in
 `docs`. Model checkouts/cards and dependency documentation are third-party

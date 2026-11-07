@@ -1,7 +1,12 @@
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
+import soundfile as sf
 from conftest import tone
 from pydantic import ValidationError
 from typer.main import get_command
@@ -9,9 +14,9 @@ from typer.testing import CliRunner
 
 from yapit.cli import app
 from yapit.common_utils.mediautils import write_wav
-from yapit.common_utils.modelutils import load_model
 from yapit.models import Beat, Brief, Script
 from yapit.rescript.cli import app as rescript_app
+from yapit.storage import DataStore
 
 
 def test_root_command_help_and_readme_catalog_are_complete():
@@ -126,18 +131,6 @@ def test_old_module_groups_remain_compatible(arguments, target, monkeypatch, tmp
     assert len(calls) == 1
 
 
-def test_model_factory_supports_local_sdk_without_a_cache_keyword(tmp_path):
-    class LocalModel:
-        def __init__(self, path, *, device):
-            self.path = path
-            self.device = device
-
-    path = tmp_path / "local-model.gguf"
-    model = load_model(LocalModel, path, cache_parameter=None, device="cpu")
-    assert model.path == str(path)
-    assert model.device == "cpu"
-
-
 def test_cli_prompt_and_input_validation(tmp_path, monkeypatch):
     monkeypatch.setenv("YAPIT_WORKSPACE", str(tmp_path))
     result = CliRunner().invoke(app, ["prompt", "--topic", "One weekend", "--seconds", "30"])
@@ -172,3 +165,119 @@ def test_style_cli_registration_defaults_consent_but_respects_explicit_refusal(
     accepted = runner.invoke(app, arguments)
     assert accepted.exit_code == 0, accepted.output
     assert json.loads(accepted.stdout)["style"] == "lively-vlog"
+
+
+def test_extraction_is_model_free_even_with_cuda_asr_settings(tmp_path):
+    source = tmp_path / "source.wav"
+    sf.write(source, np.zeros(24000, dtype=np.float32), 24000)
+    script = """
+import importlib.abc
+import json
+import socket
+import sys
+class NoModels(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split('.')[0] in {
+            'torch', 'transformers', 'qwen_tts', 'faster_whisper',
+            'openai', 'huggingface_hub', 'ctranslate2', 'onnxruntime'
+        }:
+            raise AssertionError('Model dependency accessed: ' + fullname)
+sys.meta_path.insert(0, NoModels())
+socket.create_connection = lambda *args, **kwargs: (_ for _ in ()).throw(
+    AssertionError('Network accessed')
+)
+from yapit.cli import app
+from typer.testing import CliRunner
+result = CliRunner().invoke(app, ['extract_audio', sys.argv[1]])
+assert result.exit_code == 0, result.output
+assert json.loads(result.stdout)['action'] == 'copied'
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(source)],
+        env={**os.environ, "YAPIT_ASR_DEVICE": "cuda", "YAPIT_ASR_COMPUTE_TYPE": "float16"},
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert not (tmp_path / "models").exists()
+
+
+def test_extract_reports_ffmpeg_timeout_and_cleans_temporary_files(tmp_path, monkeypatch):
+    source = tmp_path / "source.wav"
+    source.touch()
+    temporary = []
+    monkeypatch.setenv("YAPIT_FFMPEG", "ffmpeg-timeout-test")
+
+    def timeout(command, **kwargs):
+        temporary.append(Path(command[-1]))
+        temporary[-1].write_bytes(b"partial decoded audio")
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr("yapit.common_utils.mediautils.subprocess.run", timeout)
+    result = CliRunner().invoke(app, ["extract_audio", str(source)])
+    assert result.exit_code == 1
+    assert "FFmpeg timed out after 600 seconds" in result.output
+    assert not temporary[0].parent.exists()
+    assert not list(DataStore().audio.iterdir())
+
+
+@pytest.mark.parametrize(
+    "flags,offline", [([], True), (["--offline"], True), (["--no-offline"], False)]
+)
+def test_cli_passes_settings_and_emits_json(monkeypatch, tmp_path, flags, offline):
+    source = tmp_path / "input.mp3"
+    source.touch()
+    calls = []
+    monkeypatch.setattr(
+        "yapit.rescript.cli.transcribe",
+        lambda media, **kwargs: calls.append((media, kwargs)) or {"status": "needs_review"},
+    )
+    result = CliRunner().invoke(
+        app,
+        [
+            "transcript",
+            str(source),
+            "--model",
+            "local-model",
+            *flags,
+            "--output",
+            str(DataStore().transcripts / "export"),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["status"] == "needs_review"
+    assert calls[0][1]["offline"] is offline
+    assert calls[0][1]["model"] == "local-model"
+
+
+def test_cli_reports_errors(monkeypatch, tmp_path):
+    source = tmp_path / "input.mp3"
+    source.touch()
+
+    def fail(*args, **kwargs):
+        raise ValueError("No speech was detected.")
+
+    monkeypatch.setattr("yapit.rescript.cli.transcribe", fail)
+    result = CliRunner().invoke(app, ["transcript", str(source)])
+    assert result.exit_code == 1
+    assert "No speech" in result.output
+
+
+def test_transcript_command_and_extract_command_are_registered(monkeypatch, tmp_path):
+    source = tmp_path / "source.wav"
+    source.touch()
+    monkeypatch.setattr(
+        "yapit.rescript.cli.transcribe", lambda *args, **kwargs: {"status": "needs_review"}
+    )
+    runner = CliRunner()
+    result = runner.invoke(app, ["transcript", str(source)])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["status"] == "needs_review"
+    monkeypatch.setattr(
+        "yapit.rescript.cli.extract_audio_file",
+        lambda *args, **kwargs: {"action": "copied", "audio": "data\\audio\\source.wav"},
+    )
+    result = runner.invoke(app, ["extract_audio", str(source)])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["action"] == "copied"

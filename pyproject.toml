@@ -63,8 +63,10 @@ known-third-party = ["mcp"]
 testpaths = [
   "tests",
   "src/enrollment/tests",
+  "src/rescript/tests",
   "src/yapper/tests",
   "src/editor/tests",
   "src/training/tests",
   "src/mcp/tests",
+  "src/common_utils/tests",
 ]

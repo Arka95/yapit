@@ -3,29 +3,14 @@ from pathlib import Path
 
 import imageio_ffmpeg
 import numpy as np
-import pytest
 from conftest import tone
-from PIL import Image
 
 from yapit.common_utils.mediautils import (
     SAMPLE_RATE,
     decode_audio,
-    fit_audio,
-    media_frames,
-    resample,
-    run_media,
-    write_wav,
 )
 from yapit.models import Beat, Brief, Script, Timeline
 from yapit.pipeline import Pipeline
-
-
-def test_shared_resampling_preserves_duration_and_amplitude():
-    source = (0.1 * np.sin(2 * np.pi * 220 * np.arange(48000) / 48000)).astype(np.float32)
-    result = resample(source, 48000)
-    assert len(result) == SAMPLE_RATE
-    assert np.isfinite(result).all()
-    assert np.max(np.abs(result)) == pytest.approx(0.1, abs=0.005)
 
 
 class ToneSpeech:
@@ -91,38 +76,3 @@ def test_no_script_returns_prompt_without_loading_voice(enrolled):
     assert result["status"] == "awaiting_script"
     assert "game changer" in result["prompt"]
     assert Path(result["brief"]).exists()
-
-
-def test_already_in_tolerance_does_not_force_extreme_stretch(tmp_path):
-    source = tmp_path / "raw.wav"
-    write_wav(source, tone(6))
-    audio, factor = fit_audio(source, tmp_path / "unused.wav", 9)
-    assert factor == 1
-    assert len(audio) == 6 * SAMPLE_RATE
-    assert not (tmp_path / "unused.wav").exists()
-
-
-def test_image_and_video_context_are_local_bounded_snapshots(tmp_path):
-    image = tmp_path / "source.png"
-    Image.new("RGB", (2000, 1000), "blue").save(image)
-    frames = media_frames(image, tmp_path / "image-frames")
-    with Image.open(frames[0]) as converted:
-        assert converted.size == (1280, 640)
-    video = tmp_path / "source.mp4"
-    run_media(
-        [
-            "-y",
-            "-f",
-            "lavfi",
-            "-i",
-            "color=c=blue:s=160x90:r=2:d=2",
-            "-c:v",
-            "libx264",
-            "-pix_fmt",
-            "yuv420p",
-            str(video),
-        ]
-    )
-    snapshots = media_frames(video, tmp_path / "video-frames")
-    assert 1 <= len(snapshots) <= 6
-    assert all(path.suffix == ".jpg" for path in snapshots)
