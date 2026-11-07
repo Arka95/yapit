@@ -1,5 +1,9 @@
 # Local personal-voice reel pipeline
 
+Some implementation notes below describe the original design snapshot.
+Use [the developer guide](dev.readme.md) for current folders, shared utilities,
+model storage, and enrollment boundaries.
+
 | Field | Value |
 |---|---|
 | Owner | Arka |

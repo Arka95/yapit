@@ -4,9 +4,10 @@ import numpy as np
 import pytest
 from conftest import tone
 
-from yapit.media import SAMPLE_RATE, write_wav
+from yapit.common_utils.fileutils import save_json
+from yapit.common_utils.mediautils import SAMPLE_RATE, write_wav
 from yapit.models import DeliveryStyle
-from yapit.storage import Workspace, save_json
+from yapit.storage import Workspace
 from yapit.training import train, use_checkpoint
 from yapit.voices import enroll_style, load_voice, select_voice
 

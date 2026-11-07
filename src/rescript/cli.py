@@ -7,6 +7,7 @@ from typing import Annotated
 import typer
 from dotenv import load_dotenv
 
+from yapit.constants import DEFAULT_ASR_MODEL
 from yapit.rescript.audio import extract_audio as extract_audio_file
 from yapit.rescript.transcription import transcribe
 
@@ -37,7 +38,7 @@ def transcribe_media(
     output: Annotated[
         Path | None, typer.Option(help="Flat transcript directory; must be data\\transcripts.")
     ] = None,
-    model: str = "small.en",
+    model: str = DEFAULT_ASR_MODEL,
     device: Annotated[
         str | None, typer.Option(help="ASR device; defaults to selected mode or cpu.")
     ] = None,

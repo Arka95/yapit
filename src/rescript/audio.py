@@ -1,70 +1,30 @@
 from __future__ import annotations
 
-import re
-import shutil
 import tempfile
 from pathlib import Path
 
 import soundfile as sf
 
+from yapit.common_utils.fileutils import copy_file_exclusive, data_filename
+from yapit.common_utils.mediautils import (
+    SUPPORTED_AUDIO,
+    extract_audio_stream,
+    has_video,
+    validate_media_source,
+)
 from yapit.constants import DEFAULT_PROFILE
-from yapit.media import SAMPLE_RATE, run_media
-from yapit.storage import DataStore, data_filename
-
-# These audio containers can be passed straight to YapIt's FFmpeg decoder.
-SUPPORTED_AUDIO = {
-    ".wav",
-    ".mp3",
-    ".m4a",
-    ".aac",
-    ".flac",
-    ".ogg",
-    ".opus",
-    ".aif",
-    ".aiff",
-    ".wma",
-}
-
-
-def has_video(stderr: bytes) -> bool:
-    detail = stderr.decode("utf-8", errors="replace")
-    return any(
-        "Video:" in stream and "attached pic" not in stream
-        for stream in re.findall(r"^\s*Stream #0:.*$", detail, flags=re.MULTILINE)
-    )
+from yapit.storage import DataStore
 
 
 def extract_audio(
     media: Path, *, output_dir: Path | None = None, profile: str = DEFAULT_PROFILE
 ) -> dict:
-    source = media.resolve()
-    if not source.is_file():
-        raise ValueError(f"Media file not found: {source}")
-    if source.stat().st_size > 250 * 1024 * 1024:
-        raise ValueError("Media limit is 250 MB; supply a smaller local file.")
+    source = validate_media_source(media)
     folder = DataStore.within(DataStore().audio, output_dir)
     with tempfile.TemporaryDirectory(prefix="yapit-extract-") as temporary:
         decoded = Path(temporary) / "audio.wav"
         try:
-            result = run_media(
-                [
-                    "-loglevel",
-                    "info",
-                    "-y",
-                    "-i",
-                    str(source),
-                    "-map",
-                    "0:a:0",
-                    "-vn",
-                    "-ac",
-                    "1",
-                    "-ar",
-                    str(SAMPLE_RATE),
-                    "-c:a",
-                    "pcm_s16le",
-                    str(decoded),
-                ]
-            )
+            result = extract_audio_stream(source, decoded)
         except RuntimeError as exc:
             raise ValueError(
                 f"Cannot extract audio: unsupported/corrupt media or no audio stream. {exc}"
@@ -87,17 +47,9 @@ def extract_audio(
         folder.mkdir(parents=True, exist_ok=True)
         # Exclusive creation also prevents overwrites by simultaneous extractions.
         try:
-            target = destination.open("xb")
+            copy_file_exclusive(source if copy_original else decoded, destination)
         except FileExistsError as exc:
             raise ValueError(f"Audio output already exists: {destination}.") from exc
-        with target:
-            try:
-                with (source if copy_original else decoded).open("rb") as incoming:
-                    shutil.copyfileobj(incoming, target)
-            except OSError:
-                target.close()
-                destination.unlink(missing_ok=True)
-                raise
     return {
         "status": "complete",
         "audio": str(destination),

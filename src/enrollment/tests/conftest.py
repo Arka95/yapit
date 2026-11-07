@@ -1,15 +1,17 @@
 import numpy as np
 import pytest
 
+from yapit.common_utils.fileutils import save_json
+from yapit.common_utils.mediautils import SAMPLE_RATE, write_wav
 from yapit.enrollment import enroll
-from yapit.media import SAMPLE_RATE, write_wav
-from yapit.storage import DataStore, save_json
+from yapit.storage import DataStore
 
 
 @pytest.fixture(autouse=True)
 def isolated_data_root(tmp_path, monkeypatch):
     monkeypatch.setenv("YAPIT_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("YAPIT_WORKSPACE", str(tmp_path / "workspace"))
+    monkeypatch.setenv("YAPIT_MODELS_DIR", str(tmp_path / "models"))
 
 
 def tone(seconds=4, frequency=180):

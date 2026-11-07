@@ -12,12 +12,12 @@ dist/
 *.egg-info/
 .env
 .env.*
-!.env.example
+!/.env.example
 workspace/
 models/
 voices/
 outputs/
-data/
+/data/*
 *.wav
 *.mp3
 *.mp4
@@ -31,3 +31,7 @@ data/
 # Keep this explicitly selected regression fixture; other media stays ignored.
 !tests/data/
 !tests/data/arka.ladakhi_marmots.wav
+
+# Keep Arka's clean profile data eligible for version control.
+!/data/arka/
+!/data/arka/**

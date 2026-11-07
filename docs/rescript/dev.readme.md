@@ -39,11 +39,13 @@ The dual mode launcher sets ASR variables and supplies the environment-local
 Torch CUDA DLL directory on PATH for GPU recognition; it validates GPU
 availability and never silently falls back.
 
-`audio.py` validates media by decoding its first audio stream with FFmpeg.
+`audio.py` uses `common_utils\mediautils.py` for source validation and decoding
+the first audio stream with FFmpeg.
 Its stream report distinguishes video from audio, excluding attached cover
 art. Known audio containers are copied unchanged; video or other decodable
 containers become mono 24 kHz WAV. Exclusive destination creation prevents
-overwrites; failed copies remove only the newly created partial file.
+overwrites through `common_utils\fileutils.py`; failed copies remove only the
+newly created partial file.
 The shared `DataStore` selects `data\audio`; output overrides must stay in that
 bucket. An already canonical audio input is returned unchanged after validation.
 The directory is Git-ignored. Extraction is independent
@@ -56,7 +58,7 @@ of Whisper and does not download weights.
 Processing order:
 
 1. Validate source and destination; decode the first audio stream to temporary
-   mono 16 kHz PCM WAV with the existing `run_media` helper.
+   mono 16 kHz PCM WAV with `common_utils.mediautils.extract_audio_stream`.
 2. Reject empty or over-one-hour decoded audio before recognition. The decode
    limit includes a one-second sentinel, so overlong media is rejected rather
    than accepted after truncation.
@@ -76,7 +78,7 @@ Processing order:
    `Script` limits too: 40 beats, 650 words, and per-beat field constraints.
 7. Reserve a readable `<profile>.<source>` filename after recognition and partitioning
    succeed. Write scripts and the sidecar directly in `data\transcripts` with
-   atomic `save_json`; repeats use numeric suffixes, not UUID folders.
+   atomic `common_utils.fileutils.save_json`; repeats use numeric suffixes, not UUID folders.
    Individual writes are atomic; the multi-file export is not transactional
    if the filesystem fails during export.
 
@@ -95,7 +97,9 @@ Do not silently discard an incomplete final sentence or underlength tail.
 
 The default is `small.en`, CPU/int8. CUDA/float16 and other models are explicit
 CLI choices. `--offline` maps to Whisper's `local_files_only`; supply complete
-local/cached weights for an offline run. No API keys or cloud permission
+local/cached weights for an offline run. The lazy shared `load_model` adapter
+passes Whisper's `download_root` as `YAPIT_MODELS_DIR\hub`; model folder/defaults
+are centralized in `constants.py`. No API keys or cloud permission
 flags are used. `YAPIT_FFMPEG` retains its existing meaning.
 `YAPIT_WORKSPACE` holds metadata/video/checkpoints, not new audio or transcript
 exports. Metadata and guide outputs are flat. Model checkpoints and existing

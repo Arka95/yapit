@@ -38,6 +38,9 @@ dev-mode-dirs = ["."]
 only-include = ["src"]
 sources = {"src" = "yapit"}
 
+[tool.hatch.build.targets.sdist]
+exclude = ["/data/**"]
+
 [tool.hatch.build.hooks.custom]
 path = "scripts/hatch-build.py"
 

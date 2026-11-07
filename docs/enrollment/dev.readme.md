@@ -21,8 +21,9 @@ run off the Tk thread. `cli.py` and `__main__.py` expose the module independentl
 
 The core accepts an explicit `DataStore`. Only application entry points load
 `.env`. Shared contracts are in `models.py`, filename constants in `constants.py`,
-and path/atomic JSON helpers in `storage.py`. Audio decoding and WAV writing use
-the existing deterministic media helpers. There are no imports or calls to model
+and path helpers in `storage.py`. Atomic JSON writes and file naming come from
+`common_utils\fileutils.py`; decoding and WAV writing come from
+`common_utils\mediautils.py`. There are no imports or calls to model
 providers, script-writing APIs, transcription, inference, or training.
 
 `yapit.voices` adapts application workflows to the enrollment helpers.
@@ -34,7 +35,7 @@ Normal enrollment does not require a flag, and the UI has no consent control.
 
 Profiles are normalized to lowercase. Shared bucket names (`audio`, `transcripts`,
 `generated_audio`) cannot be profile names. All new files use
-`storage.data_filename` and the template in `constants.py`.
+`common_utils.fileutils.data_filename` and the template in `constants.py`.
 
 Prepared recording filenames use the static passage's stable number; importing
 files uses their normalized basename. The journal is an inventory of accepted

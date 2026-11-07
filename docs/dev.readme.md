@@ -6,6 +6,87 @@ Source lives directly under `src` (for example `src\enrollment` and `src\rescrip
 there is no nested `src\yapit` folder. The public package/import name remains
 `yapit`, and the CLI commands are unchanged.
 
+```text
+yapit\
+  README.md
+  docs\
+    dev.readme.md
+    analysis.md
+    audio-design.md
+    module-architecture.md
+    enrollment\
+      README.md
+      dev.readme.md
+    rescript\
+      README.md
+      dev.readme.md
+  src\
+    __init__.py
+    common_utils\
+      __init__.py
+      fileutils.py
+      mediautils.py
+      modelutils.py
+    enrollment\
+      __init__.py
+      __main__.py
+      cli.py
+      desktop.py
+      recorder.py
+      session.py
+      profiles.py
+      artifacts.py
+      sample_scripts.py
+      sampleScripts\sample_<number>.json
+      tests\
+    rescript\
+      __init__.py
+      audio.py
+      cli.py
+      desktop.py
+      transcription.py
+    cli.py
+    server.py
+    storage.py
+    models.py
+    constants.py
+    media.py
+    speech.py
+    pipeline.py
+    scripts.py
+    timeline.py
+    training.py
+    voices.py
+  scripts\
+  tests\
+  models\
+    Qwen3-TTS-12Hz-1.7B-Base\
+    cosyvoice3-2512\
+    cosyvoice_source\
+    hub\
+  data\
+    <profile>\audio\
+    audio\
+    transcripts\
+    generated_audio\
+  workspace\
+    enrollment\<profile>\
+    outputs\
+  .venv\
+  .venv-cpu\
+  .venv-gpu\
+  .venv-cosyvoice\
+  .venv-cosyvoice-bootstrap\
+```
+
+Only `README.md` remains at the repository root; all project Markdown is in
+`docs`. Model checkouts/cards and dependency documentation are third-party
+assets, not project documentation to relocate. Runtime environments, models,
+workspace contents and other profiles' data are Git-ignored. `data\arka` is
+eligible for version control, including its audio; this does not stage or upload
+it automatically. Package archives exclude all `data` contents. The CosyVoice runtime remains
+separate and paused; this tree does not imply it is provisioned.
+
 Hatch maps `src` to `yapit` in release wheels. `scripts\hatch-build.py` supplies
 the corresponding editable-install import mapping without symlinks or another
 source folder. The small `editables` dependency is declared for editable builds.
@@ -23,8 +104,8 @@ declared build dependencies first:
 
 This guide covers development, component responsibilities, and advanced setup.
 For the everyday enrollment -> script -> narration -> editing workflow, use
-[README.md](README.md). Audio research and the listening-validation checklist
-are in `docs\audio-design.md`.
+[README.md](../README.md). Audio research and the listening-validation checklist
+are in [audio-design.md](audio-design.md).
 
 ## Local development
 
@@ -38,14 +119,14 @@ Copy-Item .env.example .env
 ```
 
 Keep an existing `.env` rather than overwriting it. The editable install uses
-the `src\yapit` package directly. `dev` installs pytest, Ruff, build tooling,
+the flat `src` directory through the public `yapit` namespace. `dev` installs pytest, Ruff, build tooling,
 and MCP for protocol tests; `mcp` enables the stdio server. Neither requires
 voice-model weights. Tkinter is supplied by a Tk-enabled Python installation,
 not a new Python dependency.
 
 Run commands from the repository root so relative workspace paths and local
 configuration resolve consistently. Use absolute `YAPIT_WORKSPACE` and
-`YAPIT_DATA_DIR` when
+`YAPIT_DATA_DIR` and `YAPIT_MODELS_DIR` when
 launching from another directory or an MCP client.
 
 Completed work in this checkout should be validated, committed, and pushed to the
@@ -195,6 +276,7 @@ inference works.
 |---|---|
 | `YAPIT_WORKSPACE` | Generation metadata/edit guides and temporary enrollment files; defaults to `workspace` |
 | `YAPIT_DATA_DIR` | Data/profile root; enrollment defaults independently to `.\data`; generation defaults beside the workspace |
+| `YAPIT_MODELS_DIR` | Reusable model assets; defaults to `.\models`; shared SDK cache under `models\hub` |
 | `YAPIT_MODEL` | Base Hub model ID or local model directory; defaults to `Qwen/Qwen3-TTS-12Hz-1.7B-Base` |
 | `YAPIT_DEVICE` | `auto` selects CUDA when available, otherwise CPU; can be set explicitly |
 | `YAPIT_ASR_DEVICE` | Rescript device; defaults to `cpu` without a mode launcher |
@@ -288,26 +370,52 @@ pool all enrolled recordings or update model weights. A selected fine-tuned
 checkpoint switches generation to its named custom speaker. The `SpeechBackend`
 protocol lets tests inject deterministic speech without loading Qwen.
 
+**Shared utilities and model loading.** `common_utils\mediautils.py` owns FFmpeg
+execution, input validation, audio-stream extraction/conversion, decoding,
+resampling, WAV/MP3 encoding, image/video sampling and time formatting.
+`common_utils\fileutils.py` owns atomic JSON writes, exclusive file copies,
+safe lowercase naming and artifact-name reservations. Workflow policy remains
+in `storage.py`, Rescript and enrollment rather than in the utility package.
+
+`models.py` contains Pydantic data contracts; it is deliberately not an ML
+loader. `common_utils\modelutils.py:load_model` takes a native SDK factory and
+forwards its options with the centralized cache folder. Qwen uses
+`cache_dir`, Whisper uses `download_root`, and a local-only factory can set
+`cache_parameter=None`. Other compatible LLM SDK factories can use this same
+entry point without changing profile/script schemas; this is not a claim that
+every model shares one constructor or runtime. SDK imports and device/precision
+selection stay lazy in their backends. Importing utilities or enrolling does
+not import Torch/Whisper/Qwen or initialize model storage.
+
+`constants.py` defines default model IDs and `models_directory()`, which creates
+`YAPIT_MODELS_DIR` only when a model is requested. Existing local checkpoints
+are loaded in place; reusable downloads use `models\hub`. The existing Whisper
+small.en cache was adopted into that folder using hard links for immutable
+large assets and copies for small metadata, leaving the original cache intact
+and avoiding downloads/duplicate weight allocation. CPU and GPU modes share
+the model folder. Do not remove external caches blindly.
+
 **Orchestration and timing.** `pipeline.py` reserves a readable output name, saves flat
 brief/provenance/status files under `workspace\outputs` and the script under `data\transcripts`,
 synthesizes each beat, and inserts explicit
-pauses. `media.py` joins audio and uses FFmpeg's pitch-preserving `atempo` only
+pauses. `common_utils\mediautils.py` fits audio using FFmpeg's pitch-preserving `atempo` only
 within 0.90-1.10x. A larger adjustment is refused unless the unadjusted audio
 already fits the +/-5 second tolerance. The encoded MP3 is decoded and checked
 again before the run can complete. Failure writes `<name>.status.json` and `<name>.error.log`
 for render jobs inside the pipeline's error-handling block.
 
-**Media and edit guidance.** `media.py` handles decoding/resampling, 192 kb/s
-48 kHz MP3 encoding with loudness processing, image/video frame extraction,
-and H.264/AAC guide rendering. `timeline.py` scales measured beat lengths to the
+**Media and edit guidance.** Shared media utilities handle decoding/resampling,
+192 kb/s 48 kHz MP3 encoding with loudness processing and image/video extraction.
+`media.py` retains the workflow-specific H.264/AAC placeholder guide renderer.
+`timeline.py` scales measured beat lengths to the
 encoded narration, splits longer beats, and prefers quiet windows near suggested
 sub-cuts. Phrase captions are proportional word groups, not forced alignment.
 The guide is numbered placeholder slates at 1080x1920 and 30 fps, not generated
 travel footage or automatic editing of the source video.
 
-**Storage.** `storage.py` centralizes workspace paths, the shared `DataStore`,
-safe aliases, exclusive readable-name reservations, numeric duplicate suffixes,
-and atomic JSON replacement. All new generated files are flat; `arka` is the
+**Storage.** `storage.py` owns workspace/data paths and confinement; common file
+utilities provide naming, reservations, copying and atomic JSON replacement.
+All new generated files are flat; `arka` is the
 default generation voice. Existing `job` response fields identify the shared
 metadata folder, not a private run folder; use `name`, `status_file`, and returned
 artifact paths. MCP paths are resolved
@@ -315,9 +423,9 @@ and confined to the workspace or data root; CLI manifests may intentionally refe
 to external local recordings, which are preserved in the canonical audio store.
 Profile creation reuses lowercase names; imports merge and replace matching
 filenames. `constants.py` defines the unified data filename template and default
-profile; `storage.data_filename` normalizes filenames to lowercase. Enrollment has
-its own [README](src/enrollment/README.md),
-[developer guide](src/enrollment/dev.readme.md), and local tests.
+profile; `common_utils.fileutils.data_filename` normalizes filenames to lowercase.
+Enrollment has its own [README](enrollment/README.md),
+[developer guide](enrollment/dev.readme.md), and local tests.
 Generation has no durable job queue or
 cross-process GPU lock, so do not run competing model-heavy processes on the
 same constrained device.
@@ -466,9 +574,10 @@ recording pass. For speech changes, also render with a consenting enrolled voice
 and listen to held-out phrases before claiming a voice-quality improvement.
 Documentation-only changes do not need an inference run.
 
-Never commit private recordings, model weights, generated media, `.env`, or credentials.
-Only explicitly selected test fixtures such as `tests\data\arka.ladakhi_marmots.wav`
-are exempt from the media-ignore policy.
-These are covered by `.gitignore`, but review `git diff` and staged paths before
+Never commit model weights, generated media, `.env`, or credentials. Share private
+recordings only with the owner's explicit approval.
+`data\arka` and selected test fixtures such as `tests\data\arka.ladakhi_marmots.wav`
+are exempt from the media-ignore policy; Arka's profile files are not automatically staged.
+Review `git diff` and staged paths before
 committing. Do not remove private workspaces or user recordings as test cleanup,
 and do not add automatic uploads or checkpoint promotion.

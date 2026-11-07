@@ -3,8 +3,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from yapit.media import SAMPLE_RATE, write_wav
-from yapit.storage import Workspace, save_json
+from yapit.common_utils.fileutils import save_json
+from yapit.common_utils.mediautils import SAMPLE_RATE, write_wav
+from yapit.storage import Workspace
 from yapit.voices import enroll
 
 
@@ -12,6 +13,7 @@ from yapit.voices import enroll
 def isolated_data_root(tmp_path, monkeypatch):
     monkeypatch.setenv("YAPIT_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("YAPIT_WORKSPACE", str(tmp_path / "workspace"))
+    monkeypatch.setenv("YAPIT_MODELS_DIR", str(tmp_path / "models"))
 
 
 def tone(seconds: float, frequency: float = 180) -> np.ndarray:

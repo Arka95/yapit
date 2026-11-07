@@ -9,12 +9,13 @@ import numpy as np
 import pytest
 from typer.testing import CliRunner
 
+from yapit.common_utils.fileutils import data_filename, save_json
+from yapit.common_utils.mediautils import SAMPLE_RATE, write_wav
 from yapit.enrollment import EnrollmentSession, audio_quality, enroll, load_readings, profile_names
 from yapit.enrollment.cli import app
 from yapit.enrollment.profiles import load_voice
 from yapit.enrollment.tests.conftest import tone
-from yapit.media import SAMPLE_RATE, write_wav
-from yapit.storage import DataStore, data_filename, save_json
+from yapit.storage import DataStore
 
 
 def test_profile_merge_replaces_same_filename_preserves_settings_and_lowercases(enrolled, tmp_path):
@@ -146,7 +147,7 @@ session = EnrollmentSession(DataStore(sys.argv[1]), 'ARKA')
 assert session.alias == 'arka'
 assert not session.ready
 import numpy as np
-from yapit.media import SAMPLE_RATE, write_wav
+from yapit.common_utils.mediautils import SAMPLE_RATE, write_wav
 for index in range(5):
     path = session.new_take()
     t = np.arange(4 * SAMPLE_RATE) / SAMPLE_RATE

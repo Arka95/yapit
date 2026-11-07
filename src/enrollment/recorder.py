@@ -8,8 +8,8 @@ import time
 import wave
 from pathlib import Path
 
-from yapit.media import SAMPLE_RATE, ffmpeg
-from yapit.storage import data_filename
+from yapit.common_utils.fileutils import data_filename
+from yapit.common_utils.mediautils import SAMPLE_RATE, ffmpeg
 
 
 def microphone_devices() -> list[str]:

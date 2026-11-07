@@ -9,7 +9,7 @@ import soundfile as sf
 from typer.testing import CliRunner
 
 from yapit.cli import app
-from yapit.media import run_media
+from yapit.common_utils.mediautils import run_media
 from yapit.rescript.audio import extract_audio
 from yapit.rescript.transcription import (
     Segment,
@@ -139,7 +139,15 @@ def test_whisper_adapter_consumes_lazy_words_and_uses_local_settings(monkeypatch
     assert [segment.text for segment in result] == ["Hello world.", "Goodbye.", "unfinished"]
     assert calls[0] == (
         "model",
-        ("small.en", {"device": "cpu", "compute_type": "int8", "local_files_only": True}),
+        (
+            "small.en",
+            {
+                "device": "cpu",
+                "compute_type": "int8",
+                "local_files_only": True,
+                "download_root": str(tmp_path / "models" / "hub"),
+            },
+        ),
     )
     assert calls[1][1]["word_timestamps"] is True
     assert calls[1][1]["vad_filter"] is True

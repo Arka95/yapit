@@ -12,11 +12,13 @@ from typing import Annotated, Protocol
 import soundfile as sf
 from pydantic import Field, ValidationError, model_validator
 
-from yapit.constants import DEFAULT_PROFILE
-from yapit.media import run_media
+from yapit.common_utils.fileutils import reserve_artifact_name, save_json
+from yapit.common_utils.mediautils import extract_audio_stream, has_video, validate_media_source
+from yapit.common_utils.modelutils import load_model
+from yapit.constants import DEFAULT_ASR_MODEL, DEFAULT_PROFILE
 from yapit.models import Beat, Model, Script
-from yapit.rescript.audio import extract_audio, has_video
-from yapit.storage import DataStore, reserve_artifact_name, save_json
+from yapit.rescript.audio import extract_audio
+from yapit.storage import DataStore
 
 MAX_INPUT_SECONDS = 3600
 SENTENCE_END = re.compile(r"""[.!?]["')\]]*$""")
@@ -41,7 +43,7 @@ class TranscriptionBackend(Protocol):
 class WhisperTranscriber:
     def __init__(
         self,
-        model: str = "small.en",
+        model: str = DEFAULT_ASR_MODEL,
         device: str | None = None,
         compute_type: str | None = None,
         language: str = "en",
@@ -65,8 +67,10 @@ class WhisperTranscriber:
                 'Install transcription support: python -m pip install -e ".[rescript]"'
             ) from exc
         with redirect_stdout(sys.stderr):
-            model = WhisperModel(
+            model = load_model(
+                WhisperModel,
                 self.model,
+                cache_parameter="download_root",
                 device=self.device,
                 compute_type=self.compute_type,
                 local_files_only=self.offline,
@@ -178,7 +182,7 @@ def transcribe(
     media: Path,
     *,
     output: Path | None = None,
-    model: str = "small.en",
+    model: str = DEFAULT_ASR_MODEL,
     device: str | None = None,
     compute_type: str | None = None,
     language: str = "en",
@@ -186,11 +190,7 @@ def transcribe(
     backend: TranscriptionBackend | None = None,
     profile: str = DEFAULT_PROFILE,
 ) -> dict:
-    source = media.resolve()
-    if not source.is_file():
-        raise ValueError(f"Media file not found: {source}")
-    if source.stat().st_size > 250 * 1024 * 1024:
-        raise ValueError("Media limit is 250 MB; supply a smaller local file.")
+    source = validate_media_source(media)
     data = DataStore()
     destination = data.within(data.transcripts, output or data.transcripts)
     if destination != data.transcripts:
@@ -198,26 +198,8 @@ def transcribe(
     recognizer = backend or WhisperTranscriber(model, device, compute_type, language, offline)
     with tempfile.TemporaryDirectory(prefix="yapit-rescript-") as temporary:
         audio = Path(temporary) / "audio.wav"
-        decoded = run_media(
-            [
-                "-loglevel",
-                "info",
-                "-y",
-                "-i",
-                str(source),
-                "-map",
-                "0:a:0",
-                "-vn",
-                "-t",
-                str(MAX_INPUT_SECONDS + 1),
-                "-ac",
-                "1",
-                "-ar",
-                "16000",
-                "-c:a",
-                "pcm_s16le",
-                str(audio),
-            ]
+        decoded = extract_audio_stream(
+            source, audio, sample_rate=16000, max_seconds=MAX_INPUT_SECONDS
         )
         info = sf.info(audio)
         if not 0 < info.duration <= MAX_INPUT_SECONDS:

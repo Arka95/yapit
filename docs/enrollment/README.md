@@ -70,8 +70,9 @@ workspace\enrollment\arka\
   arka.audio_sample_1.raw.<take-id>.capture.log
 ```
 
-`constants.py` defines the shared `<profile>.<name><suffix>` filename template,
-the default profile, and the numbered audio-sample stem. `storage.data_filename`
+`src\constants.py` defines the shared `<profile>.<name><suffix>` filename template,
+the default profile, and the numbered audio-sample stem.
+`common_utils.fileutils.data_filename`
 enforces lowercase and sanitizes the stem. Recordings and metadata never go in
 the source module; only the reusable baseline scripts do.
 

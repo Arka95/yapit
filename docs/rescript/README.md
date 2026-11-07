@@ -43,7 +43,8 @@ direct video transcription also retains its extracted soundtrack there.
 
 The default recognizer is faster-whisper `small.en`, running locally on CPU
 with int8 computation. First use downloads model weights, not uploads of
-your audio. For offline use, provision the model beforehand and pass
+your audio. Reusable model downloads use `models\hub` beneath `YAPIT_MODELS_DIR`.
+For offline use, provision the model beforehand and pass
 `--offline`; `--model` also accepts a local converted model directory.
 GPU use is opt-in with `--device cuda --compute-type float16` and requires
 the appropriate CTranslate2/CUDA libraries.

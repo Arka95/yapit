@@ -4,7 +4,7 @@ import re
 
 import numpy as np
 
-from yapit.media import SAMPLE_RATE, split_cut_count
+from yapit.common_utils.mediautils import SAMPLE_RATE, split_cut_count
 from yapit.models import Cue, Script, Timeline
 
 

@@ -5,20 +5,21 @@ from pathlib import Path
 
 import numpy as np
 
-from yapit.constants import DEFAULT_PROFILE
-from yapit.media import (
+from yapit.common_utils.fileutils import save_json
+from yapit.common_utils.mediautils import (
     SAMPLE_RATE,
     decode_audio,
     encode_mp3,
     fit_audio,
     media_frames,
-    render_guide,
     write_wav,
 )
+from yapit.constants import DEFAULT_PROFILE
+from yapit.media import render_guide
 from yapit.models import Brief, DeliveryStyle, Script
 from yapit.scripts import build_prompt, generate_script
 from yapit.speech import QwenSpeech, SpeechBackend
-from yapit.storage import Workspace, save_json
+from yapit.storage import Workspace
 from yapit.timeline import build_timeline
 from yapit.voices import select_voice
 

@@ -7,9 +7,9 @@ from types import SimpleNamespace
 import pytest
 from conftest import tone
 
-from yapit.media import write_wav
+from yapit.common_utils.fileutils import save_json
+from yapit.common_utils.mediautils import write_wav
 from yapit.models import Sample
-from yapit.storage import save_json
 from yapit.training import train
 from yapit.voices import load_voice
 

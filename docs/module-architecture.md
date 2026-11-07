@@ -8,11 +8,20 @@ work, not a prerequisite for choosing these boundaries.
 Enrollment now owns its UI, static `sampleScripts`, profile/sample management and
 tests under `src\enrollment`. Profiles require five accepted recordings,
 use `data\<profile>\audio` plus profile-local metadata, and merge matching filenames.
-Lowercase data naming is centralized in `constants.py` and `storage.data_filename`.
+Lowercase data naming is centralized in `constants.py` and
+`common_utils.fileutils.data_filename`.
 Evidence: `src\enrollment\session.py:46`;
 `src\enrollment\profiles.py:107`; `src\constants.py:1-3`;
 `src\storage.py:43-50`. The detailed provider-splitting proposal below remains
 unimplemented.
+
+The current refactor extracts shared file/media utilities under
+`src\common_utils`, leaving workflow-specific rendering in `src\media.py` and
+storage policy in `src\storage.py`. Model factories use the lazy shared loader;
+`src\models.py` remains data contracts. All project documentation is now under
+`docs`, indexed by the root README. See [dev.readme.md](dev.readme.md) for the
+maintained tree; older numbered source references below are research snapshots,
+not a claim that the full proposed provider split has been implemented.
 
 ## Problem Statement
 
@@ -355,7 +364,7 @@ extraction, not training or adding another model.
 - Local synthesis and protocol: `src\speech.py:19-95`.
 - Media/timeline: `src\media.py:18-257`; `src\timeline.py:11-68`.
 - Enrollment/reference selection: `src\enrollment\profiles.py:18-198`;
-  `src\enrollment\session.py:46`; `src\enrollment\README.md`.
+  `src\enrollment\session.py:46`; `docs\enrollment\README.md`.
 - Orchestration/storage/hosted permission: `src\pipeline.py:25-164`;
   `src\storage.py:14-157`.
 - Interfaces: `src\cli.py:23-198`; `src\server.py:18-167`;

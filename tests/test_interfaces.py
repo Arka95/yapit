@@ -13,12 +13,26 @@ from pydantic import ValidationError
 from typer.testing import CliRunner
 
 from yapit.cli import app
-from yapit.media import write_wav
+from yapit.common_utils.fileutils import save_json
+from yapit.common_utils.mediautils import write_wav
+from yapit.common_utils.modelutils import load_model
 from yapit.models import Beat, Brief, DeliveryStyle, Script
 from yapit.scripts import build_prompt, generate_script
 from yapit.speech import QwenSpeech
-from yapit.storage import DataStore, save_json
+from yapit.storage import DataStore
 from yapit.voices import enroll_style, load_voice, select_voice
+
+
+def test_model_factory_supports_local_sdk_without_a_cache_keyword(tmp_path):
+    class LocalModel:
+        def __init__(self, path, *, device):
+            self.path = path
+            self.device = device
+
+    path = tmp_path / "local-model.gguf"
+    model = load_model(LocalModel, path, cache_parameter=None, device="cpu")
+    assert model.path == str(path)
+    assert model.device == "cpu"
 
 
 def test_cli_prompt_and_input_validation(tmp_path, monkeypatch):
@@ -130,6 +144,8 @@ def test_qwen_uses_reference_or_checkpoint_without_cloud(
     assert np.isfinite(backend.synthesize("First sentence.")).all()
     backend.synthesize("Second sentence.")
     assert sum(kind == "load" for kind, _ in calls) == 1
+    loaded = next(options for kind, options in calls if kind == "load")
+    assert loaded[1]["cache_dir"] == str(tmp_path / "models" / "hub")
     assert sum(kind == "prompt" for kind, _ in calls) == (0 if trained else 1)
     assert sum(kind == ("trained" if trained else "clone") for kind, _ in calls) == 2
     if styled:

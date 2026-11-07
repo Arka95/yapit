@@ -7,11 +7,27 @@ import pytest
 from conftest import tone
 from PIL import Image
 
-from yapit.media import SAMPLE_RATE, decode_audio, fit_audio, media_frames, run_media, write_wav
+from yapit.common_utils.mediautils import (
+    SAMPLE_RATE,
+    decode_audio,
+    fit_audio,
+    media_frames,
+    resample,
+    run_media,
+    write_wav,
+)
 from yapit.models import Beat, Brief, DeliveryStyle, Script, Timeline
 from yapit.pipeline import Pipeline
 from yapit.timeline import build_timeline
 from yapit.voices import enroll_style
+
+
+def test_shared_resampling_preserves_duration_and_amplitude():
+    source = (0.1 * np.sin(2 * np.pi * 220 * np.arange(48000) / 48000)).astype(np.float32)
+    result = resample(source, 48000)
+    assert len(result) == SAMPLE_RATE
+    assert np.isfinite(result).all()
+    assert np.max(np.abs(result)) == pytest.approx(0.1, abs=0.005)
 
 
 class ToneSpeech:

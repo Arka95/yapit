@@ -9,10 +9,10 @@ from typing import Annotated
 import typer
 from dotenv import load_dotenv
 
+from yapit.common_utils.mediautils import ffmpeg
 from yapit.constants import DEFAULT_PROFILE
 from yapit.enrollment import enroll
 from yapit.enrollment.cli import data_store
-from yapit.media import ffmpeg
 from yapit.models import Brief, DeliveryStyle
 from yapit.pipeline import Pipeline
 from yapit.rescript.cli import app as rescript_app

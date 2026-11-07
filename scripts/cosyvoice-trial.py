@@ -81,9 +81,9 @@ def worker(request_path: Path) -> None:
 
 def trial(script_path: Path, profile: str, instruction: str) -> None:
     from yapit.cli import workspace
-    from yapit.media import SAMPLE_RATE, decode_audio, encode_mp3, write_wav
+    from yapit.common_utils.fileutils import save_json
+    from yapit.common_utils.mediautils import SAMPLE_RATE, decode_audio, encode_mp3, write_wav
     from yapit.scripts import load_script
-    from yapit.storage import save_json
     from yapit.voices import select_voice
 
     root = workspace()

@@ -7,9 +7,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from yapit.media import decode_audio
+from yapit.common_utils.fileutils import save_json
+from yapit.common_utils.mediautils import decode_audio
+from yapit.common_utils.modelutils import load_model
 from yapit.speech import MODEL_ID
-from yapit.storage import Workspace, save_json
+from yapit.storage import Workspace
 from yapit.voices import load_voice
 
 
@@ -98,7 +100,9 @@ def train(
     save_json(job.path("status.json"), {"status": "training", "upstream_commit": revision})
     try:
         # Upstream saves checkpoints by copying a local model directory, not a Hub identifier.
-        local_model = snapshot_download(repo_id=MODEL_ID)
+        local_model = load_model(
+            lambda model, **kwargs: snapshot_download(repo_id=model, **kwargs), MODEL_ID
+        )
         provenance = {
             "upstream_commit": revision,
             "base_snapshot": local_model,

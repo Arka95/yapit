@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from yapit.common_utils.mediautils import SAMPLE_RATE, decode_audio, ffmpeg, write_wav
 from yapit.enrollment import (
     EnrollmentSession,
     MicrophoneRecorder,
@@ -14,7 +15,6 @@ from yapit.enrollment import (
 )
 from yapit.enrollment.profiles import load_voice
 from yapit.enrollment.tests.conftest import tone
-from yapit.media import SAMPLE_RATE, decode_audio, ffmpeg, write_wav
 from yapit.storage import DataStore
 
 
@@ -274,6 +274,7 @@ def test_real_tk_wizard_advances_after_saving_without_opening_microphone(session
     root.withdraw()
     app = EnrollmentApp(root, session.store)
     errors = []
+    root.report_callback_exception = lambda kind, value, traceback: errors.append(value)
     playback = []
     notices = []
     monkeypatch.setattr(
@@ -322,7 +323,8 @@ def test_real_tk_wizard_advances_after_saving_without_opening_microphone(session
         while not predicate():
             if time.monotonic() > deadline:
                 raise AssertionError("Desktop action did not finish.")
-            root.update()
+            if not app._closed:
+                root.update()
             time.sleep(0.02)
         root.update()
 
@@ -393,7 +395,12 @@ def test_real_tk_wizard_advances_after_saving_without_opening_microphone(session
         pump_until(lambda: not app.busy)
         assert "passage 1 of 6" in app.heading.get()
         assert str(app.record_button["state"]) == "normal"
+        app.close()
+        pump_until(lambda: app._closed)
+        assert not app.recorder.ready
+        assert not errors
     finally:
         app.stop_playback()
         app.recorder.close()
-        root.destroy()
+        if not app._closed:
+            root.destroy()

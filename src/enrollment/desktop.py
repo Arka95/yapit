@@ -10,6 +10,7 @@ from tkinter import messagebox, ttk
 
 from dotenv import load_dotenv
 
+from yapit.common_utils.mediautils import decode_audio
 from yapit.enrollment import (
     MIN_SAMPLES,
     EnrollmentSession,
@@ -17,7 +18,6 @@ from yapit.enrollment import (
     microphone_devices,
     profile_names,
 )
-from yapit.media import decode_audio
 from yapit.storage import DataStore
 from yapit.voices import audio_quality
 
@@ -32,6 +32,7 @@ class EnrollmentApp:
         self.take_ready = False
         self.recording = False
         self.busy = False
+        self._closed = False
         self.started = 0.0
         self.events = queue.Queue()
         self.alias = tk.StringVar()
@@ -200,7 +201,7 @@ class EnrollmentApp:
                     messagebox.showerror("Yapit", str(error), parent=self.root)
                 else:
                     callback(value)
-                if not self.root.winfo_exists():
+                if self._closed:
                     return
                 self.refresh_controls()
         except queue.Empty:
@@ -450,7 +451,11 @@ class EnrollmentApp:
                 return
             self.recording = False
         self.stop_playback()
-        self.work(self.recorder.close, lambda _: self.root.destroy())
+        self.work(self.recorder.close, self.window_closed)
+
+    def window_closed(self, value=None) -> None:
+        self._closed = True
+        self.root.destroy()
 
 
 def main() -> None:

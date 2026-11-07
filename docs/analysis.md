@@ -2,6 +2,10 @@
 
 **A technical review and reproducible model-selection study**
 
+Implementation file/line references below belong to the original research
+snapshot. For the maintained folder layout and shared-utility/model-loader
+boundaries, use [the developer guide](dev.readme.md).
+
 | Metadata | Value |
 |---|---|
 | Research date | November 7, 2026 |

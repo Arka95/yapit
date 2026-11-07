@@ -10,10 +10,12 @@ from typing import Protocol
 
 import numpy as np
 
-from yapit.media import SAMPLE_RATE, resample
+from yapit.common_utils.mediautils import SAMPLE_RATE, resample
+from yapit.common_utils.modelutils import load_model
+from yapit.constants import DEFAULT_SPEECH_MODEL
 from yapit.models import Voice
 
-MODEL_ID = "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+MODEL_ID = DEFAULT_SPEECH_MODEL
 
 
 class SpeechBackend(Protocol):
@@ -53,7 +55,8 @@ class QwenSpeech:
             else torch.float16
         )
         with redirect_stdout(sys.stderr):
-            self.model = Qwen3TTSModel.from_pretrained(
+            self.model = load_model(
+                Qwen3TTSModel.from_pretrained,
                 self.voice.checkpoint or os.environ.get("YAPIT_MODEL", MODEL_ID),
                 device_map=device,
                 dtype=dtype,

@@ -8,6 +8,21 @@ with target durations of 5-180 seconds.
 The video uses numbered dark placeholder frames; replace them with your footage
 in your video editor.
 
+## Documentation index
+
+All project Markdown other than this README lives in `docs`.
+
+| Document | Purpose |
+|---|---|
+| [Developer guide](docs/dev.readme.md) | Updated folder structure, utilities, model loading, setup and tests |
+| [Enrollment guide](docs/enrollment/README.md) | Profiles, recording and sample management |
+| [Enrollment development](docs/enrollment/dev.readme.md) | Recorder lifecycle, storage and module tests |
+| [Rescript guide](docs/rescript/README.md) | Audio extraction and transcription commands |
+| [Rescript development](docs/rescript/dev.readme.md) | Recognition, shared utilities and tests |
+| [Audio design](docs/audio-design.md) | Audio choices and listening validation |
+| [Library boundaries](docs/module-architecture.md) | Responsibility map and proposed provider split |
+| [Expressive voice research](docs/analysis.md) | Model-selection study and historical implementation evidence |
+
 ## Setup
 
 ### Windows: CPU for travel, NVIDIA GPU at home
@@ -37,14 +52,15 @@ CPU mode explicitly selects CPU, regardless of the shared `.env`. Switch per com
 
 Rescript uses CPU/int8 or GPU/float16 in the selected mode. Both modes share
 `data\audio`, `data\transcripts`, `data\generated_audio`, workspace metadata,
-and the normal Hugging Face model cache; setup does not download model weights.
+and reusable model assets under `models` (`YAPIT_MODELS_DIR`), with the shared
+SDK cache under `models\hub`; setup does not download model weights.
 The launcher changes only the child process environment and runs from the checkout.
 No system CUDA/cuDNN reinstall is needed for PyTorch's bundled CUDA runtime.
 `Start Enrollment.cmd` defaults to CPU; `.\Start Enrollment.cmd gpu` selects GPU.
 
 The older single-environment commands below remain supported; substitute
 `.\yapit-mode.cmd cpu` or `.\yapit-mode.cmd gpu` for `.\.venv\Scripts\yapit`.
-See [dev.readme.md](dev.readme.md) for exact dependencies and MCP configuration.
+See [dev.readme.md](docs/dev.readme.md) for exact dependencies and MCP configuration.
 The current responsibility map and proposed reusable-library boundaries are in
 [docs\module-architecture.md](docs/module-architecture.md); this is a plan, not an
 implemented package split.
@@ -102,7 +118,7 @@ hardware, then add the speech dependencies:
 
 The Qwen speech model downloads on first inference unless you configure a local
 model directory. NVIDIA CUDA is recommended; CPU inference works but can be
-very slow. Windows inference may also require SoX. See [dev.readme.md](dev.readme.md)
+very slow. Windows inference may also require SoX. See [dev.readme.md](docs/dev.readme.md)
 for configuration, offline use, and dependency troubleshooting.
 
 ## 1. Enroll your voice
@@ -165,8 +181,8 @@ into an automatically trained voice. Signal checks cannot verify identity,
 background music, or transcript accuracy.
 
 Enrollment is a CPU-only, zero-model module with its own UI, CLI, static scripts,
-and tests. See [the module README](src/enrollment/README.md) and
-[developer README](src/enrollment/dev.readme.md). Standalone entry point:
+and tests. See [the module README](docs/enrollment/README.md) and
+[developer README](docs/enrollment/dev.readme.md). Standalone entry point:
 `python -m yapit.enrollment enroll-app`.
 
 ### Expressive narration from your own delivery
@@ -295,7 +311,7 @@ Use `yapit rescript extract_audio .\recording.mp4` to extract audio to
 `data\audio` or copy an already supported audio file there.
 Long recordings are split at sentence endings into parts over 30 and at most
 60 seconds; review recognition before generating narration. See
-[Rescript README](src/rescript/README.md).
+[Rescript README](docs/rescript/README.md).
 
 **MCP clients:** install `.[mcp]`, copy `examples\mcp.config.json` into your
 client's MCP settings, and adjust its absolute paths. Tools can prepare prompts,
@@ -305,7 +321,7 @@ stay inside `YAPIT_WORKSPACE` or `YAPIT_DATA_DIR`.
 
 **Optional automation and training:** automatic cloud script generation and
 dedicated local fine-tuning are separate, opt-in features. Neither is required
-for the workflow above. Setup and commands are in [dev.readme.md](dev.readme.md).
+for the workflow above. Setup and commands are in [dev.readme.md](docs/dev.readme.md).
 
 ## Privacy and troubleshooting
 
@@ -328,11 +344,13 @@ audio/transcript fixture under `tests\data` is a versionable test-only exception
 Recordings and narration are processed locally. Model/dependency downloads need
 network access; optional cloud script generation sends the brief and sampled
 visuals, never enrollment recordings. Manually attaching media to an assistant
-is a separate sharing decision. Private data, weights, generated media, and
-`.env` are Git-ignored; YapIt does not automatically commit or upload them.
+is a separate sharing decision. Other profiles' data, weights, generated media, and
+`.env` are Git-ignored. `data\arka` is allowed through Git's ignore rules, including
+audio, but YapIt does not automatically stage, commit or upload it. Package
+archives exclude all `data` contents.
 
 Run `.\.venv\Scripts\yapit doctor` to report dependency availability. If recording
 is too quiet, check the selected microphone and input gain and move closer;
 normalization cannot repair clipping or recover missing speech. For setup,
 implementation details, tests, and contributor instructions, see
-[dev.readme.md](dev.readme.md).
+[dev.readme.md](docs/dev.readme.md).
