@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import platform
 import subprocess
 import sys
 from pathlib import Path
 
-from yapit.common_utils.fileutils import save_json
+from yapit.common_utils.fileutils import file_sha256, save_json
 from yapit.common_utils.mediautils import decode_audio
 from yapit.common_utils.modelutils import load_model
 from yapit.speech import MODEL_ID
@@ -82,9 +81,7 @@ def train(
             }
         )
     # Keep a deterministic holdout, never used by the upstream optimization loop.
-    ordered = sorted(
-        records, key=lambda row: hashlib.sha256(Path(row["audio"]).read_bytes()).hexdigest()
-    )
+    ordered = sorted(records, key=lambda row: file_sha256(Path(row["audio"])))
     heldout = max(1, len(ordered) // 10)
     splits = {"train": ordered[heldout:], "holdout": ordered[:heldout]}
     for split, rows in splits.items():

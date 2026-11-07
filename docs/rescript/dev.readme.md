@@ -12,18 +12,25 @@ From the repository root:
 ```powershell
 .\.venv\Scripts\python -m pip install -e ".[dev,rescript]"
 .\.venv\Scripts\python -m pytest tests\test_rescript.py
-.\.venv\Scripts\python -m ruff check .
-.\.venv\Scripts\python -m ruff format --check .
+.\.venv\Scripts\python -m ruff check src tests scripts
+.\.venv\Scripts\python -m ruff format --check src tests scripts
 ```
 
 Unit tests use an injected recognizer or a fake Whisper module; they do not
 download models or require a GPU. FFmpeg integration tests exercise real audio
-decoding and video audio-stream extraction. For a listening smoke test, run
+decoding and video audio-stream extraction. A subprocess regression blocks
+model SDK imports and network calls while exercising extraction, even with
+CUDA ASR variables set. Shared storage tests check streaming archive hashes.
+For a listening smoke test, run
 the public CLI on a known local recording, review `transcript.json` against
 the source, and load each output with `yapit.scripts.load_script`. Validate
 recognition quality separately from deterministic partitioning.
 
 ## Components and contracts
+
+`src\rescript` contains only `__init__.py`, `cli.py`, `audio.py` and
+`transcription.py`; there is no desktop UI. The public initializer exports
+`extract_audio` and `transcribe`.
 
 `cli.py` registers `yapit rescript extract_audio`, `transcript`, the equivalent
 `transcribe-media` alias, and the
@@ -46,14 +53,22 @@ art. Known audio containers are copied unchanged; video or other decodable
 containers become mono 24 kHz WAV. Exclusive destination creation prevents
 overwrites through `common_utils\fileutils.py`; failed copies remove only the
 newly created partial file.
+`storage.py` uses shared `file_sha256` for archive identity/collision checks,
+streaming the file rather than allocating its entire contents. Enrollment
+journals/duplicate checks and training splits reuse the same helper.
 The shared `DataStore` selects `data\audio`; output overrides must stay in that
 bucket. An already canonical audio input is returned unchanged after validation.
 The directory is Git-ignored. Extraction is independent
 of Whisper and does not download weights.
+Shared `run_media` turns FFmpeg failures and processing timeouts into
+actionable errors; temporary decoded files are removed on either path.
 
 `transcription.py` contains the `TranscriptionBackend` protocol,
 `WhisperTranscriber`, timed `Segment` contract, `compose_scripts`, and
 `transcribe`. The Python entry point accepts an injected backend for testing.
+Device/precision choices and word grouping belong to the Whisper adapter.
+Sentence partitioning and strict `Script` validation are YapIt-specific
+policy, so they deliberately remain here rather than in `common_utils`.
 
 Processing order:
 
@@ -95,21 +110,33 @@ Do not silently discard an incomplete final sentence or underlength tail.
 
 ## Dependencies and operations
 
-The default is `small.en`, CPU/int8. CUDA/float16 and other models are explicit
-CLI choices. `--offline` maps to Whisper's `local_files_only`; supply complete
+The default is `small.en`, CPU/int8. Whisper is a local Transformer ASR model,
+and `vad_filter=True` enables faster-whisper's voice activity detector. There
+is no separate chat/text-generation LLM, Qwen synthesis, or model training
+in this workflow. Extraction and script composition are model-free.
+CPU inference can still be CPU/RAM-intensive; CUDA recognition can consume
+substantial GPU/VRAM resources. No local inference performance measurement
+is implied by the deterministic tests.
+
+CUDA/float16 can be selected through explicit options, ASR environment
+variables or `scripts\yapit-mode.cmd gpu`; it is not the default.
+The adapter constructs a Whisper model for each `recognize` call. Model files
+are cached, but instances are not pooled across calls; a CLI invocation
+processes one input. `--offline` maps to Whisper's `local_files_only`; supply complete
 local/cached weights for an offline run. The lazy shared `load_model` adapter
 passes Whisper's `download_root` as `YAPIT_MODELS_DIR\hub`; model folder/defaults
 are centralized in `constants.py`. No API keys or cloud permission
 flags are used. `YAPIT_FFMPEG` retains its existing meaning.
-`YAPIT_WORKSPACE` holds metadata/video/checkpoints, not new audio or transcript
-exports. Metadata and guide outputs are flat. Model checkpoints and existing
-voice/enrollment storage retain their required structure. `YAPIT_DATA_DIR` is the shared root for all modules, defaulting to `data`
+`YAPIT_WORKSPACE` holds temporary session files, job metadata and video guides,
+not new audio or transcript exports. Metadata and guide outputs are flat. Model checkpoints and existing
+voice/enrollment storage retain their required structure under the profile's
+data directory. `YAPIT_DATA_DIR` is the shared root for all modules, defaulting to `data`
 beside the configured workspace. Its buckets are `audio`, `transcripts`, and
 `generated_audio`. Audio overrides must remain in their bucket; transcript
 overrides must be exactly the transcript root.
 Tests isolate the data root with an environment override and verify output
-placement as well as transcription behavior. Legacy artifacts remain readable;
-no automatic media migration/deletion is performed.
+placement as well as transcription behavior. Existing exports are left
+untouched; no automatic media migration/deletion is performed.
 
 There is no background queue, GPU lock, diarization, forced alignment, image
 analysis, or MCP transcription endpoint. Avoid concurrent GPU-heavy runs

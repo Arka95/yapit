@@ -104,7 +104,7 @@ def main() -> None:
                 destination.write_bytes(content)
     subprocess.run([str(environment / "Scripts" / "sox.exe"), "--version"], check=True)
     subprocess.run([str(python), "-m", "pip", "check"], check=True)
-    print(f"Ready: yapit-mode.cmd {args.mode} doctor")
+    print(f"Ready: scripts\\yapit-mode.cmd {args.mode} doctor")
 
 
 if __name__ == "__main__":

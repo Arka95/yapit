@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import shutil
 import uuid
 from pathlib import Path
@@ -8,7 +7,7 @@ from pathlib import Path
 import numpy as np
 from pydantic import Field, model_validator
 
-from yapit.common_utils.fileutils import data_filename, save_json
+from yapit.common_utils.fileutils import data_filename, file_sha256, save_json
 from yapit.common_utils.mediautils import SAMPLE_RATE, decode_audio, write_wav
 from yapit.constants import AUDIO_SAMPLE_NAME_TEMPLATE
 from yapit.enrollment.artifacts import session_directory
@@ -196,10 +195,10 @@ class EnrollmentSession:
         publication = prepared.with_name(f".{prepared.name}.{uuid.uuid4().hex}.tmp")
         try:
             write_wav(temporary, data)
-            digest = hashlib.sha256(temporary.read_bytes()).hexdigest()
+            digest = file_sha256(temporary)
             if any(
                 Path(sample.audio).resolve() != prepared.resolve()
-                and hashlib.sha256(Path(sample.audio).read_bytes()).hexdigest() == digest
+                and file_sha256(Path(sample.audio)) == digest
                 for sample in self.samples
             ):
                 raise ValueError("This duplicates a saved recording. Read the current passage.")

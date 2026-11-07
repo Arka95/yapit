@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import hashlib
 import os
 from pathlib import Path
 
 from yapit.common_utils.fileutils import (
     copy_file_exclusive,
     data_filename,
+    file_sha256,
     reserve_artifact_name,
     safe_name,
 )
@@ -104,13 +104,13 @@ class DataStore:
         source = source.resolve()
         if source.is_relative_to(self.audio) or source.is_relative_to(self.generated_audio):
             return source
-        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        digest = file_sha256(source)
         target = (
             self.audio / "imports" / digest / data_filename(source.stem, profile, source.suffix)
         )
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists():
-            if hashlib.sha256(target.read_bytes()).hexdigest() != digest:
+            if file_sha256(target) != digest:
                 raise ValueError(
                     f"Archived recording was modified; refusing to overwrite {target}."
                 )
@@ -118,7 +118,7 @@ class DataStore:
         try:
             copy_file_exclusive(source, target)
         except FileExistsError:
-            if hashlib.sha256(target.read_bytes()).hexdigest() != digest:
+            if file_sha256(target) != digest:
                 raise ValueError(f"Recording archive collision: {target}.") from None
             return target
         return target

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -9,6 +10,11 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from yapit.constants import DATA_FILENAME_TEMPLATE, DEFAULT_PROFILE
+
+
+def file_sha256(path: Path) -> str:
+    with path.open("rb") as source:
+        return hashlib.file_digest(source, "sha256").hexdigest()
 
 
 def save_json(path: Path, value: BaseModel | dict | list) -> None:

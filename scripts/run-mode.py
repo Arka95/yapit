@@ -19,7 +19,7 @@ def main() -> int:
     environment = ROOT / f".venv-{args.mode}"
     python = environment / "Scripts" / "python.exe"
     if not python.exists():
-        parser.error(f"Missing {python}; run setup-mode.cmd {args.mode}.")
+        parser.error(f"Missing {python}; run scripts\\setup-mode.cmd {args.mode}.")
     child_env = os.environ.copy()
     child_env["YAPIT_DEVICE"] = "cuda" if args.mode == "gpu" else "cpu"
     child_env["YAPIT_ASR_DEVICE"] = child_env["YAPIT_DEVICE"]
@@ -43,7 +43,7 @@ def main() -> int:
         if check.returncode:
             print(
                 "GPU mode requires a connected NVIDIA GPU and working CUDA runtime. "
-                "Use yapit-mode.cmd cpu when travelling.",
+                "Use scripts\\yapit-mode.cmd cpu when travelling.",
                 file=sys.stderr,
             )
             return 1
@@ -55,7 +55,10 @@ def main() -> int:
     else:
         invocation = [str(environment / "Scripts" / "yapit.exe"), *command]
     if not Path(invocation[0]).is_file():
-        print(f"Incomplete {args.mode} runtime; run setup-mode.cmd {args.mode}.", file=sys.stderr)
+        print(
+            f"Incomplete {args.mode} runtime; run scripts\\setup-mode.cmd {args.mode}.",
+            file=sys.stderr,
+        )
         return 1
     return subprocess.run(invocation, cwd=ROOT, env=child_env).returncode
 

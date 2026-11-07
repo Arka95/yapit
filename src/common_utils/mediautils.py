@@ -44,6 +44,8 @@ def run_media(
     except subprocess.CalledProcessError as exc:
         detail = exc.stderr.decode("utf-8", errors="replace")[-3000:]
         raise RuntimeError(f"FFmpeg failed: {detail}") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"FFmpeg timed out after {timeout} seconds.") from exc
 
 
 def validate_media_source(source: Path) -> Path:

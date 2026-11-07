@@ -1,8 +1,29 @@
+import hashlib
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import pytest
 
+from yapit.common_utils.fileutils import file_sha256
 from yapit.storage import DataStore, Workspace
+
+
+@pytest.mark.parametrize("payload", [b"", b"recording bytes" * 65536], ids=["empty", "multi-chunk"])
+def test_recording_archive_hashes_without_loading_entire_file(tmp_path, monkeypatch, payload):
+    source = tmp_path / "source.wav"
+    source.write_bytes(payload)
+    expected = hashlib.sha256(payload).hexdigest()
+
+    def reject_full_read(path):
+        raise AssertionError("Hashing must not load the entire recording with read_bytes.")
+
+    monkeypatch.setattr(Path, "read_bytes", reject_full_read)
+    assert file_sha256(source) == expected
+    data = DataStore()
+    archived = data.archive_recording(source)
+    assert archived.parent.name == expected
+    assert data.archive_recording(source) == archived
+    assert file_sha256(archived) == expected
 
 
 def test_workspace_and_standalone_modules_share_configured_data_root(tmp_path, monkeypatch):

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from yapit.common_utils.fileutils import data_filename, save_json
+from yapit.common_utils.fileutils import data_filename, file_sha256, save_json
 from yapit.common_utils.mediautils import SAMPLE_RATE, decode_audio, write_wav
 from yapit.enrollment.artifacts import cleanup_session, session_directory
 from yapit.models import Sample, SampleManifest, Voice
@@ -97,7 +97,7 @@ def save_journal(folder: Path, name: str, samples: list[Sample]) -> None:
                     if Path(sample.audio).resolve().is_relative_to(folder)
                     else sample.audio,
                     "text": sample.text,
-                    "sha256": hashlib.sha256(Path(sample.audio).read_bytes()).hexdigest(),
+                    "sha256": file_sha256(Path(sample.audio)),
                 }
                 for sample in samples
             ],

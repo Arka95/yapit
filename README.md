@@ -31,11 +31,11 @@ Keep your existing `.venv` and `.env`. Provision two independent Python 3.11/3.1
 environments from the repository root (no activation or PowerShell policy changes):
 
 ```powershell
-.\setup-mode.cmd cpu
-.\setup-mode.cmd gpu
-.\yapit-mode.cmd cpu doctor
-.\yapit-mode.cmd gpu doctor
-.\yapit-mode.cmd gpu --help
+.\scripts\setup-mode.cmd cpu
+.\scripts\setup-mode.cmd gpu
+.\scripts\yapit-mode.cmd cpu doctor
+.\scripts\yapit-mode.cmd gpu doctor
+.\scripts\yapit-mode.cmd gpu --help
 ```
 
 `.venv-cpu` contains matching `torch`/`torchaudio` 2.9.1 CPU wheels;
@@ -45,9 +45,9 @@ GPU mode explicitly selects CUDA and **fails if the eGPU is disconnected**.
 CPU mode explicitly selects CPU, regardless of the shared `.env`. Switch per command:
 
 ```powershell
-.\yapit-mode.cmd cpu rescript transcript .\data\audio\trip.wav --offline
-.\yapit-mode.cmd gpu rescript transcript .\data\audio\trip.wav --offline
-.\yapit-mode.cmd gpu narrate my-voice --script .\data\transcripts\my-script.json --seconds 45
+.\scripts\yapit-mode.cmd cpu rescript transcript .\data\audio\trip.wav --offline
+.\scripts\yapit-mode.cmd gpu rescript transcript .\data\audio\trip.wav --offline
+.\scripts\yapit-mode.cmd gpu narrate my-voice --script .\data\transcripts\my-script.json --seconds 45
 ```
 
 Rescript uses CPU/int8 or GPU/float16 in the selected mode. Both modes share
@@ -56,10 +56,11 @@ and reusable model assets under `models` (`YAPIT_MODELS_DIR`), with the shared
 SDK cache under `models\hub`; setup does not download model weights.
 The launcher changes only the child process environment and runs from the checkout.
 No system CUDA/cuDNN reinstall is needed for PyTorch's bundled CUDA runtime.
-`Start Enrollment.cmd` defaults to CPU; `.\Start Enrollment.cmd gpu` selects GPU.
+`scripts\Start Enrollment.cmd` defaults to CPU;
+`& ".\scripts\Start Enrollment.cmd" gpu` selects GPU.
 
 The older single-environment commands below remain supported; substitute
-`.\yapit-mode.cmd cpu` or `.\yapit-mode.cmd gpu` for `.\.venv\Scripts\yapit`.
+`.\scripts\yapit-mode.cmd cpu` or `.\scripts\yapit-mode.cmd gpu` for `.\.venv\Scripts\yapit`.
 See [dev.readme.md](docs/dev.readme.md) for exact dependencies and MCP configuration.
 The current responsibility map and proposed reusable-library boundaries are in
 [docs\module-architecture.md](docs/module-architecture.md); this is a plan, not an
@@ -85,7 +86,7 @@ settings rather than changing global configuration:
 If the feed cannot supply the required dependencies, prepare a verified Windows
 wheelhouse on an authorized network/machine with matching Python and CPU/CUDA
 versions, then install locally. Existing runtime setup supports
-`.\setup-mode.cmd gpu --wheelhouse .\verified-wheels` and the equivalent CPU mode.
+`.\scripts\setup-mode.cmd gpu --wheelhouse .\verified-wheels` and the equivalent CPU mode.
 That option covers runtime/build dependencies; PyTorch and SoX may still need
 their official downloads/cache. Model weights must also be provisioned separately.
 See the developer guide for an offline dependency-install example.
@@ -125,7 +126,7 @@ for configuration, offline use, and dependency troubleshooting.
 
 ### Windows recording app
 
-Double-click **`Start Enrollment.cmd`**, or run:
+Double-click **`scripts\Start Enrollment.cmd`**, or run:
 
 ```powershell
 .\.venv\Scripts\yapit enroll-app
@@ -194,9 +195,9 @@ CustomVoice/VoiceDesign models. Instead, record a real example of your intended
 delivery; YapIt clones from that reference, not a synthetic preset presented as you:
 
 ```powershell
-.\yapit-mode.cmd cpu voice-style-prompt --style lively-vlog
-.\yapit-mode.cmd cpu voice-style-enroll my-voice --style lively-vlog --audio .\expressive.wav --text "EXACT WORDS YOU RECORDED" --consent
-.\yapit-mode.cmd gpu narrate my-voice --script .\data\transcripts\my-script.json --seconds 45 --style lively-vlog
+.\scripts\yapit-mode.cmd cpu voice-style-prompt --style lively-vlog
+.\scripts\yapit-mode.cmd cpu voice-style-enroll my-voice --style lively-vlog --audio .\expressive.wav --text "EXACT WORDS YOU RECORDED" --consent
+.\scripts\yapit-mode.cmd gpu narrate my-voice --script .\data\transcripts\my-script.json --seconds 45 --style lively-vlog
 ```
 
 Read the supplied short passage in your natural lively-vlog, relaxed-travel,

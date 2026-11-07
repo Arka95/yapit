@@ -1,4 +1,6 @@
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -19,6 +21,61 @@ from yapit.rescript.transcription import (
 )
 from yapit.scripts import load_script
 from yapit.storage import DataStore
+
+
+def test_extraction_is_model_free_even_with_cuda_asr_settings(tmp_path):
+    source = tmp_path / "source.wav"
+    sf.write(source, np.zeros(24000, dtype=np.float32), 24000)
+    script = """
+import importlib.abc
+import json
+import socket
+import sys
+class NoModels(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split('.')[0] in {
+            'torch', 'transformers', 'qwen_tts', 'faster_whisper',
+            'openai', 'huggingface_hub', 'ctranslate2', 'onnxruntime'
+        }:
+            raise AssertionError('Model dependency accessed: ' + fullname)
+sys.meta_path.insert(0, NoModels())
+socket.create_connection = lambda *args, **kwargs: (_ for _ in ()).throw(
+    AssertionError('Network accessed')
+)
+from yapit.cli import app
+from typer.testing import CliRunner
+result = CliRunner().invoke(app, ['rescript', 'extract_audio', sys.argv[1]])
+assert result.exit_code == 0, result.output
+assert json.loads(result.stdout)['action'] == 'copied'
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(source)],
+        env={**os.environ, "YAPIT_ASR_DEVICE": "cuda", "YAPIT_ASR_COMPUTE_TYPE": "float16"},
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert not (tmp_path / "models").exists()
+
+
+def test_extract_reports_ffmpeg_timeout_and_cleans_temporary_files(tmp_path, monkeypatch):
+    source = tmp_path / "source.wav"
+    source.touch()
+    temporary = []
+    monkeypatch.setenv("YAPIT_FFMPEG", "ffmpeg-timeout-test")
+
+    def timeout(command, **kwargs):
+        temporary.append(Path(command[-1]))
+        temporary[-1].write_bytes(b"partial decoded audio")
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr("yapit.common_utils.mediautils.subprocess.run", timeout)
+    result = CliRunner().invoke(app, ["rescript", "extract_audio", str(source)])
+    assert result.exit_code == 1
+    assert "FFmpeg timed out after 600 seconds" in result.output
+    assert not temporary[0].parent.exists()
+    assert not list(DataStore().audio.iterdir())
 
 
 def segments_at(*ends):

@@ -45,7 +45,6 @@ yapit\
       __init__.py
       audio.py
       cli.py
-      desktop.py
       transcription.py
     cli.py
     server.py
@@ -60,6 +59,12 @@ yapit\
     training.py
     voices.py
   scripts\
+    Start Enrollment.cmd
+    setup-mode.cmd
+    yapit-mode.cmd
+    run-mode.py
+    setup-mode.py
+    hatch-build.py
   tests\
   models\
     Qwen3-TTS-12Hz-1.7B-Base\
@@ -147,7 +152,7 @@ than claiming the work was published.
 
 ### Isolated CPU/GPU runtimes on Windows
 
-`setup-mode.cmd cpu` and `setup-mode.cmd gpu` use normal isolated venvs,
+`scripts\setup-mode.cmd cpu` and `scripts\setup-mode.cmd gpu` use normal isolated venvs,
 preserving the old `.venv`. `scripts\setup-mode.py` installs the selected
 `requirements-cpu.txt` / `requirements-gpu.txt` first without transitive dependency
 resolution on the PyTorch index, then resolves dependencies from PyPI with the editable project
@@ -162,7 +167,7 @@ pip, not a complete lockfile. No global Python packages are installed.
 Setup installs Hatchling/editables into the selected environment and uses them
 for the editable build without another isolated build dependency download.
 If package downloads fail, do not bypass TLS validation. For a trusted local
-wheel directory, `.\setup-mode.cmd cpu --wheelhouse .\verified-wheels` (or `gpu`)
+wheel directory, `.\scripts\setup-mode.cmd cpu --wheelhouse .\verified-wheels` (or `gpu`)
 resolves runtime/build dependencies offline. PyTorch still uses its official
 index/cache, and the SoX archive still comes from its checksum-verified mirror.
 Only use public wheels whose upstream hashes or provenance you have verified.
@@ -238,7 +243,7 @@ Thea's `docs\setup.gpu.md` describes **OpenCV CUDA**, not Yapit/PyTorch:
 do not reinstall its CUDA toolkit or cuDNN to configure these environments.
 GPU wheels occupy several GB; the model cache remains shared and unchanged.
 
-`scripts\run-mode.py`, wrapped by `yapit-mode.cmd`, sets child-only
+`scripts\run-mode.py`, wrapped by `scripts\yapit-mode.cmd`, sets child-only
 `YAPIT_DEVICE`, `YAPIT_ASR_DEVICE`, and `YAPIT_ASR_COMPUTE_TYPE`.
 CPU uses cpu/int8 for ASR; GPU uses cuda/float16. GPU mode validates CUDA
 availability before dispatch and never falls back. ASR's explicit `--device`
@@ -251,14 +256,14 @@ dependencies. No activation, process-global environment mutation, or execution
 policy bypass is used.
 
 ```powershell
-.\yapit-mode.cmd cpu python -m pip check
-.\yapit-mode.cmd gpu python -c "import torch; x=torch.ones(2,device='cuda'); print(x+x)"
-.\yapit-mode.cmd gpu python -m pip check
-.\yapit-mode.cmd gpu mcp
+.\scripts\yapit-mode.cmd cpu python -m pip check
+.\scripts\yapit-mode.cmd gpu python -c "import torch; x=torch.ones(2,device='cuda'); print(x+x)"
+.\scripts\yapit-mode.cmd gpu python -m pip check
+.\scripts\yapit-mode.cmd gpu mcp
 ```
 
 To add developer tools, use the selected interpreter and retain constraints:
-`.\yapit-mode.cmd cpu python -m pip install -c requirements-cpu.txt -c requirements-runtime.txt -e ".[dev]"`.
+`.\scripts\yapit-mode.cmd cpu python -m pip install -c requirements-cpu.txt -c requirements-runtime.txt -e ".[dev]"`.
 Use GPU constraints for GPU development. Neither setup downloads model weights;
 `--offline` ASR reuses a previously cached model.
 
@@ -380,7 +385,7 @@ protocol lets tests inject deterministic speech without loading Qwen.
 **Shared utilities and model loading.** `common_utils\mediautils.py` owns FFmpeg
 execution, input validation, audio-stream extraction/conversion, decoding,
 resampling, WAV/MP3 encoding, image/video sampling and time formatting.
-`common_utils\fileutils.py` owns atomic JSON writes, exclusive file copies,
+`common_utils\fileutils.py` owns streaming SHA-256 file hashing, atomic JSON writes, exclusive file copies,
 safe lowercase naming and artifact-name reservations. Workflow policy remains
 in `storage.py`, Rescript and enrollment rather than in the utility package.
 

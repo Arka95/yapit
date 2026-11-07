@@ -4,6 +4,43 @@ Turn a local audio or video file into the same Script JSON that YapIt accepts
 for narration: `title` and `beats` with `text`, `visual`, and `pause_ms`.
 Rescript transcribes speech; it does not rewrite it or synthesize audio.
 
+## Models and resource use
+
+| Operation | Models | Default execution |
+|---|---|---|
+| `extract_audio` | None | CPU FFmpeg decoding/conversion and file copying |
+| `transcript` / `transcribe-media` | Local Whisper ASR (`small.en`), with voice activity detection | CPU/int8 unless ASR settings or the GPU launcher select CUDA |
+| Script composition | None | Deterministic sentence grouping, partitioning and schema validation |
+
+ASR means automatic speech recognition. Whisper is a Transformer speech model,
+not a separate chat/text-generation LLM. Rescript does not invoke Qwen TTS,
+an LLM rewrite, or a cloud transcription service. Transcription is **not
+model-free**: CPU/int8 can still consume substantial CPU time and RAM.
+CUDA/float16 recognition can be GPU-intensive; GPU is optional, not required.
+Larger `--model` choices can increase the workload. No training is performed.
+
+Direct CLI use defaults to CPU/int8 when `YAPIT_ASR_DEVICE` and
+`YAPIT_ASR_COMPUTE_TYPE` are unset; explicit options override those variables.
+The GPU launcher also checks CUDA availability before dispatch, even for an
+extraction command, but extraction itself does not run a neural model.
+
+## Module boundaries and shared utilities
+
+The implementation lives in `src\rescript`: `cli.py` owns command parsing and
+JSON/error output, `audio.py` owns extraction/copy policy, and `transcription.py`
+owns the recognizer adapter, timed segments, script composition and export workflow.
+`__init__.py` exposes the two Python entry points. There is no desktop UI here.
+
+Generic operations are shared rather than reimplemented:
+
+- `common_utils\mediautils.py`: source validation, FFmpeg, audio-stream extraction and video detection.
+- `common_utils\fileutils.py`: naming, exclusive copies, atomic JSON, reservations and streaming file hashes.
+- `common_utils\modelutils.py`: lazy native model construction with the central cache directory.
+- `storage.py`: data-bucket confinement and source archival, using the shared file helpers.
+
+Whisper-specific settings and YapIt's script-partition rules remain in Rescript,
+not in general-purpose utilities.
+
 ## Setup and use
 
 From the YapIt checkout, in PowerShell:
@@ -11,13 +48,13 @@ From the YapIt checkout, in PowerShell:
 ```powershell
 .\.venv\Scripts\python -m pip install -e ".[rescript]"
 .\.venv\Scripts\yapit rescript extract_audio .\trip.mp4
-.\.venv\Scripts\yapit rescript transcript .\data\audio\trip.wav
+.\.venv\Scripts\yapit rescript transcript .\data\audio\arka.trip.wav
 ```
 
 Audio files work the same way, including WAV, MP3, M4A, and FLAC. FFmpeg
 decodes the first audio stream of any supported local media file; a video
-without audio fails. Inputs are limited to 250 MB and one hour.
-Sources are not modified. URLs are not accepted.
+without audio fails. Inputs are limited to 250 MB; transcription also limits
+decoded audio to one hour. Sources are not modified. URLs are not accepted.
 
 ### User-facing commands
 
@@ -49,8 +86,8 @@ For offline use, provision the model beforehand and pass
 GPU use is opt-in with `--device cuda --compute-type float16` and requires
 the appropriate CTranslate2/CUDA libraries.
 
-With YapIt's dual runtime setup, use `.\yapit-mode.cmd cpu rescript transcript`
-or `.\yapit-mode.cmd gpu rescript transcript` followed by your input path.
+With YapIt's dual runtime setup, use `.\scripts\yapit-mode.cmd cpu rescript transcript`
+or `.\scripts\yapit-mode.cmd gpu rescript transcript` followed by your input path.
 The launcher sets CPU/int8 or CUDA/float16 for ASR and shares the same recordings,
 transcripts, metadata, and cached models. GPU mode fails if the eGPU is absent;
 CPU mode works without it. Explicit ASR device/precision options still override
@@ -111,7 +148,9 @@ multilingual synthesis support.
 
 Rescript has no cloud transcription path. Temporary decoded audio is deleted
 after recognition, including on failure. Transcripts and timestamps may still
-contain private information; the canonical data stores are Git-ignored.
+contain private information. Its shared `data\audio` and `data\transcripts`
+buckets remain Git-ignored; the project allows `data\arka` separately, but
+does not automatically stage or upload any recording.
 Existing exports in the workspace are not moved or deleted. The explicitly
 selected `tests\data` audio/transcript pair remains a versionable fixture.
 Recognition can miss speech or hallucinate words; silence detection is not
@@ -120,3 +159,6 @@ script without labels. Music, overlapping voices, and noisy recordings may
 need manual correction.
 
 See [dev.readme.md](dev.readme.md) for implementation and testing.
+
+Model references: [Whisper](https://github.com/openai/whisper) and
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper).
