@@ -112,6 +112,15 @@ before continuing normal dependency resolution. Merely adding `--find-links`
 did not prevent pip from selecting blocked remote metadata. This is a targeted
 cache workaround, not proof that the entire CosyVoice environment is provisioned.
 
+`scripts\cache-feed-wheel.py` implements that verified-cache path for individual
+wheels on this machine. It accepts a wheel basename, requires a published SHA256,
+uses only the approved feed artifact endpoint, and refuses modified cached files:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\cache-feed-wheel.py networkx-3.1-py3-none-any.whl
+.\.venv-cosyvoice-bootstrap\Scripts\python.exe -m pip --python .\.venv-cosyvoice\Scripts\python.exe install --no-index --no-deps .\.runtime-wheel-cache\cosyvoice\networkx-3.1-py3-none-any.whl
+```
+
 The wheel choices follow the official
 [PyTorch previous-versions matrix](https://pytorch.org/get-started/previous-versions/).
 The CUDA wheel supplies its own runtime and cuDNN. The installed NVIDIA
