@@ -4,6 +4,9 @@
 
 `profiles.py` owns deterministic signal checks, minimum-sample validation,
 filename-based merging, reference ranking, manifests, and the inventory journal.
+`styles.py` owns expressive-reference registration, named style guides and
+profile/reference selection. It accepts a `DataStore`, preserves the baseline
+reference and persists style recordings/metadata without loading a model.
 `session.py` owns profile creation/resumption and exact passage-to-recording
 pairing. `sample_scripts.py` loads numbered static JSON files in numeric order.
 `artifacts.py` confines temporary files to the enrollment workspace and removes
@@ -26,10 +29,15 @@ and path helpers in `storage.py`. Atomic JSON writes and file naming come from
 `common_utils\mediautils.py`. There are no imports or calls to model
 providers, script-writing APIs, transcription, inference, or training.
 
-`yapit.voices` adapts application workflows to the enrollment helpers.
-`yapit.desktop` remains a compatibility launcher. Main CLI and MCP enrollment
-delegate to this module; the module CLI avoids importing unrelated pipelines.
+Main CLI and MCP enrollment delegate to this module; generation/training pass
+their workspace's `DataStore` to its profile/style APIs. The old root
+`voices.py` wrappers are removed rather than duplicated. The root `desktop.py`
+compatibility shim is removed; `yapit enroll-app` still launches this module's
+native `desktop.py`. The module CLI avoids importing unrelated pipelines.
 Normal enrollment does not require a flag, and the UI has no consent control.
+`yapit enroll-app`, `yapit voice-enroll` and `yapit profiles` are flat commands.
+The standalone `python -m yapit.enrollment` CLI remains optional for isolated
+module development.
 
 ## Storage and updates
 

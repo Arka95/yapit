@@ -4,14 +4,16 @@ import json
 import platform
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from yapit.common_utils.fileutils import file_sha256, save_json
 from yapit.common_utils.mediautils import decode_audio
 from yapit.common_utils.modelutils import load_model
-from yapit.speech import MODEL_ID
+from yapit.constants import DEFAULT_SPEECH_MODEL
+from yapit.enrollment import load_voice
 from yapit.storage import Workspace
-from yapit.voices import load_voice
+from yapit.training.checkpoints import prepare_resume_model, validate_checkpoint
 
 
 def train(
@@ -22,9 +24,13 @@ def train(
     epochs: int = 3,
     batch_size: int = 1,
     learning_rate: float = 2e-6,
+    resume: Path | None = None,
 ) -> dict:
     if not 1 <= epochs <= 30 or not 1 <= batch_size <= 16 or not 1e-8 <= learning_rate <= 1e-3:
         raise ValueError("Invalid training parameters.")
+    if resume is not None:
+        resume = resume.resolve()
+        validate_checkpoint(resume, workspace.profile_dir(name).name)
     if platform.system() != "Linux":
         raise RuntimeError(
             "Upstream fine-tuning requires CUDA/bfloat16/FlashAttention. "
@@ -61,7 +67,8 @@ def train(
     ).stdout
     if dirty.strip():
         raise ValueError("Use a clean, reviewed upstream checkout for reproducible training.")
-    voice = load_voice(workspace, name)
+    voice = load_voice(workspace.data, name)
+    name = voice.name
     if len(voice.samples) < 10:
         raise ValueError(
             "Fine-tuning needs at least 10 curated distinct clips (project guardrail)."
@@ -95,11 +102,18 @@ def train(
             "Fine-tuning needs at least 60 seconds; 5-15 clean minutes is recommended."
         )
     save_json(job.path("status.json"), {"status": "training", "upstream_commit": revision})
+    continuation = None
     try:
         # Upstream saves checkpoints by copying a local model directory, not a Hub identifier.
         local_model = load_model(
-            lambda model, **kwargs: snapshot_download(repo_id=model, **kwargs), MODEL_ID
+            lambda model, **kwargs: snapshot_download(repo_id=model, **kwargs),
+            DEFAULT_SPEECH_MODEL,
         )
+        initialization = local_model
+        if resume is not None:
+            continuation = tempfile.TemporaryDirectory(prefix="yapit-resume-", dir=workspace.root)
+            initialization = continuation.name
+            prepare_resume_model(Path(local_model), resume, Path(initialization), name)
         provenance = {
             "upstream_commit": revision,
             "base_snapshot": local_model,
@@ -110,6 +124,9 @@ def train(
             "holdout_clips": heldout,
             "training_clips": len(splits["train"]),
             "automatic_quality_approval": False,
+            "resume_checkpoint": str(resume) if resume else None,
+            "resume_weights_sha256": file_sha256(resume / "model.safetensors") if resume else None,
+            "optimizer": "new AdamW; model-weight continuation only" if resume else "new AdamW",
         }
         save_json(job.path("training.json"), provenance)
         commands = [
@@ -127,7 +144,7 @@ def train(
                 sys.executable,
                 str(training_dir / "sft_12hz.py"),
                 "--init_model_path",
-                local_model,
+                initialization,
                 "--output_model_path",
                 str(checkpoint_dir),
                 "--train_jsonl",
@@ -166,24 +183,36 @@ def train(
             "status_file": str(job.path("status.json")),
             "checkpoints": checkpoints,
             "transcripts": str(transcript_dir),
-            "next": "Listen to held-out phrases and run voice-use-checkpoint to select an epoch.",
+            "resumed_from": str(resume) if resume else None,
+            "next": "Review held-out audio, then choose an epoch with voice-select-checkpoint.",
         }
         save_json(job.path("status.json"), result)
         return result
     except Exception as exc:
         save_json(job.path("status.json"), {"status": "failed", "error": str(exc)})
         raise
+    finally:
+        if continuation is not None:
+            continuation.cleanup()
 
 
-def use_checkpoint(workspace: Workspace, name: str, checkpoint: Path) -> None:
-    checkpoint = checkpoint.resolve()
-    config = json.loads((checkpoint / "config.json").read_text(encoding="utf-8"))
-    if config.get("tts_model_type") != "custom_voice":
-        raise ValueError("Select an upstream fine-tuned CustomVoice checkpoint, not a Base model.")
-    speakers = config.get("talker_config", {}).get("spk_id", {})
-    if name not in speakers or not (checkpoint / "model.safetensors").is_file():
-        raise ValueError("Checkpoint is incomplete or does not contain this speaker name.")
-    voice = load_voice(workspace, name)
-    voice.checkpoint = str(checkpoint)
-    voice.speaker = name
-    save_json(workspace.voice_path(name), voice)
+def resume_checkpoint(
+    workspace: Workspace,
+    name: str,
+    checkpoint: Path,
+    upstream: Path,
+    *,
+    epochs: int = 3,
+    batch_size: int = 1,
+    learning_rate: float = 2e-6,
+) -> dict:
+    """Continue fine-tuning model weights, not optimizer/epoch state or narration selection."""
+    return train(
+        workspace,
+        name,
+        upstream,
+        epochs=epochs,
+        batch_size=batch_size,
+        learning_rate=learning_rate,
+        resume=checkpoint,
+    )

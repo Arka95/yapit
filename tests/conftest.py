@@ -5,8 +5,8 @@ import pytest
 
 from yapit.common_utils.fileutils import save_json
 from yapit.common_utils.mediautils import SAMPLE_RATE, write_wav
+from yapit.enrollment import enroll
 from yapit.storage import Workspace
-from yapit.voices import enroll
 
 
 @pytest.fixture(autouse=True)
@@ -51,5 +51,5 @@ def enrolled(tmp_path: Path) -> Workspace:
             ]
         },
     )
-    enroll(workspace, "test-voice", manifest, consent=True)
+    enroll(workspace.data, "test-voice", manifest, consent=True)
     return workspace

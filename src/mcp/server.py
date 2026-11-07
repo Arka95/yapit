@@ -11,11 +11,12 @@ from mcp.server.fastmcp import FastMCP
 from yapit.common_utils.fileutils import safe_name, save_json
 from yapit.common_utils.mediautils import SAMPLE_RATE, decode_audio
 from yapit.constants import DEFAULT_PROFILE
+from yapit.editor import render_guide
 from yapit.enrollment import enroll
-from yapit.media import render_guide
 from yapit.models import Brief, DeliveryStyle, Script, Timeline
 from yapit.pipeline import Pipeline
 from yapit.storage import Workspace
+from yapit.yapper import generate_audio
 
 
 def create_server(root: Path | None = None) -> FastMCP:
@@ -28,7 +29,7 @@ def create_server(root: Path | None = None) -> FastMCP:
     @server.prompt()
     def reel_script(topic: str, seconds: float = 30, kind: str = "travel", facts: str = "") -> str:
         """Reusable non-agentic Instagram reel script prompt."""
-        from yapit.scripts import build_prompt
+        from yapit.yapper.script_planner import build_prompt
 
         return build_prompt(Brief(topic=topic, seconds=seconds, kind=kind, facts=facts))
 
@@ -79,6 +80,14 @@ def create_server(root: Path | None = None) -> FastMCP:
             raise ValueError("Yapit is busy; retry after the current job.")
         try:
             media = workspace.inside(media_path) if media_path else None
+            if not video:
+                return generate_audio(
+                    script,
+                    workspace=workspace,
+                    voice_name=voice,
+                    seconds=seconds,
+                    style=style,
+                )
             return pipeline.reel(
                 Brief(topic=topic, seconds=seconds, kind=kind, facts=facts),
                 voice,

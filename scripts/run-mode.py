@@ -51,7 +51,7 @@ def main() -> int:
     if command[0] == "python":
         invocation = [str(python), *command[1:]]
     elif command[0] == "mcp":
-        invocation = [str(environment / "Scripts" / "yapit-mcp.exe"), *command[1:]]
+        invocation = [str(python), "-m", "yapit.mcp", *command[1:]]
     else:
         invocation = [str(environment / "Scripts" / "yapit.exe"), *command]
     if not Path(invocation[0]).is_file():

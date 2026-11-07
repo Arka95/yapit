@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import io
+import logging
 import subprocess
 import sys
 import urllib.request
@@ -15,9 +16,30 @@ SOX_URL = "https://netix.dl.sourceforge.net/project/sox/sox/14.4.2/sox-14.4.2-wi
 SOX_SHA256 = "8072cc147cf1a3b3713b8b97d6844bb9389e211ab9e1101e432193fad6ae6662"
 
 
+def select_mode(mode: str) -> str:
+    if mode != "auto":
+        return mode
+    try:
+        probe = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if probe.returncode == 0 and probe.stdout.strip():
+            return "gpu"
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    logging.getLogger(__name__).warning(
+        "No NVIDIA GPU detected (or driver probe unavailable); defaulting to CPU setup."
+    )
+    return "cpu"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("cpu", "gpu"))
+    parser.add_argument("mode", nargs="?", default="auto", choices=("auto", "cpu", "gpu"))
     parser.add_argument(
         "--wheelhouse",
         type=Path,
@@ -26,6 +48,7 @@ def main() -> None:
     args = parser.parse_args()
     if sys.platform != "win32" or not (3, 11) <= sys.version_info[:2] <= (3, 12):
         parser.error("Use Windows Python 3.11 or 3.12.")
+    args.mode = select_mode(args.mode)
     environment = ROOT / f".venv-{args.mode}"
     python = environment / "Scripts" / "python.exe"
     if not python.exists():

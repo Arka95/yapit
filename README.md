@@ -1,359 +1,202 @@
 # YapIt
 
-Turn a script into narration in your own locally cloned voice, plus a portrait
-reel-editing guide. Designed for English travel and honest product-review reels,
-with target durations of 5-180 seconds.
+Turn reviewed text into narration in your enrolled voice and a portrait editing
+guide. Rescript extracts/transcribes local media; Yapper plans scripts and
+synthesizes audio; Editor renders duration-coloured placeholders; training is a
+separate, explicitly requested operation.
 
-**The output is audio and a 1080x1920 editing guide, not a finished reel.**
-The video uses numbered dark placeholder frames; replace them with your footage
-in your video editor.
+**The video is an editing guide, not a finished reel.** Replace its numbered
+solid-colour placeholders with your footage. Recognition, voice similarity,
+delivery, timing and captions require human review.
 
 ## Documentation index
 
-All project Markdown other than this README lives in `docs`.
+All project Markdown except this README lives in `docs`. User guides cover each
+module's operations; developer guides cover its implementation and tests.
 
-| Document | Purpose |
-|---|---|
-| [Developer guide](docs/dev.readme.md) | Updated folder structure, utilities, model loading, setup and tests |
-| [Enrollment guide](docs/enrollment/README.md) | Profiles, recording and sample management |
-| [Enrollment development](docs/enrollment/dev.readme.md) | Recorder lifecycle, storage and module tests |
-| [Rescript guide](docs/rescript/README.md) | Audio extraction and transcription commands |
-| [Rescript development](docs/rescript/dev.readme.md) | Recognition, shared utilities and tests |
-| [Audio design](docs/audio-design.md) | Audio choices and listening validation |
-| [Library boundaries](docs/module-architecture.md) | Responsibility map and proposed provider split |
-| [Expressive voice research](docs/analysis.md) | Model-selection study and historical implementation evidence |
+| Document | Dev guide | Purpose |
+|---|---|---|
+| [Project README](README.md) | [Project development](docs/dev.readme.md) | Setup, command inventory, configuration, folder structure and integration |
+| [Enrollment](docs/enrollment/README.md) | [Enrollment development](docs/enrollment/dev.readme.md) | Model-free recording, profiles and sample curation |
+| [Rescript](docs/rescript/README.md) | [Rescript development](docs/rescript/dev.readme.md) | Audio extraction, local ASR and reviewable scripts |
+| [Yapper](docs/yapper/README.md) | [Yapper development](docs/yapper/dev.readme.md) | Script planning, text/JSON narration and measured timing |
+| [Editor](docs/editor/README.md) | [Editor development](docs/editor/dev.readme.md) | Duration-coloured placeholders, captions and video rendering |
+| [Training](docs/training/README.md) | [Training development](docs/training/dev.readme.md) | Explicit fine-tuning and reviewed checkpoint selection |
+| [MCP](docs/mcp/README.md) | [MCP development](docs/mcp/dev.readme.md) | Local stdio tools, client configuration and protocol integration |
+| [Audio design](docs/audio-design.md) | - | Design rationale and listening-validation requirements |
+| [Library boundaries](docs/module-architecture.md) | - | Current logical modules and proposed independently distributed providers |
+| [Expressive voice research](docs/analysis.md) | - | Historical model study; not a current CLI or implementation guide |
 
 ## Setup
 
-### Windows: CPU for travel, NVIDIA GPU at home
-
-Keep your existing `.venv` and `.env`. Provision two independent Python 3.11/3.12
-environments from the repository root (no activation or PowerShell policy changes):
+Use Python 3.11 or 3.12. From the repository root in PowerShell:
 
 ```powershell
-.\scripts\setup-mode.cmd cpu
-.\scripts\setup-mode.cmd gpu
-.\scripts\yapit-mode.cmd cpu doctor
-.\scripts\yapit-mode.cmd gpu doctor
-.\scripts\yapit-mode.cmd gpu --help
-```
-
-`.venv-cpu` contains matching `torch`/`torchaudio` 2.9.1 CPU wheels;
-`.venv-gpu` contains matching 2.9.1 CUDA 12.8 wheels. Both install the project,
-Qwen speech, Rescript, MCP, and checksum-verified Windows SoX.
-GPU mode explicitly selects CUDA and **fails if the eGPU is disconnected**.
-CPU mode explicitly selects CPU, regardless of the shared `.env`. Switch per command:
-
-```powershell
-.\scripts\yapit-mode.cmd cpu rescript transcript .\data\audio\trip.wav --offline
-.\scripts\yapit-mode.cmd gpu rescript transcript .\data\audio\trip.wav --offline
-.\scripts\yapit-mode.cmd gpu narrate my-voice --script .\data\transcripts\my-script.json --seconds 45
-```
-
-Rescript uses CPU/int8 or GPU/float16 in the selected mode. Both modes share
-`data\audio`, `data\transcripts`, `data\generated_audio`, `data\generated_video`, workspace metadata,
-and reusable model assets under `models` (`YAPIT_MODELS_DIR`), with the shared
-SDK cache under `models\hub`; setup does not download model weights.
-The launcher changes only the child process environment and runs from the checkout.
-No system CUDA/cuDNN reinstall is needed for PyTorch's bundled CUDA runtime.
-`scripts\Start Enrollment.cmd` defaults to CPU;
-`& ".\scripts\Start Enrollment.cmd" gpu` selects GPU.
-
-The older single-environment commands below remain supported; substitute
-`.\scripts\yapit-mode.cmd cpu` or `.\scripts\yapit-mode.cmd gpu` for `.\.venv\Scripts\yapit`.
-See [dev.readme.md](docs/dev.readme.md) for exact dependencies and MCP configuration.
-The current responsibility map and proposed reusable-library boundaries are in
-[docs\module-architecture.md](docs/module-architecture.md); this is a plan, not an
-implemented package split.
-
-### VPN-restricted Windows machine: `DESKTOP-A05R1KA`
-
-On Arka's Windows eGPU machine, the VPN restricts direct PyPI access. Treat package
-downloads as a network constraint, not a CUDA/GPU failure. An index can be reachable
-while the wheel host it redirects to is blocked; observed failures include TLS
-`HandshakeFailure`. Changing from pip to uv does not remove the VPN restriction.
-
-Use the configured organization-approved package feed where available. During
-setup, pip successfully fetched a package through
-`https://packagefeedproxy.microsoft.io/pypi/simple/`; this does not guarantee that
-every dependency or redirected download is available. Prefer per-command index
-settings rather than changing global configuration:
-
-```powershell
-.\.venv\Scripts\python -m pip install --index-url https://packagefeedproxy.microsoft.io/pypi/simple/ -e .
-```
-
-If the feed cannot supply the required dependencies, prepare a verified Windows
-wheelhouse on an authorized network/machine with matching Python and CPU/CUDA
-versions, then install locally. Existing runtime setup supports
-`.\scripts\setup-mode.cmd gpu --wheelhouse .\verified-wheels` and the equivalent CPU mode.
-That option covers runtime/build dependencies; PyTorch and SoX may still need
-their official downloads/cache. Model weights must also be provisioned separately.
-See the developer guide for an offline dependency-install example.
-
-Keep separate backend environments: CosyVoice's Python 3.10/pinned dependencies
-must not replace the existing Qwen CPU/GPU environments. Never disable TLS
-verification, use untrusted mirrors, or commit package-feed credentials to work
-around the VPN.
-
-Use Python 3.11 or 3.12. Run these PowerShell commands from your checkout
-(the example location is `C:\projects\yapit`):
-
-```powershell
-cd C:\projects\yapit
 python -m venv .venv
 .\.venv\Scripts\python -m pip install -e .
+# Only if you do not already have .env:
 Copy-Item .env.example .env
 .\.venv\Scripts\yapit doctor
 ```
 
-If you already have `.env`, keep it and skip `Copy-Item`. FFmpeg is supplied by
-`imageio-ffmpeg`; a system installation is optional.
+Install `.[voice]` for narration, `.[rescript]` for transcription, `.[mcp]` for
+the MCP server, and `.[dev]` for tests/build tooling. Cloud scripting and actual
+fine-tuning have separate optional dependencies and permission/hardware requirements.
+Model weights are provisioned separately; installation alone is not offline-ready.
+See the developer guide for compatible runtimes, offline setup and troubleshooting.
 
-For narration, install a matching PyTorch/torchaudio pair suitable for your
-hardware, then add the speech dependencies:
-
-```powershell
-.\.venv\Scripts\python -m pip install -e ".[voice]"
-```
-
-The Qwen speech model downloads on first inference unless you configure a local
-model directory. NVIDIA CUDA is recommended; CPU inference works but can be
-very slow. Windows inference may also require SoX. See [dev.readme.md](docs/dev.readme.md)
-for configuration, offline use, and dependency troubleshooting.
-
-## 1. Enroll your voice
-
-### Windows recording app
-
-Double-click **`scripts\Start Enrollment.cmd`**, or run:
+For isolated Windows CPU/GPU runtimes without activation:
 
 ```powershell
-.\.venv\Scripts\yapit enroll-app
+.\scripts\setup-mode.cmd
+# Or choose explicitly:
+.\scripts\setup-mode.cmd cpu
+.\scripts\setup-mode.cmd gpu
+.\scripts\yapit-mode.cmd cpu doctor
+.\scripts\yapit-mode.cmd gpu --help
 ```
 
-1. Create or select a voice profile, such as `arka`, choose your microphone,
-   and click **Create / open profile**. There is no consent checkbox.
-2. Wait for **Microphone ready**, then press **Record** and read the passage.
-   Press **Stop**, then **Play take**.
-3. Check **Confirm before saving**, then click **Save & Next**.
-4. Save at least **five distinct samples**, then click **Finish enrollment**.
-   The 16 shared static passages are under `src\enrollment\sampleScripts`;
-   recording the full baseline is recommended, not required.
+Omitting the setup mode defaults to `auto`: an NVIDIA driver probe selects GPU,
+otherwise setup selects CPU and logs the reason. Explicit GPU dispatch requires
+working CUDA availability and does not silently fall back to CPU.
+The launchers share configured data/model roots and change only the child environment.
+Setup downloads dependencies/tools, not model weights.
 
-Aim for 8-15 seconds per passage; recording stops at 20 seconds. Retake a passage
-if you miss words or hear noise. Optional normalization and outer-silence trimming
-preserve the raw take until enrollment finishes. Unusable signal levels, clipping, excessive
-silence, and duplicate recordings are rejected.
+Examples below use `yapit`. Without activating your environment, substitute
+`.\.venv\Scripts\yapit` or `.\scripts\yapit-mode.cmd cpu` / `gpu`.
 
-Reopen the same profile to add recordings or select a saved passage to replace
-its audio. Names are always lowercase; `ARKA` and `arka` are one profile.
-Accepted recordings live under `data\<profile>\audio`, with profile metadata,
-manifests and journals under `data\<profile>`. Files use the shared
-`<profile>.<name>.<extension>` format defined in `src\constants.py`, for example
-`arka.audio_sample_1.wav` and `arka.journal.json`. Imports merge by normalized
-filename and overwrite matching files; they do not create duplicate profiles.
-Temporary raw takes, logs, preparation reports, and draft state live under
-`workspace\enrollment\<profile>` and are removed after successful **Finish enrollment**.
-Incomplete sessions retain them for retry; data contains no enrollment logs.
+## Available commands
 
-The app is Windows-only and local-only. It needs no speech model or API key.
-Opening a profile prepares the microphone once; it stays active between takes,
-but saves audio only after **Record**. Stop ends the take; Finish or Close releases
-the microphone. A short in-memory pre-roll protects the opening words.
+Operations are flat: **`yapit audiogen`**, not `yapit yapper generate`.
+Run `yapit COMMAND --help` for arguments, options and defaults.
+Model annotations include locally loaded models, not just cloud APIs.
+Qwen3-TTS is the local speech language model used for narration/training,
+not a general-purpose chat model. Whisper is listed separately as local ASR.
 
-### Already have recordings?
-
-Copy `examples\samples.example.json`, replace the audio paths and exact
-transcripts, then enroll:
-
-```powershell
-.\.venv\Scripts\yapit voice-enroll my-voice --manifest .\my-samples.json
-```
-
-The combined profile needs at least five distinct recordings. Paths are relative
-to the manifest. Use complete 3-20 second clips with one
-speaker, a quiet room, consistent microphone placement, and no music or clipping.
-Listen to every clip and check its transcript yourself.
-
-**Enrollment is reference-based voice cloning, not model training.** YapIt keeps
-your samples and selects one reference for narration; it does not combine them
-into an automatically trained voice. Signal checks cannot verify identity,
-background music, or transcript accuracy.
-
-Enrollment is a CPU-only, zero-model module with its own UI, CLI, static scripts,
-and tests. See [the module README](docs/enrollment/README.md) and
-[developer README](docs/enrollment/dev.readme.md). Standalone entry point:
-`python -m yapit.enrollment enroll-app`.
-
-### Expressive narration from your own delivery
-
-Qwen is the current **provisional baseline**, not a proven best backend;
-environment isolation is independent of the eventual model choice.
-The default Base model cannot accept native emotion instructions like
-CustomVoice/VoiceDesign models. Instead, record a real example of your intended
-delivery; YapIt clones from that reference, not a synthetic preset presented as you:
-
-```powershell
-.\scripts\yapit-mode.cmd cpu voice-style-prompt --style lively-vlog
-.\scripts\yapit-mode.cmd cpu voice-style-enroll my-voice --style lively-vlog --audio .\expressive.wav --text "EXACT WORDS YOU RECORDED" --consent
-.\scripts\yapit-mode.cmd gpu narrate my-voice --script .\data\transcripts\my-script.json --seconds 45 --style lively-vlog
-```
-
-Read the supplied short passage in your natural lively-vlog, relaxed-travel,
-or asmr-travel delivery. Use one clean, user-owned 3-20 second recording and
-an exact transcript; listen before enrolling. Missing style references fail
-before loading the speech model, and styles cannot be used with a selected
-custom-voice checkpoint. Default references and voice identity are unchanged.
-This is not training or emotion classification, and expressive quality is not
-guaranteed: listen to generated audio and review pronunciation, delivery, and timing.
-
-### Experimental CosyVoice3 comparison
-
-The first instruction-controlled challenger is
-`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`, with a separate `.venv-cosyvoice`
-Python 3.10 environment and official source under `models\cosyvoice_source`.
-It does not replace the default Qwen backend or its CPU/GPU environments.
-After provisioning the dependencies and local model files, run:
-
-```powershell
-.\.venv\Scripts\python.exe .\scripts\cosyvoice-trial.py --script .\data\transcripts\arka.cappadocia_vlog.script.json
-```
-
-The trial requests warm, engaged, lightly curious travel narration from the Arka
-reference, uses the upstream instruction-plus-reference interface, and keeps
-`speed=1.0`. It joins the approved words without inserting the ASR source pauses;
-the model still determines punctuation pauses. Outputs use the normal flat
-profile/source naming and duplicate suffixes. Provenance records the actual
-instruction, and metrics record generation time and PyTorch peak GPU memory.
-Emotion adherence and voice similarity remain **unreviewed until listening**.
-This is an experimental runner, not the finished `add_emotion` feature.
-
-## 2. Prepare and approve a script
-
-Script writing can stay conversational: ask your assistant for a catchy,
-non-cringey travel or product-review script with your target duration. To get
-YapIt's reusable instructions and JSON format:
-
-```powershell
-.\.venv\Scripts\yapit prompt --topic "A relaxed seven-day Istanbul and Cappadocia itinerary" --seconds 45 --kind travel --facts "Four days in Istanbul; three in Cappadocia. Balloon flights depend on weather."
-```
-
-You can provide an image or video instead:
-
-```powershell
-.\.venv\Scripts\yapit prompt --media .\trip.mp4 --seconds 30
-```
-
-The command returns a `prompt`, its flat metadata paths, and any sampled image
-paths. Paste the prompt into your assistant, attach the returned image/frames,
-review the answer, and save the Script JSON under `data\transcripts`, for example
-`data\transcripts\my-script.json`.
-`examples\script.json` shows the format: a title and beats containing `text`,
-`visual`, and `pause_ms`.
-
-For video, YapIt samples up to six frames roughly five seconds apart near the
-start; it does not analyze the source audio. Supply verified facts for details
-the images cannot establish. Use `--kind product` for product reviews.
-
-A UTF-8 `.txt` script also works: sentences become beats with default pauses.
-JSON gives you more control over pauses and visual suggestions. No API key is
-needed for this prompt-and-review workflow.
-
-## 3. Generate narration and the editing guide
-
-Generation defaults to the enrolled `arka` profile. You can still pass another
-enrolled alias explicitly. Use the same target duration you used for the script:
-
-```powershell
-.\.venv\Scripts\yapit reel --script .\data\transcripts\my-script.json --seconds 45
-```
-
-For audio and timeline only:
-
-```powershell
-.\.venv\Scripts\yapit narrate --script .\data\transcripts\my-script.json --seconds 45
-```
-
-The JSON response gives the output paths and a readable `name`, not a job ID.
-New generated artifacts are flat: no per-run audio, transcript, or metadata
-subfolders. Filenames use `<profile>.<source-filename>` without the source extension.
-Already-prefixed names reuse the profile prefix. Unsafe filename characters become
-underscores. For script-only CLI generation the source is the script filename;
-inline MCP scripts use their title. Repeated names gain `.1`, `.2`, etc. before the
-extension (or artifact suffix), without overwriting previous results.
-An existing related artifact can also reserve a name. For example:
-
-| File | Use |
+| Command | Functionality |
 |---|---|
-| `data\generated_audio\arka.trip.wav` / `arka.trip.mp3` | Final narration |
-| `data\generated_audio\arka.trip.raw.wav` / `arka.trip.fitted.wav` | Synthesis and fitting intermediates |
-| `data\transcripts\arka.trip.script.json` | The script used for this render |
-| `workspace\outputs\arka.trip.timeline.json` | Measured timing and suggested cuts |
-| `data\generated_video\arka.trip.guide.mp4` | 9:16 placeholder video with narration |
-| `data\transcripts\arka.trip.captions.srt` | Approximate phrase captions |
-| `workspace\outputs\arka.trip.provenance.json` / `arka.trip.status.json` | Voice mode, synthetic notice, and result |
+| `yapit doctor` | Report dependencies, FFmpeg and CUDA availability; no speech-model download |
+| `yapit profiles` | List saved profile names, including incomplete profiles with saved metadata |
+| `yapit enroll-app` | Open the Windows microphone enrollment UI |
+| `yapit voice-enroll` | Import/merge an existing recordings manifest; at least five distinct clips |
+| `yapit voice-style-prompt` | Get an expressive reference passage and recording directions |
+| `yapit enroll-style` | Save your verified expressive recording to a validated existing profile; consent defaults to true |
+| `yapit extract_audio` | Extract video audio, convert decodable audio or copy supported audio |
+| `yapit transcript` | Transcribe into Script JSON/timing; cached/offline by default (local ASR model required: Whisper) |
+| `yapit prompt` | Prepare a script-writing prompt from a brief and optional local image/video frames |
+| `yapit audiogen` | Generate narration/timing from exactly one of `--text` or `--script` (local speech LLM required: Qwen3-TTS) |
+| `yapit narrate` | File-only narration; voice is an optional positional argument (local speech LLM required: Qwen3-TTS) |
+| `yapit reel` | Generate narration/edit guide; without a script, return a prompt (local speech LLM required for narration: Qwen3-TTS) |
+| `yapit voice-train` | Linux/WSL2 CUDA fine-tuning; `--resume DIRECTORY` continues weights with a new optimizer (local speech LLM required: Qwen3-TTS) |
+| `yapit voice-select-checkpoint` | Manually select a reviewed CustomVoice checkpoint for inference |
 
-`narrate` omits the video and captions. Listen to the MP3 for voice similarity,
-pronunciation, and pacing before publishing. Import it and the guide into your
-editor, replace placeholder clips with your footage, and refine cuts/captions.
+Root options are `--help`, `--install-completion` and `--show-completion`.
+`audiogen --voice NAME` selects a profile; narration/reel default to `arka`.
+`reel --auto-script` is the optional cloud-writing path, not a separate command.
 
-YapIt measures generated speech and pauses, then accepts a duration within
-**+/-5 seconds**. Pitch-preserving tempo adjustment is limited to 0.90-1.10x;
-larger mismatches fail rather than truncating speech. Shorten or expand the
-script, or adjust `--seconds`, and rerun. Cut points and captions are editing
-suggestions, **not word-level alignment**.
+### Typical workflow
 
-## Other ways to use YapIt
+```powershell
+yapit enroll-app
+yapit profiles
+yapit extract_audio .\trip.mp4
+yapit transcript .\data\audio\arka.trip.wav
+yapit prompt --topic "A relaxed weekend route" --seconds 30
+# Review the recognized/written words and save a Script JSON or UTF-8 text file.
+yapit audiogen --script .\data\transcripts\trip.json --voice arka --seconds 30
+yapit reel arka --script .\data\transcripts\trip.json --seconds 30
+```
 
-**Rescript:** turn local audio/video into narration-compatible Script JSON with
-`yapit rescript transcript .\recording.wav`. Install `.[rescript]` first.
-Use `yapit rescript extract_audio .\recording.mp4` to extract audio to
-`data\audio` or copy an already supported audio file there.
-Long recordings are split at sentence endings into parts over 30 and at most
-60 seconds; review recognition before generating narration. See
-[Rescript README](docs/rescript/README.md).
+Inline words work too:
 
-**MCP clients:** install `.[mcp]`, copy `examples\mcp.config.json` into your
-client's MCP settings, and adjust its absolute paths. Tools can prepare prompts,
-enroll voices, generate narration/reels, render timelines, and read job status.
-Without a script, `generate_reel` returns a prompt first. MCP file inputs must
-stay inside `YAPIT_WORKSPACE` or `YAPIT_DATA_DIR`.
+```powershell
+yapit audiogen --text "Take the slower route. Leave time to enjoy the view." --voice arka --seconds 5
+```
 
-**Optional automation and training:** automatic cloud script generation and
-dedicated local fine-tuning are separate, opt-in features. Neither is required
-for the workflow above. Setup and commands are in [dev.readme.md](docs/dev.readme.md).
+Supplied narration text is not rewritten by an LLM. Plain text gets default
+sentence/paragraph pauses; Script JSON supports explicit `pause_ms` and visual
+suggestions. Targets are 5-180 seconds, with the existing +/-5-second tolerance
+and bounded 0.90-1.10x tempo fitting. Final timing is measured, not guaranteed by
+text estimates. Enrollment/reference cloning does not train model weights.
+Transcription defaults to cached/local weights; explicit `--offline` is redundant.
+Use `--no-offline` to permit model downloads, not hosted recognition. No online
+transcription provider is supported.
 
-## Privacy and troubleshooting
+### Compatibility and isolated module entry points
 
-All modules use one data layout: **`data\audio`** for imported recordings,
-**`data\transcripts`** for scripts,
-transcripts, training text, and captions, and **`data\generated_audio`** for
-synthesized WAV/MP3 files and their audio intermediates, and **`data\generated_video`**
-for completed generated videos. New generation and
-Rescript artifacts have readable flat filenames, without job-ID folders.
-Voice/enrollment storage retains its existing alias subfolders. Rescript stores
-`arka.<source>.script.json` and `arka.<source>.transcript.json` directly in `data\transcripts`
-and archives externally supplied audio under `data\audio\imports`.
-Set `YAPIT_DATA_DIR` to choose a different data root; by default it is `data`
-beside the configured workspace. Set absolute workspace/data paths when launching
-from another directory. Job metadata and temporary render slates/playlists remain
-in `workspace\outputs`; completed videos go to `data\generated_video`.
-voice profiles and accepted enrollment recordings belong to `data\<profile>`.
-Enrollment independently defaults to `.\data`; `YAPIT_WORKSPACE` controls only its
-temporary session files. There is no old-profile/draft lookup. The explicitly selected
-audio/transcript fixture under `tests\data` is a versionable test-only exception.
+Old grouped commands remain hidden from root help for existing scripts:
+`yapit yapper generate`, `yapit rescript extract_audio`,
+`yapit rescript transcript`.
+`yapit voice-use-checkpoint` remains a hidden inference-selection alias, not
+training resumption. Use the flat forms above for new commands.
+`voice-style-enroll` was renamed to `enroll-style`; update old calls.
 
-Recordings and narration are processed locally. Model/dependency downloads need
-network access; optional cloud script generation sends the brief and sampled
-visuals, never enrollment recordings. Manually attaching media to an assistant
-is a separate sharing decision. Other profiles' data, weights, generated media, and
-`.env` are Git-ignored. `data\arka` is allowed through Git's ignore rules, including
-audio, but YapIt does not automatically stage, commit or upload it. Package
-archives exclude all `data` contents.
+Optional standalone developer entry points are
+`python -m yapit.yapper generate`,
+`python -m yapit.rescript.cli extract_audio|transcript` and
+`python -m yapit.enrollment enroll-app|voice-enroll|profiles`.
+They are not required for ordinary usage. Editor is reached through `reel`,
+MCP `render_timeline` or Python; training through the two voice-training/checkpoint
+commands or Python. Neither has a standalone CLI group.
 
-Run `.\.venv\Scripts\yapit doctor` to report dependency availability. If recording
-is too quiet, check the selected microphone and input gain and move closer;
-normalization cannot repair clipping or recover missing speech. For setup,
-implementation details, tests, and contributor instructions, see
-[dev.readme.md](docs/dev.readme.md).
+## MCP and helper commands
+
+`yapit-mcp` (or `python -m yapit.mcp`) starts the local stdio MCP server.
+Install `.[mcp]` and adapt `src\mcp\examples\mcp.config.json` with absolute paths.
+MCP-specific implementation, tests and the example configuration live in
+`src\mcp`; see the [MCP guide](docs/mcp/README.md).
+The old `python -m yapit.server` path is replaced by `python -m yapit.mcp`.
+MCP names are protocol tools, **not** additional `yapit` CLI commands:
+
+| MCP tool / prompt | Purpose |
+|---|---|
+| `prepare_script_prompt` | Prepare a brief/schema prompt with local frame paths |
+| `enroll_voice` | Enroll a confined recordings manifest |
+| `generate_narration` | Synthesize a supplied Script without video |
+| `generate_reel` | Orchestrate scripting/narration/edit guide |
+| `render_timeline` | Render an existing matching timeline/audio pair |
+| `get_job_status` | Read status by the returned output name |
+| `reel_script` (prompt) | Return reusable script-writing instructions |
+
+All MCP file inputs must stay inside the configured workspace or data root.
+Calls are synchronous; there is no durable job queue or cross-process GPU lock.
+
+| Helper command | Purpose |
+|---|---|
+| `.\scripts\setup-mode.cmd [auto\|cpu\|gpu]` | Provision an isolated runtime; default auto selection; optional `--wheelhouse PATH` |
+| `.\scripts\yapit-mode.cmd cpu` / `gpu` | Dispatch any flat YapIt command; `python <args>` or `mcp` are launcher alternatives |
+| `& ".\scripts\Start Enrollment.cmd"` | Open enrollment in CPU mode; optional `gpu` argument |
+| `python .\scripts\cache-feed-wheel.py WHEEL_BASENAME` | Cache one hash-verified wheel from the configured approved feed; optional `--folder PATH` |
+| `python .\scripts\cosyvoice-trial.py --script PATH` | Experimental comparison; optional `--profile`/`--instruction`, separate worker/models required; currently paused |
+
+`setup-mode.py` and `run-mode.py` are Python backends for the CMD wrappers,
+not additional product operations. `hatch-build.py` is a build hook and the
+CosyVoice worker is an internal subprocess adapter. Their details belong in the
+developer guide; no production CosyVoice backend is implied.
+
+## Files, privacy and review
+
+| Location | Content |
+|---|---|
+| `data\<profile>` | Accepted enrollment recordings/profile metadata and training checkpoints |
+| `data\audio` | Imported/extracted source audio; external transcription archives are under `imports` |
+| `data\transcripts` | Reviewed scripts, ASR sidecars, captions and training JSONL |
+| `data\generated_audio` | Final WAV/MP3 and raw/fitted synthesis intermediates |
+| `data\generated_video` | Completed edit-guide MP4s |
+| `workspace\outputs` | Prompts, measured timelines, provenance/status, logs and temporary rendering files |
+| `workspace\enrollment` | Resumable drafts/raw takes; removed after successful enrollment |
+| `models` | Shared model assets/cache, configurable with `YAPIT_MODELS_DIR` |
+
+Set absolute `YAPIT_DATA_DIR` / `YAPIT_WORKSPACE` for alternate launch locations.
+Generation/Rescript default to data beside the workspace; enrollment independently
+defaults to `.\data`. The data override is shared by all modules.
+
+Processing is local unless cloud script writing is explicitly enabled. Downloads
+need network access; manual sharing with an assistant is a separate decision.
+Keep `.env`, credentials, weights and private recordings out of commits.
+`data\arka` is eligible for Git but is never automatically staged/uploaded.
+Source archives exclude the repository's `data` directory; selected tracked
+fixtures under `tests\data` are a separate test-only exception.
+
+Review recognized words and generated audio before use. Passing model-free tests
+does not establish voice quality, correct recognition or exact word alignment.

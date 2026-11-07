@@ -47,7 +47,7 @@ class WhisperTranscriber:
         device: str | None = None,
         compute_type: str | None = None,
         language: str = "en",
-        offline: bool = False,
+        offline: bool = True,
     ):
         self.model = model
         self.device = device or os.getenv("YAPIT_ASR_DEVICE", "cpu")
@@ -186,7 +186,7 @@ def transcribe(
     device: str | None = None,
     compute_type: str | None = None,
     language: str = "en",
-    offline: bool = False,
+    offline: bool = True,
     backend: TranscriptionBackend | None = None,
     profile: str = DEFAULT_PROFILE,
 ) -> dict:

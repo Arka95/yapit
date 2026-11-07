@@ -10,7 +10,7 @@ from yapit.models import Brief, Script
 
 
 def build_prompt(brief: Brief) -> str:
-    instructions = files("yapit").joinpath("script_prompt.txt").read_text(encoding="utf-8")
+    instructions = files("yapit.yapper").joinpath("script_prompt.txt").read_text(encoding="utf-8")
     budget = max(4, round(brief.seconds * 0.90 * brief.words_per_minute / 60))
     return (
         f"{instructions}\nTarget spoken words: approximately {budget}.\n"

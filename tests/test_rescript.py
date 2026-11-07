@@ -19,8 +19,8 @@ from yapit.rescript.transcription import (
     compose_scripts,
     transcribe,
 )
-from yapit.scripts import load_script
 from yapit.storage import DataStore
+from yapit.yapper.script_planner import load_script
 
 
 def test_extraction_is_model_free_even_with_cuda_asr_settings(tmp_path):
@@ -44,7 +44,7 @@ socket.create_connection = lambda *args, **kwargs: (_ for _ in ()).throw(
 )
 from yapit.cli import app
 from typer.testing import CliRunner
-result = CliRunner().invoke(app, ['rescript', 'extract_audio', sys.argv[1]])
+result = CliRunner().invoke(app, ['extract_audio', sys.argv[1]])
 assert result.exit_code == 0, result.output
 assert json.loads(result.stdout)['action'] == 'copied'
 """
@@ -71,7 +71,7 @@ def test_extract_reports_ffmpeg_timeout_and_cleans_temporary_files(tmp_path, mon
         raise subprocess.TimeoutExpired(command, kwargs["timeout"])
 
     monkeypatch.setattr("yapit.common_utils.mediautils.subprocess.run", timeout)
-    result = CliRunner().invoke(app, ["rescript", "extract_audio", str(source)])
+    result = CliRunner().invoke(app, ["extract_audio", str(source)])
     assert result.exit_code == 1
     assert "FFmpeg timed out after 600 seconds" in result.output
     assert not temporary[0].parent.exists()
@@ -169,7 +169,12 @@ def test_schema_limits_prevent_export():
         )
 
 
-def test_whisper_adapter_consumes_lazy_words_and_uses_local_settings(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    "settings,local_only", [({}, True), ({"offline": True}, True), ({"offline": False}, False)]
+)
+def test_whisper_adapter_consumes_lazy_words_and_uses_local_settings(
+    monkeypatch, tmp_path, settings, local_only
+):
     calls = []
     words = [
         SimpleNamespace(start=0, end=1, word=" Hello"),
@@ -192,7 +197,7 @@ def test_whisper_adapter_consumes_lazy_words_and_uses_local_settings(monkeypatch
         return SimpleNamespace(transcribe=recognize)
 
     monkeypatch.setitem(sys.modules, "faster_whisper", SimpleNamespace(WhisperModel=model))
-    result = WhisperTranscriber(offline=True).recognize(tmp_path / "audio.wav")
+    result = WhisperTranscriber(**settings).recognize(tmp_path / "audio.wav")
     assert [segment.text for segment in result] == ["Hello world.", "Goodbye.", "unfinished"]
     assert calls[0] == (
         "model",
@@ -201,7 +206,7 @@ def test_whisper_adapter_consumes_lazy_words_and_uses_local_settings(monkeypatch
             {
                 "device": "cpu",
                 "compute_type": "int8",
-                "local_files_only": True,
+                "local_files_only": local_only,
                 "download_root": str(tmp_path / "models" / "hub"),
             },
         ),
@@ -297,7 +302,10 @@ def test_timestamp_beyond_audio_rejected(tmp_path):
     assert not list(DataStore().transcripts.glob("*.transcript.json"))
 
 
-def test_cli_passes_settings_and_emits_json(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    "flags,offline", [([], True), (["--offline"], True), (["--no-offline"], False)]
+)
+def test_cli_passes_settings_and_emits_json(monkeypatch, tmp_path, flags, offline):
     source = tmp_path / "input.mp3"
     source.touch()
     calls = []
@@ -308,19 +316,18 @@ def test_cli_passes_settings_and_emits_json(monkeypatch, tmp_path):
     result = CliRunner().invoke(
         app,
         [
-            "rescript",
-            "transcribe-media",
+            "transcript",
             str(source),
             "--model",
             "local-model",
-            "--offline",
+            *flags,
             "--output",
             str(DataStore().transcripts / "export"),
         ],
     )
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout)["status"] == "needs_review"
-    assert calls[0][1]["offline"] is True
+    assert calls[0][1]["offline"] is offline
     assert calls[0][1]["model"] == "local-model"
 
 
@@ -332,7 +339,7 @@ def test_cli_reports_errors(monkeypatch, tmp_path):
         raise ValueError("No speech was detected.")
 
     monkeypatch.setattr("yapit.rescript.cli.transcribe", fail)
-    result = CliRunner().invoke(app, ["rescript", "transcribe-media", str(source)])
+    result = CliRunner().invoke(app, ["transcript", str(source)])
     assert result.exit_code == 1
     assert "No speech" in result.output
 
@@ -437,14 +444,14 @@ def test_transcript_command_and_extract_command_are_registered(monkeypatch, tmp_
         "yapit.rescript.cli.transcribe", lambda *args, **kwargs: {"status": "needs_review"}
     )
     runner = CliRunner()
-    result = runner.invoke(app, ["rescript", "transcript", str(source)])
+    result = runner.invoke(app, ["transcript", str(source)])
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout)["status"] == "needs_review"
     monkeypatch.setattr(
         "yapit.rescript.cli.extract_audio_file",
         lambda *args, **kwargs: {"action": "copied", "audio": "data\\audio\\source.wav"},
     )
-    result = runner.invoke(app, ["rescript", "extract_audio", str(source)])
+    result = runner.invoke(app, ["extract_audio", str(source)])
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout)["action"] == "copied"
 

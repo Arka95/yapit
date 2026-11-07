@@ -7,28 +7,11 @@ from pathlib import Path
 
 from yapit.common_utils.fileutils import data_filename, save_json
 from yapit.common_utils.mediautils import decode_audio, write_wav
-from yapit.enrollment.profiles import audio_quality
-from yapit.enrollment.profiles import enroll as enroll_profile
-from yapit.enrollment.profiles import load_voice as load_profile
+from yapit.enrollment.profiles import audio_quality, load_voice
 from yapit.models import DeliveryStyle, StyleReference, Voice
-from yapit.storage import Workspace
+from yapit.storage import DataStore
 
-__all__ = ["audio_quality", "enroll", "enroll_style", "load_voice", "select_voice", "STYLE_GUIDES"]
-
-
-def enroll(
-    workspace: Workspace,
-    name: str,
-    manifest_path: Path,
-    consent: bool = True,
-    *,
-    confined: bool = False,
-) -> Voice:
-    return enroll_profile(workspace.data, name, manifest_path, consent, confined=confined)
-
-
-def load_voice(workspace: Workspace, name: str) -> Voice:
-    return load_profile(workspace.data, name)
+__all__ = ["enroll_style", "select_voice", "STYLE_GUIDES"]
 
 
 STYLE_GUIDES = {
@@ -68,19 +51,25 @@ STYLE_GUIDES = {
 
 
 def enroll_style(
-    workspace: Workspace,
+    store: DataStore,
     name: str,
     style: DeliveryStyle,
     source: Path,
     text: str,
-    consent: bool,
+    consent: bool = True,
 ) -> StyleReference:
     style = DeliveryStyle(style)
     if not consent:
         raise ValueError("Confirm this is your own voice and the transcript is exact.")
     if style == DeliveryStyle.default:
         raise ValueError("Use voice-enroll for the default voice; choose a named delivery style.")
-    voice = load_voice(workspace, name)
+    try:
+        voice = load_voice(store, name)
+    except FileNotFoundError as exc:
+        raise ValueError(
+            f"Profile {name!r} does not exist. "
+            "Create it with yapit enroll-app or yapit voice-enroll first."
+        ) from exc
     if voice.checkpoint:
         raise ValueError("Reference-driven styles require Base voice cloning, not a checkpoint.")
     if style in voice.styles:
@@ -94,8 +83,8 @@ def enroll_style(
     quality = audio_quality(data)
     if quality["reasons"]:
         raise ValueError(" ".join(quality["reasons"]))
-    name = workspace.profile_dir(name).name
-    directory = workspace.profile_dir(name) / "audio"
+    name = store.profile_dir(name).name
+    directory = store.voice_audio_dir(name)
     filename = data_filename(style.value, name, ".wav")
     if (directory / filename).exists():
         raise ValueError("The style audio directory exists; refusing to overwrite recordings.")
@@ -113,7 +102,7 @@ def enroll_style(
         write_wav(staged / filename, data)
         shutil.copytree(staged, directory, dirs_exist_ok=True)
     save_json(
-        workspace.profile_dir(name) / data_filename(style.value, name, ".reference.json"),
+        store.profile_dir(name) / data_filename(style.value, name, ".reference.json"),
         {
             **reference.model_dump(mode="json"),
             "style": style.value,
@@ -123,28 +112,28 @@ def enroll_style(
         },
     )
     voice.styles[style] = reference
-    save_json(workspace.voice_path(name), voice)
+    save_json(store.voice_path(name), voice)
     return reference
 
 
 def select_voice(
-    workspace: Workspace, name: str, style: DeliveryStyle = DeliveryStyle.default
+    store: DataStore, name: str, style: DeliveryStyle = DeliveryStyle.default
 ) -> tuple[Voice, Path]:
     style = DeliveryStyle(style)
-    voice = load_voice(workspace, name)
+    voice = load_voice(store, name)
     if style == DeliveryStyle.default:
-        return voice, workspace.voice_audio_dir(name)
+        return voice, store.voice_audio_dir(name)
     if voice.checkpoint:
         raise ValueError("Reference-driven styles require Base voice cloning, not a checkpoint.")
     if style not in voice.styles:
         raise ValueError(
             f"No {style.value!r} reference enrolled for {name!r}. Record your own expressive "
-            "3-20 second clip and register it with voice-style-enroll first."
+            "3-20 second clip and register it with enroll-style first."
         )
     reference = voice.styles[style]
-    audio = workspace.inside(reference.audio)
-    if not audio.is_relative_to(workspace.data.audio) and not audio.is_relative_to(
-        workspace.profile_dir(name) / "audio"
+    audio = store.inside(reference.audio)
+    if not audio.is_relative_to(store.audio) and not audio.is_relative_to(
+        store.voice_audio_dir(name)
     ):
         raise ValueError("Style reference recordings must stay inside the raw audio store.")
     selected = voice.model_copy(

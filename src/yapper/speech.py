@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import sys
@@ -47,6 +48,10 @@ class QwenSpeech:
         device = os.environ.get("YAPIT_DEVICE", "auto")
         if device == "auto":
             device = "cuda:0" if torch.cuda.is_available() else "cpu"
+            if device == "cpu":
+                logging.getLogger(__name__).warning(
+                    "No CUDA GPU is available; defaulting to CPU narration."
+                )
         dtype = (
             torch.float32
             if device == "cpu"

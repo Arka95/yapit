@@ -9,7 +9,7 @@ Rescript transcribes speech; it does not rewrite it or synthesize audio.
 | Operation | Models | Default execution |
 |---|---|---|
 | `extract_audio` | None | CPU FFmpeg decoding/conversion and file copying |
-| `transcript` / `transcribe-media` | Local Whisper ASR (`small.en`), with voice activity detection | CPU/int8 unless ASR settings or the GPU launcher select CUDA |
+| `transcript` | Local Whisper ASR (`small.en`), with voice activity detection | CPU/int8 unless ASR settings or the GPU launcher select CUDA |
 | Script composition | None | Deterministic sentence grouping, partitioning and schema validation |
 
 ASR means automatic speech recognition. Whisper is a Transformer speech model,
@@ -24,31 +24,14 @@ Direct CLI use defaults to CPU/int8 when `YAPIT_ASR_DEVICE` and
 The GPU launcher also checks CUDA availability before dispatch, even for an
 extraction command, but extraction itself does not run a neural model.
 
-## Module boundaries and shared utilities
-
-The implementation lives in `src\rescript`: `cli.py` owns command parsing and
-JSON/error output, `audio.py` owns extraction/copy policy, and `transcription.py`
-owns the recognizer adapter, timed segments, script composition and export workflow.
-`__init__.py` exposes the two Python entry points. There is no desktop UI here.
-
-Generic operations are shared rather than reimplemented:
-
-- `common_utils\mediautils.py`: source validation, FFmpeg, audio-stream extraction and video detection.
-- `common_utils\fileutils.py`: naming, exclusive copies, atomic JSON, reservations and streaming file hashes.
-- `common_utils\modelutils.py`: lazy native model construction with the central cache directory.
-- `storage.py`: data-bucket confinement and source archival, using the shared file helpers.
-
-Whisper-specific settings and YapIt's script-partition rules remain in Rescript,
-not in general-purpose utilities.
-
 ## Setup and use
 
 From the YapIt checkout, in PowerShell:
 
 ```powershell
 .\.venv\Scripts\python -m pip install -e ".[rescript]"
-.\.venv\Scripts\yapit rescript extract_audio .\trip.mp4
-.\.venv\Scripts\yapit rescript transcript .\data\audio\arka.trip.wav
+.\.venv\Scripts\yapit extract_audio .\trip.mp4
+.\.venv\Scripts\yapit transcript .\data\audio\arka.trip.wav
 ```
 
 Audio files work the same way, including WAV, MP3, M4A, and FLAC. FFmpeg
@@ -73,39 +56,45 @@ already stored at its canonical destination is validated and returned unchanged.
 Extraction has a 250 MB input limit and a ten-minute processing timeout;
 the one-hour duration limit applies to transcription, not extraction.
 
-`transcript AUDIO` creates the reviewable transcript and Script JSON.
-`transcribe-media INPUT` remains an equivalent command for direct audio/video
-transcription. External audio inputs are archived under `data\audio\imports`;
+`transcript INPUT` creates the reviewable transcript and Script JSON from local
+audio or video. External audio inputs are archived under `data\audio\imports`;
 direct video transcription also retains its extracted soundtrack there.
 
 The default recognizer is faster-whisper `small.en`, running locally on CPU
-with int8 computation. First use downloads model weights, not uploads of
-your audio. Reusable model downloads use `models\hub` beneath `YAPIT_MODELS_DIR`.
-For offline use, provision the model beforehand and pass
-`--offline`; `--model` also accepts a local converted model directory.
+with int8 computation. Transcription defaults to offline: only cached/local
+model files are used, and explicit `--offline` is optional. Provision the model
+beforehand or pass `--no-offline` to permit downloads. This only downloads model
+assets; your audio is not uploaded and recognition remains local.
+Reusable downloads use `models\hub` beneath `YAPIT_MODELS_DIR`.
+`--model` also accepts a local converted model directory.
 GPU use is opt-in with `--device cuda --compute-type float16` and requires
 the appropriate CTranslate2/CUDA libraries.
 
-With YapIt's dual runtime setup, use `.\scripts\yapit-mode.cmd cpu rescript transcript`
-or `.\scripts\yapit-mode.cmd gpu rescript transcript` followed by your input path.
+With YapIt's dual runtime setup, use `.\scripts\yapit-mode.cmd cpu transcript`
+or `.\scripts\yapit-mode.cmd gpu transcript` followed by your input path.
 The launcher sets CPU/int8 or CUDA/float16 for ASR and shares the same recordings,
-transcripts, metadata, and cached models. GPU mode fails if the eGPU is absent;
+transcripts, metadata, and cached models. GPU mode fails if CUDA is unavailable;
 CPU mode works without it. Explicit ASR device/precision options still override
 these defaults. See the root README for provisioning both environments.
 
 ```powershell
-.\.venv\Scripts\yapit rescript transcript .\speech.wav --output .\data\transcripts
-.\.venv\Scripts\yapit rescript transcript .\speech.wav --model .\models\whisper-small-en --offline
+.\.venv\Scripts\yapit transcript .\speech.wav --output .\data\transcripts
+.\.venv\Scripts\yapit transcript .\speech.wav --model .\models\whisper-small-en --offline
+# Explicitly permit model downloads if the model is not cached:
+.\.venv\Scripts\yapit transcript .\speech.wav --no-offline
 ```
 
 Outputs are flat under `data\transcripts`; no run-ID directory is created.
 `--output`, if supplied, must identify that same transcript root, not a child.
 Names use `arka.<source>` (an existing `arka.` prefix is reused), with numeric
-suffixes on duplicates. All modules use `YAPIT_DATA_DIR`, which
-defaults to `data` beside the configured workspace. Generated narration belongs
+suffixes on duplicates. Rescript uses the shared `YAPIT_DATA_DIR`, defaulting to
+`data` beside the configured workspace; enrollment independently defaults to
+`.\data` when that override is unset. Generated narration belongs
 in `data\generated_audio`; completed videos belong in `data\generated_video`,
 while job metadata and rendering intermediates remain in the workspace.
-The module can also run as `python -m yapit.rescript.cli`.
+The old `yapit rescript ...` commands remain hidden compatibility aliases.
+Normal use needs no module prefix. Implementation, shared utilities and the
+optional standalone module CLI are covered in the developer guide.
 
 ## Review and regenerate
 

@@ -18,8 +18,8 @@ from yapit.enrollment import (
     microphone_devices,
     profile_names,
 )
+from yapit.enrollment.profiles import audio_quality
 from yapit.storage import DataStore
-from yapit.voices import audio_quality
 
 
 class EnrollmentApp:

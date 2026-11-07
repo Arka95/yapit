@@ -83,12 +83,12 @@ def trial(script_path: Path, profile: str, instruction: str) -> None:
     from yapit.cli import workspace
     from yapit.common_utils.fileutils import save_json
     from yapit.common_utils.mediautils import SAMPLE_RATE, decode_audio, encode_mp3, write_wav
-    from yapit.scripts import load_script
-    from yapit.voices import select_voice
+    from yapit.enrollment.styles import select_voice
+    from yapit.yapper.script_planner import load_script
 
     root = workspace()
     script = load_script(script_path)
-    voice, voice_dir = select_voice(root, profile)
+    voice, voice_dir = select_voice(root.data, profile)
     if voice.checkpoint:
         raise ValueError("The CosyVoice trial uses a reference, not a Qwen checkpoint.")
     reference = (voice_dir / voice.reference_audio).resolve()

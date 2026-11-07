@@ -13,18 +13,29 @@ from yapit.common_utils.mediautils import ffmpeg
 from yapit.constants import DEFAULT_PROFILE
 from yapit.enrollment import enroll
 from yapit.enrollment.cli import data_store
+from yapit.enrollment.cli import profiles as profiles_command
+from yapit.enrollment.styles import STYLE_GUIDES, enroll_style, select_voice
 from yapit.models import Brief, DeliveryStyle
 from yapit.pipeline import Pipeline
 from yapit.rescript.cli import app as rescript_app
-from yapit.scripts import load_script
+from yapit.rescript.cli import extract_audio, transcript
 from yapit.storage import Workspace
-from yapit.training import train, use_checkpoint
-from yapit.voices import STYLE_GUIDES, enroll_style, select_voice
+from yapit.training import resume_checkpoint, select_checkpoint, train
+from yapit.yapper import generate_audio
+from yapit.yapper.cli import app as yapper_app
+from yapit.yapper.cli import generate as audiogen_command
+from yapit.yapper.script_planner import load_script
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 PathOption = Annotated[Path | None, typer.Option()]
 
-app.add_typer(rescript_app, name="rescript")
+app.command("audiogen")(audiogen_command)
+app.command("extract_audio")(extract_audio)
+app.command("transcript")(transcript)
+app.command("profiles")(profiles_command)
+
+app.add_typer(rescript_app, name="rescript", hidden=True)
+app.add_typer(yapper_app, name="yapper", hidden=True)
 
 
 def workspace() -> Workspace:
@@ -96,24 +107,22 @@ def voice_style_prompt(style: DeliveryStyle = DeliveryStyle.lively_vlog) -> None
             "style": style.value,
             **STYLE_GUIDES[style],
             "recording_seconds": "3-20; aim for 8-15",
-            "next": "Record your own voice, verify the exact text, then use voice-style-enroll.",
+            "next": "Record your own voice, verify the exact text, then use enroll-style.",
         }
     )
 
 
-@app.command("voice-style-enroll")
-def voice_style_enroll(
+@app.command("enroll-style")
+def enroll_style_command(
     name: str,
     audio: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
     text: Annotated[str, typer.Option(help="Exact manually verified words in the recording.")],
     style: DeliveryStyle = DeliveryStyle.lively_vlog,
-    consent: Annotated[
-        bool, typer.Option(help="This is my own voice, and I verified the exact transcript.")
-    ] = False,
+    consent: Annotated[bool, typer.Option(hidden=True)] = True,
 ) -> None:
     """Register an expressive recording for an existing voice, without training."""
     try:
-        reference = enroll_style(workspace(), name, style, audio, text, consent)
+        reference = enroll_style(workspace().data, name, style, audio, text, consent)
     except (ValueError, OSError) as exc:
         raise typer.BadParameter(str(exc)) from exc
     emit({"voice": name, "style": style.value, **reference.model_dump(mode="json")})
@@ -148,7 +157,9 @@ def reel(
     root = workspace()
     if script is not None and auto_script:
         raise typer.BadParameter("Choose --script or --auto-script, not both.")
-    rate = select_voice(root, voice, style)[0].words_per_minute if script or auto_script else 150
+    rate = (
+        select_voice(root.data, voice, style)[0].words_per_minute if script or auto_script else 150
+    )
     brief = Brief(topic=topic, seconds=seconds, kind=kind, facts=facts, words_per_minute=rate)
     result = Pipeline(root).reel(
         brief,
@@ -172,11 +183,11 @@ def narrate(
     """Render only narration MP3 and the measured clip timeline."""
     root = workspace()
     emit(
-        Pipeline(root).reel(
-            Brief(seconds=seconds),
-            voice,
+        generate_audio(
             load_script(script),
-            render_video=False,
+            workspace=root,
+            voice_name=voice,
+            seconds=seconds,
             style=style,
             source_name=script.stem,
         )
@@ -189,18 +200,30 @@ def voice_train(
     upstream: Annotated[Path, typer.Option(exists=True, file_okay=False)],
     epochs: int = 3,
     batch_size: int = 1,
+    resume: Annotated[
+        Path | None,
+        typer.Option(
+            exists=True, file_okay=False, help="Continue checkpoint weights; new optimizer."
+        ),
+    ] = None,
 ) -> None:
     """Fine-tune locally using a reviewed official Qwen3-TTS checkout (Linux/CUDA)."""
-    emit(train(workspace(), name, upstream, epochs=epochs, batch_size=batch_size))
+    root = workspace()
+    emit(
+        resume_checkpoint(root, name, resume, upstream, epochs=epochs, batch_size=batch_size)
+        if resume is not None
+        else train(root, name, upstream, epochs=epochs, batch_size=batch_size)
+    )
 
 
-@app.command("voice-use-checkpoint")
-def voice_use_checkpoint(
+@app.command("voice-use-checkpoint", hidden=True)
+@app.command("voice-select-checkpoint")
+def voice_select_checkpoint(
     name: str,
     checkpoint: Annotated[Path, typer.Option(exists=True, file_okay=False)],
 ) -> None:
     """Select a fine-tuned checkpoint after listening review."""
-    use_checkpoint(workspace(), name, checkpoint)
+    select_checkpoint(workspace(), name, checkpoint)
     emit({"voice": name, "checkpoint": str(checkpoint.resolve())})
 
 

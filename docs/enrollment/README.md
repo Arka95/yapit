@@ -95,7 +95,7 @@ short clips, and repeated recordings under different filenames.
 
 ```powershell
 .\.venv\Scripts\yapit voice-enroll arka --manifest .\my-samples.json
-.\.venv\Scripts\python.exe -m yapit.enrollment profiles
+.\.venv\Scripts\yapit profiles
 ```
 
 The manifest has a `samples` array of `{"audio": "path.wav", "text": "Exact words."}`.
@@ -107,6 +107,10 @@ distinct recordings. Invalid inputs are checked before imported files replace
 existing ones. Original external input files are not changed.
 
 Profiles are read only from this data layout; there are no old-profile fallbacks.
+For an expressive reference on an existing validated profile, use
+`yapit enroll-style` as described in the [Yapper guide](../yapper/README.md).
+It saves the named style in the same profile without changing the baseline
+recordings or training weights; consent defaults to true.
 Entry points use
 `YAPIT_DATA_DIR`, or `data` beneath the current working directory independently
 of `YAPIT_WORKSPACE`. Temporary enrollment files use

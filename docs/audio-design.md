@@ -77,7 +77,7 @@ reverb, clipped peaks and stitched syllables. Proofread contractions, numbers an
 pronunciation against the audio. The project resamples to mono 24 kHz; it does not
 silently trim recordings and invalidate their transcripts.
 
-`voices.py:audio_quality` checks duration, clipping (>0.1%), signal RMS
+`enrollment\profiles.py:audio_quality` checks duration, clipping (>0.1%), signal RMS
 (<-40 dBFS), and very-quiet-frame proportion (>60%). RMS is signal energy;
 dBFS expresses it relative to the maximum digital level. These checks do **not**
 measure signal-to-noise ratio, recognize speech or prove the transcript is right.
@@ -110,10 +110,12 @@ The maintained MCP SDK v1 API is deliberately bounded below v2 for this implemen
 and tested through a real stdio client, rather than relying on v2 compatibility [R8].
 
 **Pipeline** persists the brief/status, chooses a supplied script or optional
-generated script, invokes speech per semantic beat and passes audio to media.
+generated script, invokes Yapper for semantic-beat narration and passes its
+measured timeline/audio to Editor.
 Failure is recorded, never reported as a successful reel.
 
-**Reusable script prompt** is packaged as `script_prompt.txt`. It budgets words,
+**Reusable script prompt** is packaged as `yapper\script_prompt.txt` and loaded
+by `yapper\script_planner.py`. It budgets words,
 requires factual grounding, avoids generic influencer phrasing, and defines
 structured beats with punctuation, pauses and visual suggestions.
 An assistant can use it directly, with no API subscription or agent orchestration.
@@ -180,7 +182,7 @@ understanding system. There is no background-music beat detector.
 
 ### Actual training
 
-`training.py:train` uses a clean, explicitly supplied official checkout and records
+`training\trainer.py:train` uses a clean, explicitly supplied official checkout and records
 its Git commit. It keeps ~10% of clips held out, writes upstream-compatible
 `audio/text/ref_audio` JSONL, prepares audio codes and invokes upstream SFT.
 The reference is the same across examples, following upstream guidance [R4].
@@ -197,7 +199,7 @@ Upstream defaults/code may evolve; pin and review the checkout before execution.
 The prep script's internal batch size is upstream-controlled and can also cause OOM.
 
 Each checkpoint remains a candidate. The owner compares epochs on held-out phrases
-before `voice-use-checkpoint` updates the profile. No automatic "best epoch" claim,
+before `voice-select-checkpoint` updates the profile. No automatic "best epoch" claim,
 no self-improvement from arbitrary generated scripts, and no claim that reference
 conditioning has trained a model. Training logs and snapshot/commit provenance are
 retained. Training failure preserves the prior profile.
@@ -274,7 +276,8 @@ erDiagram
     }
 ```
 
-Backed by: `models.py`, `pipeline.py` persisted script/timeline/provenance, `voices.py`.
+Backed by: `models.py`, `pipeline.py` persisted script/timeline/provenance,
+`enrollment\styles.py`.
 These are file-backed entities, not fictitious SQL tables. Prompt-only jobs precede
 voice selection; REEL_JOB here denotes narration/render attempts.
 
@@ -352,10 +355,13 @@ the independent preprint supplies a separate evaluation, not product certificati
   https://github.com/QwenLM/Qwen3-TTS/blob/main/finetuning/sft_12hz.py
 
 Local implementation source of truth: `src/models.py` (contracts),
-`voices.py` (curation), `speech.py` (reference/trained inference),
-`training.py` (upstream orchestration), `scripts.py`/`script_prompt.txt` (prompt),
-`pipeline.py` (artifacts/status), `timeline.py` (cuts), `media.py` (real encoding),
-`server.py` (confined stdio tools), `tests/` (automated evidence).
+`enrollment\profiles.py` / `enrollment\styles.py` (curation/reference selection),
+`yapper\speech.py` (reference/trained inference),
+`training\trainer.py` (upstream orchestration), `yapper\script_planner.py` and
+`yapper\script_prompt.txt` (prompt), `yapper\generation.py` (narration),
+`pipeline.py` (reel orchestration/status), `yapper\timeline.py` (measured cuts),
+`editor\render.py` and `editor\templates.py` (video), `common_utils\mediautils.py` (media utilities),
+`mcp\server.py` (confined stdio tools), `tests/` (automated evidence).
 No internal wiki, contact directory, telemetry, PR or dashboard evidence exists for
 this new independent project. To add: owner listening results, target GPU sizing,
 the exact reviewed SFT checkout commit and real API validation, tied to VOICE-1/2

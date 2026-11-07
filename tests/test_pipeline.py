@@ -16,10 +16,8 @@ from yapit.common_utils.mediautils import (
     run_media,
     write_wav,
 )
-from yapit.models import Beat, Brief, DeliveryStyle, Script, Timeline
+from yapit.models import Beat, Brief, Script, Timeline
 from yapit.pipeline import Pipeline
-from yapit.timeline import build_timeline
-from yapit.voices import enroll_style
 
 
 def test_shared_resampling_preserves_duration_and_amplitude():
@@ -88,116 +86,11 @@ def test_real_mp3_vertical_video_and_contiguous_timeline(enrolled):
     assert brief["words_per_minute"] != 150
 
 
-def test_narration_only_skips_video(enrolled):
-    result = Pipeline(enrolled).reel(
-        Brief(seconds=7),
-        "test-voice",
-        script(),
-        backend=ToneSpeech(),
-        render_video=False,
-    )
-    assert Path(result["audio"]).exists()
-    assert result["video"] is None
-    assert not list(enrolled.data.generated_video.iterdir())
-    assert not (Path(result["job"]) / "video").exists()
-
-
-def test_duration_failure_is_persisted_without_truncating_speech(enrolled):
-    with pytest.raises(ValueError, match="Rewrite"):
-        Pipeline(enrolled).reel(
-            Brief(seconds=5),
-            "test-voice",
-            script(),
-            backend=ToneSpeech(8),
-        )
-    status_files = list((enrolled.root / "outputs").glob("*.status.json"))
-    assert len(status_files) == 1
-    status = json.loads(status_files[0].read_text())
-    assert status["status"] == "failed"
-    assert not list(enrolled.data.generated_audio.glob("*.mp3"))
-
-
 def test_no_script_returns_prompt_without_loading_voice(enrolled):
     result = Pipeline(enrolled).reel(Brief(topic="A useful camera review"), "not-enrolled")
     assert result["status"] == "awaiting_script"
     assert "game changer" in result["prompt"]
     assert Path(result["brief"]).exists()
-
-
-def test_style_pipeline_passes_real_reference_and_preserves_script(enrolled, tmp_path, monkeypatch):
-    source = tmp_path / "lively.wav"
-    write_wav(source, tone(4, 260))
-    reference = enroll_style(
-        enrolled,
-        "test-voice",
-        DeliveryStyle.lively_vlog,
-        source,
-        "Look at these little faces! What a lovely surprise.",
-        True,
-    )
-    selected = []
-
-    def speech(voice, directory):
-        selected.append((voice, directory))
-        return ToneSpeech()
-
-    monkeypatch.setattr("yapit.pipeline.QwenSpeech", speech)
-    result = Pipeline(enrolled).reel(
-        Brief(seconds=7),
-        "test-voice",
-        script(),
-        render_video=False,
-        style=DeliveryStyle.lively_vlog,
-    )
-    voice, directory = selected[0]
-    assert directory / voice.reference_audio == Path(reference.audio)
-    assert voice.reference_text == reference.text
-    assert Script.model_validate_json(Path(result["script"]).read_text()) == script()
-    provenance = json.loads(Path(result["provenance"]).read_text())
-    assert provenance["delivery_style"] == "lively-vlog"
-    assert provenance["reference_audio"] == reference.audio
-    assert Path(result["audio"]).exists()
-
-
-def test_flat_named_outputs_preserve_previous_render(enrolled):
-    first = Pipeline(enrolled).reel(
-        Brief(seconds=7),
-        "test-voice",
-        script(),
-        backend=ToneSpeech(),
-        render_video=False,
-        source_name="test-voice.trip",
-    )
-    original = Path(first["wav"]).read_bytes()
-    second = Pipeline(enrolled).reel(
-        Brief(seconds=7),
-        "test-voice",
-        script(),
-        backend=ToneSpeech(3.2),
-        render_video=False,
-        source_name="test-voice.trip",
-    )
-    assert Path(first["wav"]).name == "test-voice.trip.wav"
-    assert Path(second["wav"]).name == "test-voice.trip.1.wav"
-    assert Path(first["wav"]).read_bytes() == original
-    assert Path(second["audio"]).name == "test-voice.trip.1.mp3"
-    assert all(path.is_file() for path in enrolled.data.generated_audio.iterdir())
-    assert all(path.is_file() for path in (enrolled.root / "outputs").iterdir())
-    assert Path(first["script"]).parent == enrolled.data.transcripts
-
-
-def test_missing_style_fails_before_synthesis_or_job_creation(enrolled):
-    speech = ToneSpeech()
-    with pytest.raises(ValueError, match="voice-style-enroll"):
-        Pipeline(enrolled).reel(
-            Brief(seconds=7),
-            "test-voice",
-            script(),
-            backend=speech,
-            style=DeliveryStyle.lively_vlog,
-        )
-    assert not speech.calls
-    assert not (enrolled.root / "outputs").exists()
 
 
 def test_already_in_tolerance_does_not_force_extreme_stretch(tmp_path):
@@ -207,18 +100,6 @@ def test_already_in_tolerance_does_not_force_extreme_stretch(tmp_path):
     assert factor == 1
     assert len(audio) == 6 * SAMPLE_RATE
     assert not (tmp_path / "unused.wav").exists()
-
-
-def test_long_beat_prefers_quiet_window_and_keeps_cues_contiguous():
-    audio = tone(8)
-    audio[round(3.75 * SAMPLE_RATE) : round(3.85 * SAMPLE_RATE)] = 0
-    one = Script(title="Long beat", beats=[Beat(text="One two three four five six seven eight.")])
-    timeline = build_timeline(one, [8], 8, audio)
-    assert 3.75 <= timeline.cues[0].end <= 3.85
-    assert timeline.cues[0].end == timeline.cues[1].start
-    assert timeline.cues[-1].end == 8
-    with pytest.raises(ValueError, match="positive"):
-        build_timeline(one, [0], 8)
 
 
 def test_image_and_video_context_are_local_bounded_snapshots(tmp_path):

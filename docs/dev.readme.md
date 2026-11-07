@@ -4,88 +4,41 @@
 
 Source lives directly under `src` (for example `src\enrollment` and `src\rescript`);
 there is no nested `src\yapit` folder. The public package/import name remains
-`yapit`, and the CLI commands are unchanged.
+`yapit`. CLI operations are exposed directly, independently of module folders.
 
-```text
-yapit\
-  README.md
-  VERSION
-  pyproject.toml
-  docs\
-    dev.readme.md
-    analysis.md
-    audio-design.md
-    module-architecture.md
-    enrollment\
-      README.md
-      dev.readme.md
-    rescript\
-      README.md
-      dev.readme.md
-  src\
-    __init__.py
-    common_utils\
-      __init__.py
-      fileutils.py
-      mediautils.py
-      modelutils.py
-    enrollment\
-      __init__.py
-      __main__.py
-      cli.py
-      desktop.py
-      recorder.py
-      session.py
-      profiles.py
-      artifacts.py
-      sample_scripts.py
-      sampleScripts\sample_<number>.json
-      tests\
-    rescript\
-      __init__.py
-      audio.py
-      cli.py
-      transcription.py
-    cli.py
-    server.py
-    storage.py
-    models.py
-    constants.py
-    media.py
-    speech.py
-    pipeline.py
-    scripts.py
-    timeline.py
-    training.py
-    voices.py
-  scripts\
-    Start Enrollment.cmd
-    setup-mode.cmd
-    yapit-mode.cmd
-    run-mode.py
-    setup-mode.py
-    hatch-build.py
-  tests\
-  models\
-    Qwen3-TTS-12Hz-1.7B-Base\
-    cosyvoice3-2512\
-    cosyvoice_source\
-    hub\
-  data\
-    <profile>\audio\
-    audio\
-    transcripts\
-    generated_audio\
-    generated_video\
-  workspace\
-    enrollment\<profile>\
-    outputs\
-  .venv\
-  .venv-cpu\
-  .venv-gpu\
-  .venv-cosyvoice\
-  .venv-cosyvoice-bootstrap\
-```
+This is a folder-level ownership map, not a file inventory. Implementation details
+and module-local tests belong in the linked developer guides.
+
+| Source folder | What it owns | Developer guide |
+|---|---|---|
+| `src\` | Shared contracts/configuration, storage, CLI adapters and reel orchestration | This guide |
+| `src\enrollment\` | Model-free microphone recording, sample curation and reusable voice profiles | [Enrollment](enrollment/dev.readme.md) |
+| `src\rescript\` | Media audio extraction and local speech recognition into reviewable scripts | [Rescript](rescript/dev.readme.md) |
+| `src\yapper\` | Script planning, local speech synthesis, pauses/duration fitting and measured timelines | [Yapper](yapper/dev.readme.md) |
+| `src\editor\` | Video templates, duration-coloured placeholders, captions and edit-guide rendering | [Editor](editor/dev.readme.md) |
+| `src\training\` | Explicit voice fine-tuning, weights-only continuation and checkpoint selection | [Training](training/dev.readme.md) |
+| `src\mcp\` | Stdio MCP tools, server entry points, client configuration examples and protocol tests | [MCP](mcp/dev.readme.md) |
+| `src\common_utils\` | Shared file, media and model-loading primitives; no workflow ownership | This guide |
+
+| Supporting folder | Purpose |
+|---|---|
+| `docs\` | Project guidance, module user/developer guides and design/research documents |
+| `scripts\` | Runtime setup/launch helpers, packaging support and experimental worker tools |
+| `examples\` | Example scripts and voice-sample manifests; MCP client examples belong to its module |
+| `tests\` | Cross-module integration and shared-utility tests; modules also own their local test folders |
+| `models\` | Downloaded model assets and reusable caches |
+| `data\<profile>\` | Accepted baseline/style recordings, voice metadata and training checkpoints |
+| `data\audio\` | Imported/extracted source audio |
+| `data\transcripts\` | Reviewed scripts, ASR sidecars, captions and training datasets |
+| `data\generated_audio\` | Generated narration and raw/fitted audio intermediates |
+| `data\generated_video\` | Completed edit-guide videos |
+| `workspace\enrollment\` | Resumable enrollment drafts, raw takes and temporary capture artifacts |
+| `workspace\outputs\` | Job metadata, prompts, measured timelines, logs and temporary rendering artifacts |
+| `.venv*` | Isolated application runtimes and optional experimental worker environments |
+
+There are no Python files at the repository root. Shared contracts, configuration,
+storage and thin application adapters still live directly under `src`; this
+refactor does not move those into additional packages.
 
 Only `README.md` remains at the repository root; all project Markdown is in
 `docs`. Model checkouts/cards and dependency documentation are third-party
@@ -93,13 +46,54 @@ assets, not project documentation to relocate. Runtime environments, models,
 workspace contents and other profiles' data are Git-ignored. `data\arka` is
 eligible for version control, including its audio; this does not stage or upload
 it automatically. Package archives exclude all `data` contents. The CosyVoice runtime remains
-separate and paused; this tree does not imply it is provisioned.
+separate and paused; this layout does not imply it is provisioned.
+
+## Reel lifecycle
+
+Each box is an existing module; arrows show artifact hand-offs or tool delegation,
+not network services or a requirement to run every module for every reel.
+
+```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 1700, "nodeSpacing": 24, "rankSpacing": 30}}}%%
+flowchart TB
+    subgraph MAIN[" "]
+        direction LR
+        Enrollment["<b>Enrollment</b><br/>- Record / curate<br/>- Profiles / styles"]:::svc
+        Rescript["<b>Rescript</b><br/>- Extract audio<br/>- Transcribe to Script"]:::svc
+        Yapper["<b>Yapper</b><br/>- Plan / load Script<br/>- Local narration<br/>- Audio / timing"]:::svc
+        Editor["<b>Editor</b><br/>- Coloured placeholders<br/>- MP4 / captions"]:::svc
+        Training["<b>Training</b><br/>- Fine-tune / resume<br/>- Validate / select"]:::svc
+        MCP["<b>MCP</b><br/>- Stdio tools<br/>- Delegate workflows"]:::svc
+
+        Enrollment -->|"Profile / styles"| Yapper
+        Enrollment -->|"Samples"| Training
+        Training -->|"Selected checkpoint"| Yapper
+        Rescript -->|"Reviewed Script"| Yapper
+        Yapper -->|"Audio / timing"| Editor
+        MCP -->|"Enrollment"| Enrollment
+        MCP -->|"Narration / reel"| Yapper
+        MCP -->|"Rendering"| Editor
+    end
+    MAIN ~~~ SUM
+    SUM["<div style='width:1650px'><b>Reel generation by module</b><br/><b>How to read:</b> Arrows = hand-offs/tool delegation; blue = modules, grey = summary.<br/><b>Summary:</b> CLI/Pipeline coordinates narration and editing; Training/MCP are optional. Checkpoint selection is manual.<br/><i>Backed by: src/pipeline.py:18; src/mcp/server.py:22. Output: editing guide.</i></div>"]:::caption
+    style MAIN fill:none,stroke:none;
+    classDef svc fill:#cfe3ff,stroke:#2b6cb0,color:#0b2545;
+    classDef caption fill:#f7f7f7,stroke:#999,color:#222,font-size:16px;
+```
+
+**Backed by:** `src\enrollment\profiles.py:108`, `src\enrollment\styles.py:53`,
+`src\rescript\transcription.py:181`, `src\yapper\generation.py:25`,
+`src\editor\render.py:12`, `src\training\trainer.py:19`,
+`src\training\checkpoints.py:24`, `src\mcp\server.py:22`, `src\pipeline.py:18`.
+
+## Packaging and source mapping
 
 Hatch maps `src` to `yapit` in release wheels. `scripts\hatch-build.py` supplies
 the corresponding editable-install import mapping without symlinks or another
 source folder. The small `editables` dependency is declared for editable builds.
-After moving source files, reinstall the package into each application runtime;
-old editable installs still point at the removed folder. Do not install YapIt
+Existing editable installs mapped to the current `src` directory see module
+file moves without reinstalling. Reinstall into each application runtime when
+upgrading a wheel or replacing an older editable layout. Do not install YapIt
 into the separate Python 3.10 CosyVoice worker.
 
 `VERSION` is the single source of the package version. Hatch reads its plain
@@ -153,6 +147,10 @@ than claiming the work was published.
 
 ### Isolated CPU/GPU runtimes on Windows
 
+`scripts\setup-mode.cmd` defaults to automatic selection: a bounded `nvidia-smi`
+driver probe selects GPU if an NVIDIA device is detected, otherwise it logs a
+CPU fallback. This does not guarantee CUDA works in the installed runtime;
+GPU dispatch still validates it. Explicit `cpu`/`gpu` preserve the requested mode.
 `scripts\setup-mode.cmd cpu` and `scripts\setup-mode.cmd gpu` use normal isolated venvs,
 preserving the old `.venv`. `scripts\setup-mode.py` installs the selected
 `requirements-cpu.txt` / `requirements-gpu.txt` first without transitive dependency
@@ -238,10 +236,11 @@ uses only the approved feed artifact endpoint, and refuses modified cached files
 
 The wheel choices follow the official
 [PyTorch previous-versions matrix](https://pytorch.org/get-started/previous-versions/).
-The CUDA wheel supplies its own runtime and cuDNN. The installed NVIDIA
-driver must support CUDA 12.8; the RTX 4070 SUPER supports this build.
-Thea's `docs\setup.gpu.md` describes **OpenCV CUDA**, not Yapit/PyTorch:
-do not reinstall its CUDA toolkit or cuDNN to configure these environments.
+The configured wheels target CUDA 12.8; a compatible NVIDIA driver/device must
+be available. The launcher checks CUDA availability, not a particular eGPU's
+identity or every backend's inference. These are PyTorch runtime requirements,
+not OpenCV CUDA setup instructions; setup does not install a system CUDA toolkit
+or cuDNN.
 GPU wheels occupy several GB; the model cache remains shared and unchanged.
 
 `scripts\run-mode.py`, wrapped by `scripts\yapit-mode.cmd`, sets child-only
@@ -308,7 +307,7 @@ not the training path's FlashAttention requirement.
 **Windows tools.** FFmpeg handles capture and media conversion; the bundled
 `imageio-ffmpeg` executable is the default. Qwen's dependencies may also need
 SoX and its accompanying DLLs. Put a verified SoX installation on `PATH`, or
-place its executable/dependencies in `.venv\Scripts`: `speech.py` adds the
+place its executable/dependencies in `.venv\Scripts`: `yapper\speech.py` adds the
 interpreter directory to `PATH` when it finds SoX there and none is already
 discoverable. Do not disable TLS, integrity checks, or repository trust controls
 to work around package-installation failures.
@@ -316,6 +315,10 @@ to work around package-installation failures.
 **Offline inference.** First provision the complete base model and speech
 tokenizer, then set `YAPIT_MODEL` to their local model directory.
 `HF_HUB_OFFLINE=1` prevents Hub network access for cached/local inference.
+Automatic narration device selection uses CUDA when available; otherwise it logs
+CPU fallback once during model load. Explicit devices are not silently rewritten.
+Rescript defaults to offline cached/local recognition; `--no-offline` permits
+model downloads only, never uploading audio for hosted transcription.
 
 **Reference-conditioned delivery (provisional Qwen baseline).** No head-to-head
 model selection or expressive-quality benchmark has been measured. Environment
@@ -323,9 +326,13 @@ separation does not commit the project to this backend. Base cloning uses user r
 `lively-vlog`, `relaxed-travel`, and `asmr-travel`; it does not accept the native
 emotion `instruct` supported by different CustomVoice/VoiceDesign model paths.
 `voice-style-prompt` gives recording direction and an exact passage;
-`voice-style-enroll` applies the normal consent, transcript, and 3-20 second
-signal checks. Recordings live in `data\audio\styles\<voice>\<style>`;
-`data\transcripts\styles\<voice>\<style>\reference.json` holds the sidecar,
+`enroll-style` defaults consent to true, like `voice-enroll`; no consent flag
+is required. It loads and validates the existing profile before processing audio;
+missing profiles must first be created with `enroll-app` or `voice-enroll`.
+Transcript and 3-20 second signal checks still apply.
+Prepared and raw style recordings live in `data\<profile>\audio`
+as `<profile>.<style>.wav` and `<profile>.<style>.raw.<extension>`.
+`data\<profile>\<profile>.<style>.reference.json` holds the sidecar,
 and the voice profile maps the references. Default identity references remain
 unchanged. Missing styles fail before model load; custom-voice checkpoints
 cannot use this Base reference selection. There is no training, classifier,
@@ -337,8 +344,13 @@ checkpoint takes precedence over `YAPIT_MODEL`.
 ## How the components work
 
 **Entry points and contracts.** `cli.py` exposes Typer commands through `yapit`;
-`server.py` exposes MCP tools through `yapit-mcp`. Both delegate generation to
-`pipeline.py`, rather than maintaining separate rendering implementations.
+`mcp\server.py` exposes MCP tools through `yapit-mcp`. Reels use `pipeline.py`;
+audio-only commands/tools use Yapper directly, and timeline rendering uses Editor.
+Root CLI registers module command functions as `audiogen`, `extract_audio`,
+`transcript` and `profiles`. No module-name group is needed.
+Old `yapper`/`rescript` groups remain hidden compatibility aliases.
+The [root command inventory](../README.md#available-commands) is the user-facing
+source of command names; optional standalone module CLIs stay available for development.
 `models.py` contains Pydantic contracts for briefs, scripts, voices, and
 continuous timelines, rejecting unknown fields and invalid values.
 
@@ -369,14 +381,15 @@ Successful enrollment removes profile-owned workspace draft/raw/log/preparation
 files, while retaining accepted audio and final metadata. Incomplete/failed
 sessions remain resumable; data never holds enrollment logs.
 
-**Script preparation.** `scripts.py` combines `script_prompt.txt`, a validated
+**Script preparation.** `yapper\script_planner.py` combines the Yapper-packaged
+`script_prompt.txt`, a validated
 brief, a word budget, and the Script JSON schema. The default flow returns this
 prompt for a human-reviewed conversation; no agent framework or API call is
 involved. UTF-8 text scripts are split into sentence/paragraph beats, while JSON
 supports explicit pauses and visual suggestions. Optional cloud generation uses
 the same prompt and permits one duration-estimate revision.
 
-**Local voice synthesis.** `speech.py` lazily loads Qwen3-TTS Base 1.7B and builds
+**Local voice synthesis.** `yapper\speech.py` lazily loads Qwen3-TTS Base 1.7B and builds
 a clone prompt from one reference recording and its verified transcript.
 `QwenSpeech` reuses that model/prompt across beats within a render; it does not
 pool all enrolled recordings or update model weights. A selected fine-tuned
@@ -408,26 +421,43 @@ large assets and copies for small metadata, leaving the original cache intact
 and avoiding downloads/duplicate weight allocation. CPU and GPU modes share
 the model folder. Do not remove external caches blindly.
 
-**Orchestration and timing.** `pipeline.py` reserves a readable output name, saves flat
-brief/provenance/status files under `workspace\outputs` and the script under `data\transcripts`,
-synthesizes each beat, and inserts explicit
-pauses. `common_utils\mediautils.py` fits audio using FFmpeg's pitch-preserving `atempo` only
+**Orchestration and timing.** `pipeline.py` orchestrates script planning, Yapper and
+Editor for reels. `yapper\generation.py` owns direct narration and a reusable
+audio renderer: it saves script/provenance, synthesizes beats and inserts explicit
+pauses. Both workflows reserve names and persist flat brief/status files under
+`workspace\outputs`; scripts land in `data\transcripts`.
+`common_utils\mediautils.py` fits audio using FFmpeg's pitch-preserving `atempo` only
 within 0.90-1.10x. A larger adjustment is refused unless the unadjusted audio
 already fits the +/-5 second tolerance. The encoded MP3 is decoded and checked
 again before the run can complete. Failure writes `<name>.status.json` and `<name>.error.log`
-for render jobs inside the pipeline's error-handling block.
+for render jobs inside the owning workflow's error-handling block.
+`yapit narrate`, `yapit audiogen` and MCP narration use Yapper directly,
+without calling the script-writing provider or Editor.
 
 **Media and edit guidance.** Shared media utilities handle decoding/resampling,
 192 kb/s 48 kHz MP3 encoding with loudness processing and image/video extraction.
-`media.py` retains the workflow-specific H.264/AAC placeholder guide renderer.
-`timeline.py` scales measured beat lengths to the
+`editor\render.py` owns the workflow-specific H.264/AAC placeholder guide renderer.
+`yapper\timeline.py` scales measured beat lengths to the
 encoded narration, splits longer beats, and prefers quiet windows near suggested
 sub-cuts. Phrase captions are proportional word groups, not forced alignment.
+`editor\templates.py` supplies solid-colour backgrounds selected from each cue's
+duration, retaining readable numbered labels. Bands are red <1s, cyan 1-<2s,
+green 2-<3s, darkgreen 3-<4s, blue 4-<5s, yellow 5-6s, and magenta >6s.
 The guide is numbered placeholder slates at 1080x1920 and 30 fps, not generated
 travel footage or automatic editing of the source video.
 Rendering uses workspace slates/playlists and a temporary encoded video;
 only a successful completed video is copied into `data\generated_video`,
 without overwriting an existing file. The temporary encoded copy is then removed.
+The generated concat playlist specifies the image input framerate as well as
+frame-rounded durations, so output cuts follow the timeline rather than a
+different image-reader time base. Prefixes must be simple ASCII names; concat input is restricted to local-file
+protocols.
+
+Audio/planning-only tests live in `src\yapper\tests`; template/rendering tests live
+in `src\editor\tests`. Root tests retain cross-module CLI/MCP/reel integration
+and generic shared-utility checks. See the
+[Yapper developer guide](yapper/dev.readme.md) and
+[Editor developer guide](editor/dev.readme.md).
 
 **Storage.** `storage.py` owns workspace/data paths and confinement; common file
 utilities provide naming, reservations, copying and atomic JSON replacement.
@@ -449,8 +479,9 @@ same constrained device.
 
 ## Data locations and supported boundaries
 
-All modules share `DataStore` and `YAPIT_DATA_DIR` (default: the `data` directory
-beside `YAPIT_WORKSPACE`). Set both roots to absolute paths for alternate working
+All modules share `DataStore` and `YAPIT_DATA_DIR`. Generation/Rescript default to
+`data` beside `YAPIT_WORKSPACE`; enrollment independently defaults to `.\data`.
+Set both roots to absolute paths for alternate working
 directories, MCP clients, and WSL.
 
 | Location beneath the data root | Content |
@@ -471,7 +502,8 @@ directly; canonical profiles are never read from the workspace. Temporary
 drafts, raw captures, capture logs, and preparation reports live in
 `YAPIT_WORKSPACE\enrollment\<profile>` and are deleted after successful enrollment.
 Under `YAPIT_WORKSPACE`, flat `outputs\<name>.*` files hold prompts/frames, timelines,
-provenance, status, guides and logs. Model checkpoints retain the upstream-required
+provenance, status, temporary rendering files and logs; completed guides are in
+`data\generated_video`. Model checkpoints retain the upstream-required
 directory structure beneath the selected profile's `checkpoints\<readable-name>`.
 Profiles and draft
 state necessarily embed reference text as metadata; standalone transcript/script
@@ -494,7 +526,7 @@ apart near the start; source audio is not transcribed or sent for scripting.
 
 Signal gates require complete 3-20 second clips, no more than 0.1% clipped
 samples, RMS at least -40 dBFS, and no more than 60% very quiet 20 ms frames.
-Normalization does not bypass these gates or repair clipped speech. Twelve
+Normalization does not bypass these gates or repair clipped speech. Sixteen
 starter passages improve variety but do not establish phonetic completeness,
 voice similarity, or sufficient training quality.
 
@@ -514,7 +546,9 @@ source, examples, logs, or commits.
 
 ## MCP integration
 
-Install `.[mcp]` and adapt `examples\mcp.config.json` in your client's settings.
+Install `.[mcp]` and adapt `src\mcp\examples\mcp.config.json` in your client's settings.
+The [MCP user guide](mcp/README.md) and [developer guide](mcp/dev.readme.md)
+own protocol-specific setup, implementation and tests.
 It launches `yapit-mcp` over stdio, not a public HTTP listener. Set absolute
 executable/workspace/data paths and explicit model/device configuration as needed;
 do not depend on the client's working directory to find your `.env`.
@@ -537,9 +571,13 @@ Keep model/library output on stderr so stdout remains valid MCP protocol data.
 
 ## Optional dedicated fine-tuning
 
-`training.py` wraps the official upstream single-speaker training scripts;
+`training\trainer.py` wraps the official upstream single-speaker training scripts;
 enrollment alone never runs it. Training requires Linux/WSL2, an NVIDIA CUDA GPU
 with bfloat16 support, `.[train]`, and a compatible FlashAttention build.
+Training-only tests now live under `src\training\tests`; root CLI still uses the
+explicit `train`/`resume_checkpoint`/`select_checkpoint` APIs.
+See the [training guide](training/README.md) and
+[training developer guide](training/dev.readme.md).
 Use a clean, reviewed and pinned checkout of the official upstream repository:
 
 ```powershell
@@ -551,7 +589,8 @@ dependencies and valid local paths:
 
 ```text
 yapit voice-train my-voice --upstream <reviewed-Qwen3-TTS-directory> --epochs 3 --batch-size 1
-yapit voice-use-checkpoint my-voice --checkpoint <selected-checkpoint-directory>
+yapit voice-train my-voice --upstream <reviewed-Qwen3-TTS-directory> --resume <validated-checkpoint-directory>
+yapit voice-select-checkpoint my-voice --checkpoint <selected-checkpoint-directory>
 ```
 
 Use the same workspace and data root; re-enroll if moving recordings between filesystems
@@ -565,6 +604,12 @@ Checkpoint selection is manual: compare held-out phrases and choose by listening
 not just the last epoch. Only reviewed local custom-voice checkpoints containing
 the alias's speaker are accepted. Reference cloning remains active until you
 select one. Batch size 1 is not a guarantee of fitting a particular GPU.
+`--resume` continues compatible checkpoint weights with a new optimizer, not
+interrupted-run optimizer/step state. It restores Base training components in
+temporary storage and does not select the resulting checkpoint for inference.
+Training still requires CUDA and never falls back to CPU; the CPU remains
+involved in data preparation/model loading. See the training guides for the
+compatibility checks and additional CPU RAM/disk required by continuation.
 
 ## Validation and contribution instructions
 

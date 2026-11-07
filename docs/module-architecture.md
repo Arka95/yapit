@@ -1,8 +1,9 @@
 # YapIt library boundaries and dependency plan
 
-Status: the model-free enrollment module is implemented; the remaining library
-split is a proposal for owner review.
-Inventory date: November 7, 2026. The CosyVoice setup/trial is independent background
+Status: enrollment, shared utilities, Rescript, Yapper, Editor and training are implemented
+as logical modules in one distribution. Independently distributed provider
+packages in the proposal below are not implemented.
+Inventory date: November 7, 2026. The CosyVoice setup/trial is separate paused
 work, not a prerequisite for choosing these boundaries.
 
 Enrollment now owns its UI, static `sampleScripts`, profile/sample management and
@@ -16,12 +17,23 @@ Evidence: `src\enrollment\session.py:46`;
 unimplemented.
 
 The current refactor extracts shared file/media utilities under
-`src\common_utils`, leaving workflow-specific rendering in `src\media.py` and
+`src\common_utils`, leaving workflow-specific rendering/templates in `src\editor` and
 storage policy in `src\storage.py`. Model factories use the lazy shared loader;
 `src\models.py` remains data contracts. All project documentation is now under
 `docs`, indexed by the root README. See [dev.readme.md](dev.readme.md) for the
 maintained tree; older numbered source references below are research snapshots,
 not a claim that the full proposed provider split has been implemented.
+
+Yapper now owns `script_planner.py`/`script_prompt.txt`, local synthesis,
+audio generation and measured timelines under `src\yapper`, with audio/planning
+tests there. Editor owns video rendering/templates and rendering-only tests
+under `src\editor`. Root CLI/MCP/Pipeline remain thin cross-module adapters;
+contracts, configuration and storage remain shared root-source modules.
+Explicit fine-tuning and checkpoint-selection code/tests now live under
+`src\training`; `yapit.training` exports remain compatible and SDK loading stays
+inside requested training calls.
+The repository root contains no Python files. See the
+[Yapper](yapper/dev.readme.md) and [Editor](editor/dev.readme.md) guides for current APIs.
 
 ## Problem Statement
 
@@ -46,19 +58,20 @@ Evidence: `src\scripts.py:29-71`; `src\speech.py:31-95`;
 
 | Action | Current owner | Hosted LLM/API required? | Current execution and hardware |
 |---|---|---|---|
-| Extract video audio | `rescript.audio.extract_audio` -> `media.run_media` | No | CPU FFmpeg; first audio stream, mono 24 kHz PCM WAV |
+| Extract video audio | `rescript.audio.extract_audio` -> `common_utils.mediautils.run_media` | No | CPU FFmpeg; first audio stream, mono 24 kHz PCM WAV |
 | Convert unsupported audio | The same `extract_audio` function | No | CPU FFmpeg; decodable input becomes supported WAV; corrupt/undecodable/no-audio input errors |
 | Copy already-supported audio | The same function, after decode validation | No | CPU filesystem copy; original supported container preserved |
 | Recognize spoken words | `WhisperTranscriber.recognize` | No | Local faster-whisper/CTranslate2; configured CPU/int8 or CUDA/float16 |
 | Prepare recognition input | `transcribe` | No | CPU FFmpeg decode to temporary mono 16 kHz WAV |
 | Compose recognition into narration scripts | `compose_scripts` | No | CPU deterministic partitioning, schema validation and source-gap-derived pauses |
-| Load/validate text or Script JSON | `scripts.load_script`, `models.Script` | No | CPU; no model |
-| Build a reusable script prompt | `scripts.build_prompt` | No | CPU template/schema/word-budget composition; another tool may subsequently use the prompt |
-| Automatically write a script | `scripts.generate_script` | **Yes, when chosen** | OpenAI request with brief and optional sampled image frames; explicitly cloud-gated |
+| Load/validate text or Script JSON | `yapper.script_planner.load_script`, `models.Script` | No | CPU; no model |
+| Build a reusable script prompt | `yapper.script_planner.build_prompt` | No | CPU template/schema/word-budget composition; another tool may subsequently use the prompt |
+| Automatically write a script | `yapper.script_planner.generate_script` | **Yes, when chosen** | OpenAI request with brief and optional sampled image frames; explicitly cloud-gated |
 | Enroll/curate a voice or labeled style | `enrollment.profiles`, `enrollment.session`, `enrollment.desktop`; style adapter in `voices` | No | CPU recording, FFmpeg, NumPy signal checks and profile storage; not training |
-| Synthesize the enrolled voice | `speech.QwenSpeech` | No hosted API | Local Qwen model; CPU supported, CUDA preferred for the intended workflow |
-| Fit/encode audio | `media.fit_audio`, `encode_mp3` | No | CPU FFmpeg; standard pipeline applies existing duration/stretching gates |
-| Build timelines/captions/edit guides | `timeline`, `media.render_guide` | No | CPU NumPy/Pillow/FFmpeg; current guide encoder is `libx264`, not a configured GPU encoder |
+| Synthesize the enrolled voice | `yapper.speech.QwenSpeech`, `yapper.generation` | No hosted API | Local Qwen model; CPU supported, CUDA preferred for the intended workflow |
+| Fit/encode audio | `common_utils.mediautils.fit_audio`, `encode_mp3` | No | CPU FFmpeg; Yapper applies existing duration/stretching gates |
+| Build measured timelines | `yapper.timeline` | No | CPU NumPy; measured beat timing, quiet-window sub-cuts and approximate phrase grouping |
+| Render captions/edit guides | `editor.render`, `editor.templates` | No | CPU Pillow/FFmpeg; duration-coloured backgrounds and `libx264`, not a configured GPU encoder |
 | Fine-tune a voice | `training.train` | No hosted LLM API | Current implementation requires Linux/WSL2, CUDA, BF16 and FlashAttention |
 | Expose commands/tools/UI | `cli`, `rescript.cli`, `server`, `desktop` | No intrinsically | CPU adapters; called operations determine model/API needs |
 | Name/persist artifacts | `storage` | No | CPU filesystem I/O and exclusive name reservation |
@@ -75,7 +88,7 @@ Inventory evidence:
 `src\timeline.py:11-68`;
 `src\training.py:16-175`;
 `src\cli.py:23-198`;
-`src\server.py:18-167`;
+`src\mcp\server.py:18-167`;
 `src\storage.py:14-157`.
 
 The supported-copy set is WAV, MP3, M4A, AAC, FLAC, OGG, OPUS, AIF/AIFF and WMA.
@@ -99,7 +112,7 @@ original. `src\rescript\audio.py:14-103`.
    runs over stdio; its client may be an assistant, but deterministic tools do not
    require a model API. Rescript commands are currently CLI/Python operations,
    not registered tools in this MCP server.
-   `src\server.py:18-167`; `src\rescript\cli.py:16-69`.
+   `src\mcp\server.py:18-167`; `src\rescript\cli.py:16-69`.
 4. `media.py` combines audio utilities, image/video sampling and guide rendering.
    `scripts.py` combines deterministic formatting and hosted generation.
    `rescript.transcribe` combines decoding, archiving, inference, composition and
@@ -286,7 +299,7 @@ Keep at most one model-heavy job admitted per local GPU worker initially.
 Reject busy requests or use a small bounded local work queue; do not silently
 queue unlimited audio in RAM. Current MCP already rejects concurrent protected
 operations per server instance, but it does not coordinate independent CLI
-processes. `src\server.py:23,47-61,64-95`.
+processes. `src\mcp\server.py:23,47-61,64-95`.
 
 Single points of failure are the eGPU/driver, local disk, model worker and optional
 hosted endpoint. Mitigations are explicit supported CPU selection, checked local
@@ -367,7 +380,7 @@ extraction, not training or adding another model.
   `src\enrollment\session.py:46`; `docs\enrollment\README.md`.
 - Orchestration/storage/hosted permission: `src\pipeline.py:25-164`;
   `src\storage.py:14-157`.
-- Interfaces: `src\cli.py:23-198`; `src\server.py:18-167`;
+- Interfaces: `src\cli.py:23-198`; `src\mcp\server.py:18-167`;
   `src\enrollment\desktop.py:25`.
 - Training prerequisites: `src\training.py:16-175`.
 - Experimental Cosy runtime: `requirements-cosyvoice.txt`;

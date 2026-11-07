@@ -24,12 +24,12 @@ voice = ["qwen-tts==0.1.1", "torch>=2.6,<3"]
 cloud = ["openai>=1.100,<3"]
 rescript = ["faster-whisper>=1.2.1,<2"]
 mcp = ["mcp>=1.20,<2"]
-train = ["qwen-tts==0.1.1", "torch>=2.6,<3", "tensorboard>=2.19,<3"]
+train = ["qwen-tts==0.1.1", "torch>=2.6,<3", "tensorboard>=2.19,<3", "safetensors>=0.4.3,<1"]
 dev = ["pytest>=8.3,<10", "ruff>=0.12,<1", "build>=1.2,<2", "mcp>=1.20,<2"]
 
 [project.scripts]
 yapit = "yapit.cli:app"
-yapit-mcp = "yapit.server:main"
+yapit-mcp = "yapit.mcp.server:main"
 
 [tool.hatch.build]
 dev-mode-dirs = ["."]
@@ -43,7 +43,7 @@ only-include = ["src"]
 sources = {"src" = "yapit"}
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/data/**"]
+exclude = ["/data/**", "/.vscode/**"]
 
 [tool.hatch.build.hooks.custom]
 path = "scripts/hatch-build.py"
@@ -57,6 +57,14 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["yapit"]
+known-third-party = ["mcp"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "src/enrollment/tests"]
+testpaths = [
+  "tests",
+  "src/enrollment/tests",
+  "src/yapper/tests",
+  "src/editor/tests",
+  "src/training/tests",
+  "src/mcp/tests",
+]

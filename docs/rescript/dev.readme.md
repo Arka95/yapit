@@ -23,7 +23,7 @@ model SDK imports and network calls while exercising extraction, even with
 CUDA ASR variables set. Shared storage tests check streaming archive hashes.
 For a listening smoke test, run
 the public CLI on a known local recording, review `transcript.json` against
-the source, and load each output with `yapit.scripts.load_script`. Validate
+the source, and load each output with `yapit.yapper.script_planner.load_script`. Validate
 recognition quality separately from deterministic partitioning.
 
 ## Components and contracts
@@ -32,9 +32,12 @@ recognition quality separately from deterministic partitioning.
 `transcription.py`; there is no desktop UI. The public initializer exports
 `extract_audio` and `transcribe`.
 
-`cli.py` registers `yapit rescript extract_audio`, `transcript`, the equivalent
-`transcribe-media` alias, and the
-standalone module entry point. It loads `.env`, accepts local paths and explicit
+Root `cli.py` registers the Rescript command functions directly as
+`yapit extract_audio` and `yapit transcript`.
+The old `yapit rescript ...` group remains hidden for compatibility.
+`rescript\cli.py` also supports the optional standalone
+`python -m yapit.rescript.cli extract_audio|transcript` entry point.
+It loads `.env`, accepts local paths and explicit
 recognition settings, and prints result JSON or an actionable error.
 
 Optional `device`/`compute_type` arguments take precedence over
@@ -122,12 +125,14 @@ CUDA/float16 can be selected through explicit options, ASR environment
 variables or `scripts\yapit-mode.cmd gpu`; it is not the default.
 The adapter constructs a Whisper model for each `recognize` call. Model files
 are cached, but instances are not pooled across calls; a CLI invocation
-processes one input. `--offline` maps to Whisper's `local_files_only`; supply complete
-local/cached weights for an offline run. The lazy shared `load_model` adapter
+processes one input. CLI, `transcribe` and `WhisperTranscriber` default `offline`
+to true, mapping to Whisper's `local_files_only`. Supply complete local/cached
+weights; CLI `--no-offline` or Python `offline=False` explicitly permits model
+downloads, not remote recognition. The lazy shared `load_model` adapter
 passes Whisper's `download_root` as `YAPIT_MODELS_DIR\hub`; model folder/defaults
 are centralized in `constants.py`. No API keys or cloud permission
 flags are used. `YAPIT_FFMPEG` retains its existing meaning.
-`YAPIT_WORKSPACE` holds temporary session files, job metadata and video guides,
+`YAPIT_WORKSPACE` holds temporary session files, job metadata and rendering intermediates,
 not completed audio, transcript or video exports. Metadata and generated outputs
 are flat. Model checkpoints and existing
 voice/enrollment storage retain their required structure under the profile's

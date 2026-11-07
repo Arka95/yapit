@@ -32,8 +32,7 @@ def extract_audio(
 
 
 @app.command("transcript")
-@app.command()
-def transcribe_media(
+def transcript(
     media: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
     output: Annotated[
         Path | None, typer.Option(help="Flat transcript directory; must be data\\transcripts.")
@@ -46,7 +45,9 @@ def transcribe_media(
         str | None, typer.Option(help="ASR precision; defaults to selected mode or int8.")
     ] = None,
     language: str = "en",
-    offline: Annotated[bool, typer.Option(help="Use only cached/local model files.")] = False,
+    offline: Annotated[
+        bool, typer.Option(help="Use cached/local models; --no-offline permits model downloads.")
+    ] = True,
 ) -> None:
     """Transcribe local audio/video into reviewed-before-use Script JSON."""
     load_dotenv()
