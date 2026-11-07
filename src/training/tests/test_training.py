@@ -9,11 +9,13 @@ import pytest
 
 from yapit.common_utils.fileutils import save_json
 from yapit.common_utils.mediautils import write_wav
+from yapit.constants import DEFAULT_SPEECH_MODEL
 from yapit.enrollment import load_voice
 from yapit.models import Sample
 from yapit.storage import Workspace
 from yapit.training import resume_checkpoint, select_checkpoint, train
 from yapit.training.checkpoints import prepare_resume_model
+from yapit.training.sft_runner import run_sft
 
 from .conftest import tone
 
@@ -89,13 +91,22 @@ def resume_models(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("fail_sft", [False, True])
-@pytest.mark.parametrize("resume_run", [False, True])
+@pytest.mark.parametrize(
+    "resume_run,model",
+    [
+        (False, DEFAULT_SPEECH_MODEL),
+        (True, DEFAULT_SPEECH_MODEL),
+        (False, "Qwen/Qwen3-TTS-12Hz-0.6B-Base"),
+        (True, "Qwen/Qwen3-TTS-12Hz-0.6B-Base"),
+    ],
+)
 def test_training_uses_local_snapshot_holdout_and_never_promotes_automatically(
     enrolled,
     monkeypatch,
     tmp_path,
     fail_sft,
     resume_run,
+    model,
     resume_models,
 ):
     profile = load_voice(enrolled.data, "test-voice")
@@ -126,11 +137,12 @@ def test_training_uses_local_snapshot_holdout_and_never_promotes_automatically(
             cuda=SimpleNamespace(is_available=lambda: True, is_bf16_supported=lambda: True),
         ),
     )
+    downloads = []
     monkeypatch.setitem(
         sys.modules,
         "huggingface_hub",
         SimpleNamespace(
-            snapshot_download=lambda **kwargs: str(snapshot),
+            snapshot_download=lambda **kwargs: downloads.append(kwargs) or str(snapshot),
         ),
     )
     original_run = subprocess.run
@@ -144,8 +156,10 @@ def test_training_uses_local_snapshot_holdout_and_never_promotes_automatically(
             output = Path(command[command.index("--output_jsonl") + 1])
             output.write_text("{}\n")
             return SimpleNamespace()
-        if len(command) > 1 and command[1].endswith("sft_12hz.py"):
+        if command[1:3] == ["-m", "yapit.training.sft_runner"]:
             calls.append(command)
+            assert command[3] == str(training_dir / "sft_12hz.py")
+            assert command[4].endswith(".tensorboard")
             initialization = Path(command[command.index("--init_model_path") + 1])
             if resume_run:
                 assert json.loads((initialization / "config.json").read_text()) == json.loads(
@@ -170,9 +184,9 @@ def test_training_uses_local_snapshot_holdout_and_never_promotes_automatically(
     def execute():
         if resume_run:
             return resume_checkpoint(
-                enrolled, profile.name, resume_models.checkpoint, upstream, epochs=1
+                enrolled, profile.name, resume_models.checkpoint, upstream, epochs=1, model=model
             )
-        return train(enrolled, profile.name, upstream, epochs=1)
+        return train(enrolled, profile.name, upstream, epochs=1, model=model)
 
     if fail_sft:
         with pytest.raises(subprocess.CalledProcessError):
@@ -187,6 +201,13 @@ def test_training_uses_local_snapshot_holdout_and_never_promotes_automatically(
     assert status["status"] == ("failed" if fail_sft else "trained_needs_listening_review")
     transcript_dir = enrolled.data.transcripts
     prefix = statuses[0].name.removesuffix(".status.json")
+    assert downloads[0]["repo_id"] == model
+    provenance = json.loads((enrolled.root / "outputs" / f"{prefix}.training.json").read_text())
+    assert provenance["base_model"] == model
+    assert len(provenance["sft_runner_sha256"]) == 64
+    assert calls[0][calls[0].index("--tokenizer_model_path") + 1] == str(
+        snapshot / "speech_tokenizer"
+    )
     train_rows = [
         json.loads(row)
         for row in (transcript_dir / f"{prefix}.train.jsonl").read_text().splitlines()
@@ -209,6 +230,79 @@ def test_training_uses_local_snapshot_holdout_and_never_promotes_automatically(
         assert initialization == snapshot
     assert all(path.read_bytes() == content for path, content in originals.items())
     assert load_voice(enrolled.data, profile.name).checkpoint is None
+
+
+def test_training_rejects_non_base_model_choice_before_loading_dependencies(enrolled, tmp_path):
+    with pytest.raises(ValueError, match="official"):
+        train(enrolled, "test-voice", tmp_path, model="Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice")
+
+
+@pytest.mark.parametrize("fail", [False, True])
+@pytest.mark.parametrize("text_dimension", [1024, 2048])
+def test_sft_runner_supplies_logging_directory_and_restores_process_state(
+    tmp_path, monkeypatch, fail, text_dimension
+):
+    calls = []
+    hooks = []
+    removed = []
+    output = np.ones((1, 2, text_dimension))
+    text = SimpleNamespace(
+        embedding_dim=text_dimension,
+        register_forward_hook=lambda callback: (
+            hooks.append(callback) or SimpleNamespace(remove=lambda: removed.append(True))
+        ),
+    )
+    codec = SimpleNamespace(embedding_dim=1024)
+    talker = SimpleNamespace(
+        model=SimpleNamespace(text_embedding=text, codec_embedding=codec),
+        text_projection=lambda output: output[..., :1024],
+    )
+    loaded = SimpleNamespace(model=SimpleNamespace(talker=talker))
+    loads = []
+
+    def accelerator(**kwargs):
+        calls.append((kwargs, sys.argv.copy()))
+        if fail:
+            raise RuntimeError("upstream failure")
+
+    namespace = {
+        "Accelerator": accelerator,
+        "Qwen3TTSModel": SimpleNamespace(
+            from_pretrained=lambda *args, **kwargs: loads.append((args, kwargs)) or loaded
+        ),
+    }
+    exec(
+        "def train():\n"
+        "    Qwen3TTSModel.from_pretrained('snapshot', torch_dtype='bf16')\n"
+        "    Accelerator(gradient_accumulation_steps=4, mixed_precision='bf16', "
+        "log_with='tensorboard')\n",
+        namespace,
+    )
+    monkeypatch.setattr("yapit.training.sft_runner.runpy.run_path", lambda _: namespace)
+    argv, path = sys.argv, sys.path.copy()
+    script = tmp_path / "sft_12hz.py"
+    logs = tmp_path / "logs"
+    if fail:
+        with pytest.raises(RuntimeError, match="upstream failure"):
+            run_sft(script, logs, ["--num_epochs", "3"])
+    else:
+        run_sft(script, logs, ["--num_epochs", "3"])
+    assert calls == [
+        (
+            {
+                "gradient_accumulation_steps": 4,
+                "mixed_precision": "bf16",
+                "log_with": "tensorboard",
+                "project_dir": str(logs),
+            },
+            [str(script), "--num_epochs", "3"],
+        )
+    ]
+    assert sys.argv is argv and sys.path == path
+    assert loads == [(("snapshot",), {"torch_dtype": "bf16"})]
+    assert len(hooks) == len(removed) == (1 if text_dimension == 2048 else 0)
+    if hooks:
+        assert hooks[0](text, (), output).shape == (1, 2, 1024)
 
 
 def test_checkpoint_selection_checks_speaker_and_model_type(enrolled, tmp_path):

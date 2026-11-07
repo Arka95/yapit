@@ -27,6 +27,15 @@ provenance, bounds on epochs/batch size/learning rate and subprocess timeouts
 remain unchanged.
 
 Upstream `prepare_data.py` and `sft_12hz.py` run as explicit subprocesses.
+The owned `sft_runner.py` launcher supplies a per-job TensorBoard logging directory
+missing from upstream's Accelerator constructor; it preserves all upstream
+training arguments and leaves the reviewed checkout unchanged.
+Provenance includes the launcher's SHA-256; data preparation uses the selected
+Base snapshot's local speech tokenizer rather than resolving a separate revision.
+For smaller Base architectures whose text/codec embedding widths differ,
+the launcher applies the model's own text projection through a temporary
+embedding hook, matching inference's dimensional conversion. Equal-width
+1.7B training is unchanged; hooks are removed on success or failure.
 The wrapper passes a local base snapshot directory, never a Hub identifier as
 the checkpoint-copy source. Training status/logs persist on failure; profile
 promotion requires a separate reviewed `select_checkpoint` call.
@@ -42,7 +51,11 @@ The owned temporary Base initialization is removed on both success and failure.
 Training provenance records the resume path/weight hash and new optimizer
 semantics. The unchanged upstream trainer initializes a fresh optimizer;
 there is no optimizer/scheduler/step-state restoration or automatic promotion.
-The default Base snapshot is resolved for each run, not recovered from an external
+The explicit `model`/CLI `--model` selects the official 1.7B or 0.6B Base,
+with 1.7B unchanged as the default. The resolved config must be Base; model ID
+and snapshot path are recorded in provenance. Resume uses the same selection
+and existing architecture/tensor checks, not the inference `YAPIT_MODEL`.
+The Base snapshot is resolved for each run, not recovered from an external
 checkpoint's provenance; matching architecture/shapes is not proof of identical
 Base weights. Use the same Base lineage and validate quality separately.
 

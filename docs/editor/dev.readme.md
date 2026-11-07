@@ -1,12 +1,26 @@
 # Editor development
 
+`mixing.py` owns validated `AudioMix`, real-speech sidechain ducking, smooth
+per-beat music gain, music-only fades and a minimum 0.5-second closing hold
+(default 0.75). `generation.py` publishes a video from existing audio/timing
+without speech synthesis or music acquisition. Root CLI/Pipeline/MCP provide
+optional locally curated beat levels; Editor itself never searches for music.
+
+`render_guide` returns the frame-rounded video duration after publication.
+Its last displayed cue/time and palette include the closing hold; narration
+Timeline/SRT end times remain unchanged. Narration is padded only after its end,
+not between sentences. Source files are never overwritten. Metadata reports
+`seconds` for narration and `video_seconds` for the complete video.
+
 Source is `src\editor`; public imports are `yapit.editor`. See
 [usage and palette](README.md) and the [folder-level project layout](../dev.readme.md#flat-source-layout).
 
 ## Responsibilities
 
 `templates.py` selects a background from finite positive cue duration and builds
-RGB numbered slates. Green is bright `#00ff00`; darkgreen is `#006400`.
+RGB numbered slates. Clip/time labels scale with output width and form a
+centered block. Green is bright `#00ff00` with darkgreen `#006400` as its
+alternate; the 3-4s band is peach `#ffdab9` with orange `#ffa500` as its alternate.
 Outlined labels stay legible on light backgrounds.
 
 `render.py` turns a validated continuous Timeline into slates/playlist/SRT, muxes
@@ -40,6 +54,9 @@ The renderer's return value is `None`, preserving the existing API.
 
 Colour selection uses the cue's unrounded duration. Encoding uses cumulative
 rounded end frames, avoiding independent per-cue rounding drift.
+The renderer compares base duration-band colours and alternates only within
+the current contiguous run. A band change resets alternation, regardless of
+the overall clip index or any earlier occurrence of that band.
 The generated concat playlist specifies `option framerate` for every PNG
 (including the terminal repeated image), matching the output fps. This avoids
 the image demuxer's default time base shifting clip transitions.

@@ -5,7 +5,8 @@ from pathlib import Path
 
 from yapit.common_utils.fileutils import copy_file_exclusive
 from yapit.common_utils.mediautils import run_media, srt_time
-from yapit.editor.templates import create_placeholder
+from yapit.editor.mixing import AudioMix, audio_filters
+from yapit.editor.templates import create_placeholder, placeholder_colour
 from yapit.models import Timeline
 
 
@@ -17,19 +18,32 @@ def render_guide(
     video: Path,
     captions: Path | None = None,
     prefix: str = "",
-) -> None:
+    music: Path | None = None,
+    mix: AudioMix | None = None,
+) -> float:
     if prefix and not re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9_.-]*", prefix):
         raise ValueError("Video prefix must be a simple ASCII filename.")
+    settings = mix or AudioMix()
+    inputs, graph, seconds = audio_filters(timeline, audio, music, settings)
     output.mkdir(parents=True, exist_ok=True)
     stem = f"{prefix}." if prefix else ""
     srt = []
     concat = []
     total_frames = 0
+    previous_colour = None
+    alternate = False
     for index, cue in enumerate(timeline.cues, start=1):
-        image = create_placeholder(timeline, cue, index)
+        display = cue.model_copy(update={"end": seconds}) if index == len(timeline.cues) else cue
+        colour = placeholder_colour(display.end - display.start)
+        alternate = not alternate if colour == previous_colour else False
+        image = create_placeholder(timeline, display, index, alternate=alternate)
+        previous_colour = colour
         slate = output / f"{stem}clip-{index:03}.png"
         image.save(slate)
-        end_frame = max(total_frames + 1, round(cue.end * timeline.fps))
+        end_frame = max(
+            total_frames + 1,
+            round((seconds if index == len(timeline.cues) else cue.end) * timeline.fps),
+        )
         frames = end_frame - total_frames
         total_frames = end_frame
         concat += [
@@ -61,10 +75,13 @@ def render_guide(
             str(playlist),
             "-i",
             str(audio),
+            *inputs,
+            "-filter_complex",
+            graph,
             "-map",
             "0:v:0",
             "-map",
-            "1:a:0",
+            "[mixed]",
             "-vf",
             f"fps={timeline.fps},format=yuv420p",
             "-c:v",
@@ -78,7 +95,7 @@ def render_guide(
             "-b:a",
             "192k",
             "-t",
-            f"{timeline.seconds:.6f}",
+            f"{seconds:.8f}",
             "-movflags",
             "+faststart",
             str(output / f"{stem}guide.mp4"),
@@ -88,3 +105,4 @@ def render_guide(
     rendered = output / f"{stem}guide.mp4"
     copy_file_exclusive(rendered, video)
     rendered.unlink()
+    return seconds

@@ -9,15 +9,22 @@ from yapit.models import Cue, Timeline
 
 
 def test_coloured_clips_follow_frame_durations_and_publish_complete_video(tmp_path):
-    durations = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5]
+    durations = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 2.1, 2.9, 2.1, 3.1, 3.9, 3.2, 2.5]
     colours = [
         (255, 0, 0),
         (0, 255, 255),
         (0, 255, 0),
-        (0, 100, 0),
+        (255, 218, 185),
         (0, 0, 255),
         (255, 255, 0),
         (255, 0, 255),
+        (0, 255, 0),
+        (0, 100, 0),
+        (0, 255, 0),
+        (255, 218, 185),
+        (255, 165, 0),
+        (255, 218, 185),
+        (255, 165, 0),
     ]
     cues = []
     start = 0
@@ -33,14 +40,16 @@ def test_coloured_clips_follow_frame_durations_and_publish_complete_video(tmp_pa
     work = tmp_path / "workspace"
     video = tmp_path / "data" / "generated_video" / "trip.guide.mp4"
     captions = tmp_path / "data" / "transcripts" / "trip.captions.srt"
-    render_guide(timeline, audio, work, video=video, captions=captions, prefix="trip")
+    seconds = render_guide(timeline, audio, work, video=video, captions=captions, prefix="trip")
     assert video.is_file()
     assert not (work / "trip.guide.mp4").exists()
     assert "Clip 6" in captions.read_text()
     for index, colour in enumerate(colours, start=1):
         with Image.open(work / f"trip.clip-{index:03}.png") as slate:
             assert slate.getpixel((0, 0)) == colour
-    expected = np.repeat(np.asarray(colours), [round(d * timeline.fps) for d in durations], axis=0)
+    frame_counts = [round(d * timeline.fps) for d in durations]
+    frame_counts[-1] += round(seconds * timeline.fps) - round(start * timeline.fps)
+    expected = np.repeat(np.asarray(colours), frame_counts, axis=0)
     reader = imageio_ffmpeg.read_frames(str(video))
     try:
         metadata = next(reader)
@@ -53,7 +62,8 @@ def test_coloured_clips_follow_frame_durations_and_publish_complete_video(tmp_pa
         reader.close()
     assert len(pixels) == len(expected)
     assert np.max(np.abs(np.asarray(pixels, dtype=int) - expected)) <= 5
-    assert len(decode_audio(video)) / SAMPLE_RATE == pytest.approx(start, abs=0.05)
+    assert len(decode_audio(video)) / SAMPLE_RATE == pytest.approx(seconds, abs=0.05)
+    assert seconds - start >= 0.75
 
 
 def test_render_failure_does_not_publish_video(tmp_path, monkeypatch):
@@ -65,10 +75,12 @@ def test_render_failure_does_not_publish_video(tmp_path, monkeypatch):
         seconds=5, cues=[Cue(start=0, end=5, text="Test", visual="Footage", beat=0)]
     )
     video = tmp_path / "data" / "generated_video" / "failed.mp4"
+    audio = tmp_path / "audio.wav"
+    write_wav(audio, np.zeros(5 * SAMPLE_RATE, dtype=np.float32))
     with pytest.raises(RuntimeError, match="encoding failed"):
         render_guide(
             timeline,
-            tmp_path / "audio.wav",
+            audio,
             tmp_path / "workspace",
             video=video,
             captions=tmp_path / "captions.srt",

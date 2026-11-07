@@ -143,9 +143,28 @@ def resample(data: np.ndarray, sample_rate: int) -> np.ndarray:
     return np.frombuffer(result.stdout, dtype="<f4").copy()
 
 
-def fit_audio(raw: Path, output: Path, target: float) -> tuple[np.ndarray, float]:
-    data = decode_audio(raw)
+def fit_audio(
+    raw: Path,
+    output: Path,
+    target: float,
+    *,
+    natural_duration_tolerance: float | None = None,
+) -> tuple[np.ndarray, float]:
+    if natural_duration_tolerance is not None and (
+        not math.isfinite(natural_duration_tolerance) or natural_duration_tolerance < 0
+    ):
+        raise ValueError("Natural-duration tolerance must be finite and non-negative.")
+    maximum = max(190, target + (natural_duration_tolerance or 0))
+    data = decode_audio(raw, max_seconds=maximum)
     duration = len(data) / SAMPLE_RATE
+    if natural_duration_tolerance is not None:
+        if abs(duration - target) > natural_duration_tolerance:
+            raise ValueError(
+                f"Narration is {duration:.2f}s for a {target:.2f}s target, outside the "
+                f"+/-{natural_duration_tolerance:.2f}s natural-duration tolerance. "
+                "Rewrite the script; speech was not stretched or padded."
+            )
+        return data, 1.0
     factor = duration / target
     if abs(duration - target) <= 0.04:
         return data, 1.0

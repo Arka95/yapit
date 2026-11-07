@@ -1,6 +1,6 @@
 # YapIt library boundaries and dependency plan
 
-Status: enrollment, shared utilities, Rescript, Yapper, Editor and training are implemented
+Status: enrollment, shared utilities, Rescript, Yapper, Musicgen, Editor and training are implemented
 as logical modules in one distribution. Independently distributed provider
 packages in the proposal below are not implemented.
 Inventory date: November 7, 2026. The CosyVoice setup/trial is separate paused
@@ -26,7 +26,9 @@ not a claim that the full proposed provider split has been implemented.
 
 Yapper now owns `script_planner.py`/`script_prompt.txt`, local synthesis,
 audio generation and measured timelines under `src\yapper`, with audio/planning
-tests there. Editor owns video rendering/templates and rendering-only tests
+tests there. Musicgen owns opt-in, script-aware CC0 music acquisition under
+`src\musicgen`; AI music generation is deferred. Editor owns music mixing,
+closing holds, video rendering/templates and rendering-only tests
 under `src\editor`. Root CLI/MCP/Pipeline remain thin cross-module adapters;
 contracts, configuration and storage remain shared root-source modules.
 Explicit fine-tuning and checkpoint-selection code/tests now live under

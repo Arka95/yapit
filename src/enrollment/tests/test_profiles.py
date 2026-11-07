@@ -7,6 +7,7 @@ import sys
 
 import numpy as np
 import pytest
+from pydantic import ValidationError
 from typer.testing import CliRunner
 
 from yapit.common_utils.fileutils import data_filename, save_json
@@ -22,6 +23,10 @@ def test_profile_merge_replaces_same_filename_preserves_settings_and_lowercases(
     voice = load_voice(enrolled, "test-voice")
     voice.checkpoint = "keep-this-checkpoint"
     voice.speaker = "test-voice"
+    voice.writing_style = "relaxed and informal"
+    voice.frequent_words = ["insane", "so cool"]
+    voice.preferred_greeting = "yo guys"
+    voice.travel_preferences = {"pace": "slow"}
     save_json(enrolled.voice_path(voice.name), voice)
     source = tmp_path / "TAKE-1.WAV"
     write_wav(source, tone(frequency=390))
@@ -33,6 +38,11 @@ def test_profile_merge_replaces_same_filename_preserves_settings_and_lowercases(
     assert len(result.samples) == 5
     assert result.checkpoint == voice.checkpoint
     assert result.speaker == voice.speaker
+    saved = load_voice(enrolled, "test-voice")
+    assert saved.writing_style == voice.writing_style
+    assert saved.frequent_words == voice.frequent_words
+    assert saved.preferred_greeting == voice.preferred_greeting
+    assert saved.model_dump()["travel_preferences"] == {"pace": "slow"}
     assert unchanged.read_bytes() == old
     changed = next(sample for sample in result.samples if sample.audio == "test-voice.take-1.wav")
     assert changed.text == "The replacement text."
@@ -51,6 +61,41 @@ def test_profile_merge_replaces_same_filename_preserves_settings_and_lowercases(
         for path in (enrolled.root / "test-voice").rglob("*")
         if path.is_file()
     )
+
+
+def test_existing_profile_gains_defaults_and_preserves_extra_metadata(enrolled):
+    path = enrolled.voice_path("test-voice")
+    payload = json.loads(path.read_text())
+    for field in ("writing_style", "frequent_words", "preferred_greeting"):
+        payload.pop(field, None)
+    payload["custom_preferences"] = {"topics": ["travel"], "emoji": False}
+    save_json(path, payload)
+    profile = load_voice(enrolled, "test-voice")
+    assert profile.writing_style == "energetic and informal"
+    assert profile.frequent_words == []
+    assert profile.preferred_greeting is None
+    save_json(path, profile)
+    saved = json.loads(path.read_text())
+    assert saved["custom_preferences"] == payload["custom_preferences"]
+    assert saved["writing_style"] == "energetic and informal"
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("samples", "not a list"),
+        ("words_per_minute", float("nan")),
+        ("frequent_words", "insane"),
+        ("preferred_greeting", ""),
+    ],
+)
+def test_flexible_metadata_does_not_disable_declared_field_validation(enrolled, field, value):
+    path = enrolled.voice_path("test-voice")
+    payload = json.loads(path.read_text())
+    payload[field] = value
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValidationError):
+        load_voice(enrolled, "test-voice")
 
 
 def test_new_profile_minimum_and_invalid_update_do_not_modify_existing(enrolled, tmp_path):

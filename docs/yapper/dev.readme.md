@@ -10,6 +10,7 @@ under `docs`, not beside Python sources. See [usage](README.md) and the
 |---|---|
 | `script_planner.py`, `script_prompt.txt` | Text/JSON loading, deterministic prompt composition and explicitly opted-in cloud writing |
 | `speech.py` | `SpeechBackend` protocol and lazy native Qwen model/reference/checkpoint adapter |
+| `worker.py` | Authenticated loopback worker, one resident model, bounded private speech cache and load/request telemetry |
 | `generation.py` | Narration workflow, reusable synthesis/encoding renderer and failure/status handling |
 | `timeline.py` | Measured beat/pause scaling, quiet-window cuts and approximate phrase grouping |
 | `cli.py`, `__main__.py`, `__init__.py` | CLI and public audio API |
@@ -54,17 +55,40 @@ WAV/MP3 encoding and decode validation. Do not duplicate these utilities here.
 
 ## Preserved policies and limitations
 
+When a worker state exists, `generation.render_audio` uses its local client.
+The worker binds only 127.0.0.1 on an ephemeral port, requires a per-run bearer
+token, rejects browser origins/foreign Host headers, disables proxy/redirect
+routing and confines voice assets to the data root. Its state is owner-only
+(Windows ACL or POSIX mode 0600); no token is printed.
+
+One model is retained, with a non-queued single-generation lock. Switching
+weights/speaker/reference reloads that model; writing metadata does not.
+Checkpoint/config/reference timestamps and SDK version invalidate cached FLOAT
+WAVs. Cache bypass retains the model. Startup is offline; device/dtype and
+separate load/request timings are reported by `voice-worker-status`.
+The worker's runtime controls the device even for CPU-only frontend clients;
+`YAPIT_VOICE_WORKER=0` restores the frontend's one-shot device selection.
+This is not a machine-wide GPU lock, hosted API or durable job queue.
+
 One Qwen backend and clone prompt are reused across a render. SDK imports/model
 loading stay lazy; supplied-text parsing and prompt preparation need no model.
 Automatic device selection logs CPU fallback at model load, not per beat;
 the warning uses logging/stderr without contaminating CLI/MCP JSON stdout.
-TTS returns validated mono 24 kHz PCM. Each beat receives its requested silence;
-aggregate narration over 190 seconds is rejected without truncation.
+TTS returns validated mono 24 kHz PCM. A copy receives 5 ms onset/offset ramps,
+leaving backend buffers and measured lengths unchanged. Each beat receives only
+its requested silence; existing model-generated pauses are not deduplicated.
+Audio-only aggregate narration over 190 seconds is rejected without truncation.
+Reels also support the upper edge of the +/-33% range for a 180-second target
+(239.4 seconds); Timeline permits up to 240 seconds.
 
-Existing duration/tempo gates, raw/fitted audio retention, filename reservation,
-provenance and failure logs are preserved. Tempo fitting scales inserted silence
-too; exact pause preservation and natural-silence deduplication are not new
-features. There is no per-word alignment, human-script emphasis analyser, automatic
+`Pipeline.reel` passes `natural_duration_tolerance=brief.seconds * 0.33` to
+`render_audio`/`fit_audio` for video jobs. In-range speech is retained at 1.0x;
+out-of-range speech requires a script revision, not padding or stretching.
+Prompt and optional cloud-planning acceptance use the same range.
+Standalone `generate_audio` and narration-only Pipeline jobs retain the existing
++/-5-second and 0.90-1.10x fitting gates. Raw/fitted retention, filename
+reservation, provenance and failure logs remain unchanged.
+There is no per-word alignment, human-script emphasis analyser, automatic
 weight training or production CosyVoice provider.
 
 ## Validation

@@ -68,6 +68,14 @@ differs from imported profile text, the slot is not silently relabeled as matchi
 the static passage. Finishing exports a compatible `Voice`, retaining selected
 checkpoint/speaker/style settings; no model weights are changed.
 
+The shared `Voice` schema permits extra profile keys and preserves them on
+serialization and enrollment merges. Known fields remain validated.
+`writing_style` defaults to `energetic and informal`; optional `frequent_words`
+and `preferred_greeting` default to `[]` and null. Missing metadata in older
+profiles is supplied at load time and persisted on the next save, without a
+bulk migration. Script/media contracts retain their existing extra-field policy.
+Writing metadata is not yet consumed by Yapper's prompt builder or speech backend.
+
 There are no legacy lookup or migration paths. `DataStore` owns canonical profile
 paths and confines accepted recordings to the data root. The application
 `Workspace` delegates profile paths to this store for generation/training; it is

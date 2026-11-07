@@ -83,3 +83,27 @@ def test_cloud_revision_is_bounded_and_uses_duration_feedback(monkeypatch):
     assert generate_script(Brief(topic="Trip", seconds=5), []) == short
     assert len(calls) == 2
     assert "Previous draft estimated 40.0s; target 5.0s." in calls[1]["instructions"]
+
+
+def test_video_planning_accepts_useful_draft_within_wider_buffer(monkeypatch):
+    monkeypatch.setenv("YAPIT_ALLOW_CLOUD", "true")
+    monkeypatch.setenv("OPENAI_API_KEY", "not-a-real-key")
+    calls = []
+    supplied = Script(title="Natural", beats=[Beat(text="word " * 55, pause_ms=0)])
+
+    def parse(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(output_parsed=supplied)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "openai",
+        SimpleNamespace(
+            OpenAI=lambda **kwargs: SimpleNamespace(responses=SimpleNamespace(parse=parse)),
+        ),
+    )
+    assert generate_script(Brief(seconds=30), [], duration_tolerance=9.9) == supplied
+    assert len(calls) == 1
+    prompt = calls[0]["input"][0]["content"][0]["text"]
+    assert "Acceptable estimated duration: 20.1-39.9 seconds" in prompt
+    assert "Do not add filler, inflate pauses" in prompt

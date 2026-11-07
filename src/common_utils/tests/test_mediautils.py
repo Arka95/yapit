@@ -35,6 +35,27 @@ def test_already_in_tolerance_does_not_force_extreme_stretch(tmp_path):
     assert not (tmp_path / "unused.wav").exists()
 
 
+@pytest.mark.parametrize(("target", "duration"), [(30, 28), (30, 20.1), (30, 39.9), (180, 239.4)])
+def test_video_buffer_preserves_natural_length_at_both_boundaries(tmp_path, target, duration):
+    source = tmp_path / "raw.wav"
+    write_wav(source, tone(duration))
+    audio, factor = fit_audio(
+        source, tmp_path / "unused.wav", target, natural_duration_tolerance=target * 0.33
+    )
+    assert factor == 1
+    assert len(audio) == round(duration * SAMPLE_RATE)
+    assert not (tmp_path / "unused.wav").exists()
+
+
+@pytest.mark.parametrize("duration", [20, 40])
+def test_video_buffer_rejects_outside_range_without_stretching(tmp_path, duration):
+    source = tmp_path / "raw.wav"
+    write_wav(source, tone(duration))
+    with pytest.raises(ValueError, match="Rewrite"):
+        fit_audio(source, tmp_path / "unused.wav", 30, natural_duration_tolerance=9.9)
+    assert not (tmp_path / "unused.wav").exists()
+
+
 def test_image_and_video_context_are_local_bounded_snapshots(tmp_path):
     image = tmp_path / "source.png"
     Image.new("RGB", (2000, 1000), "blue").save(image)

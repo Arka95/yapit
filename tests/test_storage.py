@@ -70,6 +70,9 @@ def test_persistent_video_reserves_output_name_and_cannot_be_a_profile(tmp_path)
     assert existing.read_bytes() == b"existing video"
     with pytest.raises(ValueError, match="shared data directory"):
         workspace.data.profile_dir("GENERATED_VIDEO")
+    assert workspace.data.background_music == workspace.data.root / "background_music"
+    with pytest.raises(ValueError, match="shared data directory"):
+        workspace.data.profile_dir("BACKGROUND_MUSIC")
 
 
 def test_flat_output_reservation_is_safe_and_concurrent(tmp_path):

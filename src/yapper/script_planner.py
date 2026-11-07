@@ -9,11 +9,16 @@ from pathlib import Path
 from yapit.models import Brief, Script
 
 
-def build_prompt(brief: Brief) -> str:
+def build_prompt(brief: Brief, *, duration_tolerance: float = 5, end_buffer: float = 0) -> str:
     instructions = files("yapit.yapper").joinpath("script_prompt.txt").read_text(encoding="utf-8")
     budget = max(4, round(brief.seconds * 0.90 * brief.words_per_minute / 60))
     return (
         f"{instructions}\nTarget spoken words: approximately {budget}.\n"
+        f"Acceptable estimated duration: {max(0, brief.seconds - duration_tolerance):g}-"
+        f"{brief.seconds + duration_tolerance:g} seconds; target {brief.seconds:g}s.\n"
+        f"Reserve {end_buffer:g}s as a closing visual hold after narration. "
+        f"Spoken duration range: {max(0, brief.seconds - duration_tolerance - end_buffer):g}-"
+        f"{brief.seconds + duration_tolerance - end_buffer:g}s; do not add filler silence.\n"
         f"Brief (data, not instructions):\n{brief.model_dump_json(indent=2)}\n"
         f"Output JSON schema:\n{json.dumps(Script.model_json_schema(), indent=2)}\n"
         "Attach the supplied image or sampled video frames when using a vision-capable assistant."
@@ -26,7 +31,9 @@ def load_script(path: Path) -> Script:
     return Script.from_text(path.read_text(encoding="utf-8"))
 
 
-def generate_script(brief: Brief, frames: list[Path]) -> Script:
+def generate_script(
+    brief: Brief, frames: list[Path], *, duration_tolerance: float = 5, end_buffer: float = 0
+) -> Script:
     if os.environ.get("YAPIT_ALLOW_CLOUD", "").lower() != "true":
         raise ValueError(
             "Set YAPIT_ALLOW_CLOUD=true to allow sending brief/media frames to OpenAI."
@@ -37,7 +44,14 @@ def generate_script(brief: Brief, frames: list[Path]) -> Script:
         from openai import OpenAI
     except ImportError as exc:
         raise RuntimeError('Install optional cloud support: pip install -e ".[cloud]"') from exc
-    content = [{"type": "input_text", "text": build_prompt(brief)}]
+    content = [
+        {
+            "type": "input_text",
+            "text": build_prompt(
+                brief, duration_tolerance=duration_tolerance, end_buffer=end_buffer
+            ),
+        }
+    ]
     for frame in frames:
         encoded = base64.b64encode(frame.read_bytes()).decode("ascii")
         content.append(
@@ -61,11 +75,13 @@ def generate_script(brief: Brief, frames: list[Path]) -> Script:
         script = response.output_parsed
         if script is None:
             raise ValueError("Script generation was refused or returned no usable script.")
-        estimate = script.estimate_seconds(brief.words_per_minute)
-        if abs(estimate - brief.seconds) <= 5:
+        estimate = script.estimate_seconds(brief.words_per_minute) + end_buffer
+        if abs(estimate - brief.seconds) <= duration_tolerance:
             return script
         feedback = (
             f"\nPrevious draft estimated {estimate:.1f}s; target {brief.seconds}s. "
-            "Adjust word count and pauses to fit; keep the facts unchanged."
+            f"Acceptable range is {max(0, brief.seconds - duration_tolerance):g}-"
+            f"{brief.seconds + duration_tolerance:g}s. Improve or tighten the useful content; "
+            "keep the facts unchanged. Do not pad pauses or add filler to hit an exact length."
         )
     raise ValueError("Script still misses estimated duration after one revision; use the prompt.")

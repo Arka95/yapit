@@ -103,6 +103,14 @@ def test_training_cli_distinguishes_fresh_resume_and_inference_selection(enrolle
     assert calls[1][1][2] == Path(directory)
     assert calls[1][1][3] == Path(directory)
     assert calls[2][1][2] == Path(directory)
+    smaller = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
+    for arguments in [
+        [*training, "--model", smaller],
+        [*training, "--resume", directory, "--model", smaller],
+    ]:
+        result = runner.invoke(app, arguments)
+        assert result.exit_code == 0, result.output
+        assert calls[-1][2]["model"] == smaller
 
 
 @pytest.mark.parametrize(

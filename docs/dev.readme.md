@@ -15,6 +15,7 @@ and module-local tests belong in the linked developer guides.
 | `src\enrollment\` | Model-free microphone recording, sample curation and reusable voice profiles | [Enrollment](enrollment/dev.readme.md) |
 | `src\rescript\` | Media audio extraction and local speech recognition into reviewable scripts | [Rescript](rescript/dev.readme.md) |
 | `src\yapper\` | Script planning, local speech synthesis, pauses/duration fitting and measured timelines | [Yapper](yapper/dev.readme.md) |
+| `src\musicgen\` | Optional script-aware CC0 music search, source verification and downloads | [Musicgen](musicgen/dev.readme.md) |
 | `src\editor\` | Video templates, duration-coloured placeholders, captions and edit-guide rendering | [Editor](editor/dev.readme.md) |
 | `src\training\` | Explicit voice fine-tuning, weights-only continuation and checkpoint selection | [Training](training/dev.readme.md) |
 | `src\mcp\` | Stdio MCP tools, server entry points, client configuration examples and protocol tests | [MCP](mcp/dev.readme.md) |
@@ -32,6 +33,7 @@ and module-local tests belong in the linked developer guides.
 | `data\transcripts\` | Reviewed scripts, ASR sidecars, captions and training datasets |
 | `data\generated_audio\` | Generated narration and raw/fitted audio intermediates |
 | `data\generated_video\` | Completed edit-guide videos |
+| `data\background_music\` | Optional CC0 music and licensing/curation sidecars |
 | `workspace\enrollment\` | Resumable enrollment drafts, raw takes and temporary capture artifacts |
 | `workspace\outputs\` | Job metadata, prompts, measured timelines, logs and temporary rendering artifacts |
 | `.venv*` | Isolated application runtimes and optional experimental worker environments |
@@ -66,6 +68,7 @@ flowchart TB
         Rescript["<b>Rescript</b><br/>- Extract audio<br/>- Transcribe to Script"]:::svc
         Yapper["<b>Yapper</b><br/>- Plan / load Script<br/>- Local narration<br/>- Audio / timing"]:::svc
         Editor["<b>Editor</b><br/>- Coloured placeholders<br/>- MP4 / captions"]:::svc
+        Musicgen["<b>Musicgen (optional)</b><br/>- Script-aware curation<br/>- Verify / download CC0"]:::svc
         Training["<b>Training</b><br/>- Fine-tune / resume<br/>- Validate / select"]:::svc
         MCP["<b>MCP</b><br/>- Stdio tools<br/>- Delegate workflows"]:::svc
 
@@ -74,12 +77,14 @@ flowchart TB
         Training -->|"Selected checkpoint"| Yapper
         Rescript -->|"Reviewed Script"| Yapper
         Yapper -->|"Audio / timing"| Editor
+        Yapper -. "Script for optional curation" .-> Musicgen
+        Musicgen -. "Explicitly selected music" .-> Editor
         MCP -->|"Enrollment"| Enrollment
         MCP -->|"Narration / reel"| Yapper
         MCP -->|"Rendering"| Editor
     end
     MAIN ~~~ SUM
-    SUM["<div style='width:1650px'><b>Reel generation by module</b><br/><b>How to read:</b> Arrows = hand-offs/tool delegation; blue = modules, grey = summary.<br/><b>Summary:</b> CLI/Pipeline coordinates narration and editing; Training/MCP are optional. Checkpoint selection is manual.<br/><i>Backed by: src/pipeline.py:18; src/mcp/server.py:22. Output: editing guide.</i></div>"]:::caption
+    SUM["<div style='width:1650px'><b>Reel generation by module</b><br/><b>How to read:</b> Arrows = hand-offs/tool delegation; blue = modules, grey = summary.<br/><b>Summary:</b> CLI/Pipeline coordinates narration and editing; music is off by default. Checkpoint selection is manual.<br/><i>Backed by: src/pipeline.py; src/musicgen/catalog.py; src/mcp/server.py. Output: editing guide.</i></div>"]:::caption
     style MAIN fill:none,stroke:none;
     classDef svc fill:#cfe3ff,stroke:#2b6cb0,color:#0b2545;
     classDef caption fill:#f7f7f7,stroke:#999,color:#222,font-size:16px;
@@ -430,9 +435,16 @@ Editor for reels. `yapper\generation.py` owns direct narration and a reusable
 audio renderer: it saves script/provenance, synthesizes beats and inserts explicit
 pauses. Both workflows reserve names and persist flat brief/status files under
 `workspace\outputs`; scripts land in `data\transcripts`.
-`common_utils\mediautils.py` fits audio using FFmpeg's pitch-preserving `atempo` only
-within 0.90-1.10x. A larger adjustment is refused unless the unadjusted audio
-already fits the +/-5 second tolerance. The encoded MP3 is decoded and checked
+Videos retain natural speech within +/-33% of the requested duration; a
+30-second target accepts 20.1-39.9 seconds. No filler silence or speed adjustment
+is used to force an exact video length. This includes Editor's 0.75-second
+closing hold (minimum 0.5 seconds), with at most one frame of rounding.
+Music is optional/off by default; explicit music files receive beat-level gain,
+real-speech ducking and music-only fades. Audio-only
+`common_utils\mediautils.py` fitting uses FFmpeg's pitch-preserving `atempo` only
+within 0.90-1.10x; a larger adjustment is refused unless the unadjusted audio
+already fits the +/-5 second tolerance. Five-millisecond speech-edge ramps
+soften waveform joins without trimming speech. The encoded MP3 is decoded and checked
 again before the run can complete. Failure writes `<name>.status.json` and `<name>.error.log`
 for render jobs inside the owning workflow's error-handling block.
 `yapit narrate`, `yapit audiogen` and MCP narration use Yapper directly,
@@ -446,7 +458,10 @@ encoded narration, splits longer beats, and prefers quiet windows near suggested
 sub-cuts. Phrase captions are proportional word groups, not forced alignment.
 `editor\templates.py` supplies solid-colour backgrounds selected from each cue's
 duration, retaining readable numbered labels. Bands are red <1s, cyan 1-<2s,
-green 2-<3s, darkgreen 3-<4s, blue 4-<5s, yellow 5-6s, and magenta >6s.
+green 2-<3s, peach 3-<4s, blue 4-<5s, yellow 5-6s, and magenta >6s.
+Large clip/time labels are centered. Consecutive cues in the same duration
+band alternate base/darker shades; a band change resets the sequence.
+Green alternates with darkgreen, and peach with orange.
 The guide is numbered placeholder slates at 1080x1920 and 30 fps, not generated
 travel footage or automatic editing of the source video.
 Rendering uses workspace slates/playlists and a temporary encoded video;
@@ -602,7 +617,9 @@ invalidates their paths. Project guardrails require at least ten distinct clips
 and 60 seconds; 5-15 clean minutes is a recommendation, not a quality guarantee.
 The wrapper deterministically holds out about 10%, prepares codec tokens, and
 records the upstream commit and base Hub snapshot used for training. This path
-resolves its own base Hub snapshot; `YAPIT_MODEL` is an inference setting.
+resolves its own Base Hub snapshot; `--model` selects the official 1.7B
+(default) or 0.6B Base, including for resume. `YAPIT_MODEL` is an inference
+setting and does not choose training weights.
 
 Checkpoint selection is manual: compare held-out phrases and choose by listening,
 not just the last epoch. Only reviewed local custom-voice checkpoints containing

@@ -1,11 +1,13 @@
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 from yapit.common_utils.mediautils import SAMPLE_RATE, decode_audio, write_wav
 from yapit.enrollment.styles import enroll_style
-from yapit.models import DeliveryStyle, Script, Timeline
+from yapit.models import Beat, DeliveryStyle, Script, Timeline
 from yapit.yapper import generate_audio
 
 from .conftest import ToneSpeech, script, tone
@@ -45,6 +47,31 @@ def test_narration_only_skips_video(enrolled):
     assert result["video"] is None
     assert not list(enrolled.data.generated_video.iterdir())
     assert not (Path(result["job"]) / "video").exists()
+
+
+def test_hard_speech_edges_are_softened_without_mutating_backend_or_padding(enrolled):
+    wave = np.full(SAMPLE_RATE, 0.1, dtype=np.float32)
+    wave.setflags(write=False)
+    supplied = Script(
+        title="Joins",
+        beats=[Beat(text="First.", pause_ms=180), Beat(text="Second.", pause_ms=0)],
+    )
+    result = generate_audio(
+        supplied,
+        workspace=enrolled,
+        voice_name="test-voice",
+        seconds=5,
+        backend=SimpleNamespace(synthesize=lambda text: wave),
+    )
+    raw = decode_audio(Path(result["wav"]).with_suffix(".raw.wav"))
+    pause_samples = round(0.18 * SAMPLE_RATE)
+    second_start = SAMPLE_RATE + pause_samples
+    assert len(raw) == 2 * SAMPLE_RATE + pause_samples
+    assert raw[0] == raw[SAMPLE_RATE - 1] == raw[second_start] == raw[-1] == 0
+    assert np.all(raw[SAMPLE_RATE:second_start] == 0)
+    assert raw[SAMPLE_RATE // 2] == pytest.approx(0.1, abs=1 / 32768)
+    assert raw[second_start + SAMPLE_RATE // 2] == pytest.approx(0.1, abs=1 / 32768)
+    assert np.all(wave == 0.1)
 
 
 def test_duration_failure_is_persisted_without_truncating_speech(enrolled):

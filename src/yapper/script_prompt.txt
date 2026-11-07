@@ -23,7 +23,8 @@ silence by the application, not spoken stage directions. Do not use SSML,
 bracketed performance instructions, markdown or hashtags in narration.
 The first beat is the hook; the last is a useful takeaway, not an engagement plea.
 
-Stay within the word budget calculated below, INCLUDING room for pauses.
-Aim for the requested duration, within 5 seconds, at the supplied speaking rate.
-The audio renderer measures actual speech and refuses excessive time stretching.
-Never promise exact timing from text alone.
+Use the word budget below as a guide, INCLUDING room for pauses. Prioritize
+useful content and natural flow within the supplied acceptable duration range.
+Do not add filler, inflate pauses or impose a fixed number of beats to hit
+the target exactly. The renderer measures actual speech; never promise exact
+timing from text alone.

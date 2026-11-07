@@ -78,6 +78,8 @@ class StyleReference(Model):
 
 
 class Voice(Model):
+    model_config = ConfigDict(extra="allow")
+
     name: str
     consent: Literal[True]
     reference_audio: str
@@ -87,6 +89,9 @@ class Voice(Model):
     checkpoint: str | None = None
     speaker: str | None = None
     styles: dict[DeliveryStyle, StyleReference] = Field(default_factory=dict)
+    writing_style: Text = "energetic and informal"
+    frequent_words: list[Text] = Field(default_factory=list)
+    preferred_greeting: Text | None = None
 
 
 class Cue(Model):
@@ -98,7 +103,7 @@ class Cue(Model):
 
 
 class Timeline(Model):
-    seconds: Annotated[float, Field(gt=0, le=190)]
+    seconds: Annotated[float, Field(gt=0, le=240)]
     width: Annotated[int, Field(ge=64, le=2160)] = 1080
     height: Annotated[int, Field(ge=64, le=3840)] = 1920
     fps: Annotated[int, Field(ge=1, le=60)] = 30

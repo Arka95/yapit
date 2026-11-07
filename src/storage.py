@@ -10,7 +10,7 @@ from yapit.common_utils.fileutils import (
     reserve_artifact_name,
     safe_name,
 )
-from yapit.constants import DEFAULT_PROFILE, GENERATED_VIDEO_DIRECTORY
+from yapit.constants import BACKGROUND_MUSIC_DIRECTORY, DEFAULT_PROFILE, GENERATED_VIDEO_DIRECTORY
 
 
 class OutputArtifacts:
@@ -70,7 +70,14 @@ class DataStore:
         self.transcripts = self.root / "transcripts"
         self.generated_audio = self.root / "generated_audio"
         self.generated_video = self.root / GENERATED_VIDEO_DIRECTORY
-        for directory in (self.audio, self.transcripts, self.generated_audio, self.generated_video):
+        self.background_music = self.root / BACKGROUND_MUSIC_DIRECTORY
+        for directory in (
+            self.audio,
+            self.transcripts,
+            self.generated_audio,
+            self.generated_video,
+            self.background_music,
+        ):
             directory.mkdir(parents=True, exist_ok=True)
 
     def inside(self, value: str | Path, *, exists: bool = True) -> Path:
@@ -84,7 +91,13 @@ class DataStore:
 
     def profile_dir(self, name: str) -> Path:
         name = safe_name(name.strip()).lower()
-        if name in {"audio", "transcripts", "generated_audio", GENERATED_VIDEO_DIRECTORY}:
+        if name in {
+            "audio",
+            "transcripts",
+            "generated_audio",
+            GENERATED_VIDEO_DIRECTORY,
+            BACKGROUND_MUSIC_DIRECTORY,
+        }:
             raise ValueError("Profile name conflicts with a shared data directory.")
         return self.inside(self.root / name, exists=False)
 

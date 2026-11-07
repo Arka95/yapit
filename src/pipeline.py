@@ -5,10 +5,13 @@ from pathlib import Path
 
 from yapit.common_utils.fileutils import save_json
 from yapit.common_utils.mediautils import media_frames
-from yapit.constants import DEFAULT_PROFILE
-from yapit.editor import render_guide
+from yapit.constants import DEFAULT_PROFILE, VIDEO_DURATION_BUFFER
+from yapit.editor import AudioMix, render_guide
+from yapit.editor.mixing import video_seconds
 from yapit.enrollment.styles import select_voice
 from yapit.models import Brief, DeliveryStyle, Script
+from yapit.musicgen.models import MusicPlan
+from yapit.musicgen.planner import plan_music
 from yapit.storage import Workspace
 from yapit.yapper import SpeechBackend
 from yapit.yapper.generation import render_audio
@@ -20,13 +23,22 @@ class Pipeline:
         self.workspace = workspace
 
     def prompt(
-        self, brief: Brief, media: Path | None = None, profile: str = DEFAULT_PROFILE
+        self,
+        brief: Brief,
+        media: Path | None = None,
+        profile: str = DEFAULT_PROFILE,
+        *,
+        render_video: bool = True,
+        end_buffer: float = 0.75,
     ) -> dict:
         if not brief.topic and media is None:
             raise ValueError("Provide a topic or a local image/video.")
         job = self.workspace.output(media.stem if media else brief.topic, profile)
         frames = media_frames(media, job.metadata, prefix=job.name) if media else []
-        text = build_prompt(brief)
+        tolerance = brief.seconds * VIDEO_DURATION_BUFFER if render_video else 5
+        text = build_prompt(
+            brief, duration_tolerance=tolerance, end_buffer=end_buffer if render_video else 0
+        )
         job.path("prompt.txt").write_text(text, encoding="utf-8")
         save_json(job.path("brief.json"), brief)
         save_json(job.path("status.json"), {"status": "awaiting_script", "name": job.name})
@@ -53,10 +65,24 @@ class Pipeline:
         render_video: bool = True,
         style: DeliveryStyle = DeliveryStyle.default,
         source_name: str | None = None,
+        music: Path | None = None,
+        mix: AudioMix | None = None,
+        music_plan: MusicPlan | None = None,
     ) -> dict:
         style = DeliveryStyle(style)
+        settings = mix or AudioMix()
+        if music is not None and not render_video:
+            raise ValueError("Music mixing is video-only; narration output remains separate.")
+        if render_video and settings.end_buffer >= brief.seconds:
+            raise ValueError("Closing hold must be shorter than the requested video target.")
         if script is None and not auto_script:
-            return self.prompt(brief, media, voice_name)
+            return self.prompt(
+                brief,
+                media,
+                voice_name,
+                render_video=render_video,
+                end_buffer=settings.end_buffer,
+            )
         voice, voice_dir = select_voice(self.workspace.data, voice_name, style)
         brief = brief.model_copy(update={"words_per_minute": voice.words_per_minute})
         source = source_name or (media.stem if media else script.title if script else brief.topic)
@@ -68,25 +94,59 @@ class Pipeline:
             cloud_script = script is None and auto_script
             frames = media_frames(media, job.metadata, prefix=job.name) if media else []
             if script is None:
-                script = generate_script(brief, frames)
+                tolerance = brief.seconds * VIDEO_DURATION_BUFFER if render_video else 5
+                script = generate_script(
+                    brief,
+                    frames,
+                    duration_tolerance=tolerance,
+                    end_buffer=settings.end_buffer if render_video else 0,
+                )
             result, timeline = render_audio(
                 script,
                 voice,
                 voice_dir,
                 job,
-                seconds=brief.seconds,
+                seconds=brief.seconds - settings.end_buffer if render_video else brief.seconds,
                 style=style,
                 backend=backend,
                 cloud_script=cloud_script,
+                natural_duration_tolerance=brief.seconds * VIDEO_DURATION_BUFFER
+                if render_video
+                else None,
             )
             if render_video:
-                render_guide(
+                if music is not None:
+                    chosen_plan = music_plan or plan_music(script, video_type=brief.kind)
+                    save_json(job.path("music-plan.json"), chosen_plan)
+                    if not settings.beat_music_levels:
+                        settings = AudioMix.model_validate(
+                            {
+                                **settings.model_dump(),
+                                "beat_music_levels": chosen_plan.beat_levels,
+                            }
+                        )
+                save_json(
+                    job.path("mix.json"),
+                    {
+                        "audio": result["audio"],
+                        "music": str(music.resolve()) if music else None,
+                        "settings": settings.model_dump(mode="json"),
+                        "fades_apply_to": "music_only",
+                    },
+                )
+                if abs(video_seconds(timeline, settings) - brief.seconds) > (
+                    brief.seconds * VIDEO_DURATION_BUFFER + 1 / timeline.fps
+                ):
+                    raise ValueError("Video including its closing hold missed the +/-33% buffer.")
+                video_duration = render_guide(
                     timeline,
                     Path(result["audio"]),
                     job.metadata,
                     video=job.path("guide.mp4", job.video),
                     captions=job.path("captions.srt", transcript_dir),
                     prefix=job.name,
+                    music=music,
+                    mix=settings,
                 )
             result.update(
                 {
@@ -94,6 +154,9 @@ class Pipeline:
                     "captions": str(job.path("captions.srt", transcript_dir))
                     if render_video
                     else None,
+                    "video_seconds": video_duration if render_video else None,
+                    "music": str(music.resolve()) if music else None,
+                    "mix": str(job.path("mix.json")) if render_video else None,
                 }
             )
             save_json(job.path("status.json"), result)

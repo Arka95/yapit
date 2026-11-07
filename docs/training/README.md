@@ -15,6 +15,7 @@ Run in that environment with its own valid paths:
 
 ```text
 yapit voice-train arka --upstream <reviewed-Qwen3-TTS-directory> --epochs 3 --batch-size 1
+yapit voice-train arka --upstream <reviewed-Qwen3-TTS-directory> --model Qwen/Qwen3-TTS-12Hz-0.6B-Base
 yapit voice-train arka --upstream <reviewed-Qwen3-TTS-directory> --resume <validated-checkpoint-directory>
 yapit voice-select-checkpoint arka --checkpoint <reviewed-checkpoint-directory>
 ```
@@ -25,6 +26,13 @@ inference-selection compatibility aliases, not training resumption.
 Importing the module or generating narration does not
 start a training job. Native Windows training fails before loading/downloading
 training dependencies or models.
+
+`--model` explicitly selects the official 1.7B or 0.6B Base Hub model;
+the default remains `Qwen/Qwen3-TTS-12Hz-1.7B-Base`. Python `train` and
+`resume_checkpoint` accept the same `model` keyword. It is independent of
+the inference setting `YAPIT_MODEL`. Smaller weights reduce memory demand,
+but do not guarantee training fits: optimizer states and activations also need
+GPU memory. The selected model ID and resolved snapshot are recorded in provenance.
 
 Project guardrails require at least 10 curated clips and 60 seconds of recordings.
 Five to fifteen clean minutes is a recommendation, not a quality guarantee.
@@ -49,7 +57,9 @@ restores missing Base speaker-encoder weights/config in a temporary initializati
 directory. Source checkpoint/Base files and the selected profile are not modified;
 temporary initialization is removed on success or failure.
 
-Continuation uses the configured default Base snapshot, not `YAPIT_MODEL`.
+Continuation uses the explicitly selected Base snapshot (1.7B by default),
+not `YAPIT_MODEL`. Supply the same `--model` used for the original training run;
+existing architecture/tensor checks reject incompatible checkpoint sizes.
 Architecture/shape checks do not establish that an external checkpoint used
 the identical original Base revision; use checkpoints from the same Base lineage
 and review the resulting voice. Merging weights requires additional CPU RAM and
@@ -66,7 +76,8 @@ the requested speaker and required model/config files.
 Yapper then uses that checkpoint for custom-speaker inference.
 
 JSONL datasets go to `data\transcripts`; training status/logs and base/upstream
-provenance go to `workspace\outputs`. Checkpoints go to
+provenance go to `workspace\outputs`; TensorBoard uses a per-job
+`<job-name>.tensorboard` directory there. Checkpoints go to
 `data\<profile>\checkpoints\<job-name>`. Existing data/archive exclusions remain
 unchanged; training does not stage or upload recordings.
 

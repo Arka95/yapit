@@ -24,8 +24,11 @@ def train(
     epochs: int = 3,
     batch_size: int = 1,
     learning_rate: float = 2e-6,
+    model: str = DEFAULT_SPEECH_MODEL,
     resume: Path | None = None,
 ) -> dict:
+    if model not in (DEFAULT_SPEECH_MODEL, "Qwen/Qwen3-TTS-12Hz-0.6B-Base"):
+        raise ValueError("Training model must be the official Qwen3-TTS 1.7B or 0.6B Base.")
     if not 1 <= epochs <= 30 or not 1 <= batch_size <= 16 or not 1e-8 <= learning_rate <= 1e-3:
         raise ValueError("Invalid training parameters.")
     if resume is not None:
@@ -107,8 +110,11 @@ def train(
         # Upstream saves checkpoints by copying a local model directory, not a Hub identifier.
         local_model = load_model(
             lambda model, **kwargs: snapshot_download(repo_id=model, **kwargs),
-            DEFAULT_SPEECH_MODEL,
+            model,
         )
+        config = json.loads((Path(local_model) / "config.json").read_text(encoding="utf-8"))
+        if config.get("tts_model_type") != "base":
+            raise ValueError("Training initialization must be a Base model.")
         initialization = local_model
         if resume is not None:
             continuation = tempfile.TemporaryDirectory(prefix="yapit-resume-", dir=workspace.root)
@@ -117,6 +123,8 @@ def train(
         provenance = {
             "upstream_commit": revision,
             "base_snapshot": local_model,
+            "base_model": model,
+            "sft_runner_sha256": file_sha256(Path(__file__).with_name("sft_runner.py")),
             "voice": name,
             "epochs": epochs,
             "batch_size": batch_size,
@@ -135,6 +143,8 @@ def train(
                 str(training_dir / "prepare_data.py"),
                 "--device",
                 "cuda:0",
+                "--tokenizer_model_path",
+                str(Path(local_model) / "speech_tokenizer"),
                 "--input_jsonl",
                 str(job.path("train.jsonl", transcript_dir)),
                 "--output_jsonl",
@@ -142,7 +152,10 @@ def train(
             ],
             [
                 sys.executable,
+                "-m",
+                "yapit.training.sft_runner",
                 str(training_dir / "sft_12hz.py"),
+                str(job.path("tensorboard")),
                 "--init_model_path",
                 initialization,
                 "--output_model_path",
@@ -205,6 +218,7 @@ def resume_checkpoint(
     epochs: int = 3,
     batch_size: int = 1,
     learning_rate: float = 2e-6,
+    model: str = DEFAULT_SPEECH_MODEL,
 ) -> dict:
     """Continue fine-tuning model weights, not optimizer/epoch state or narration selection."""
     return train(
@@ -214,5 +228,6 @@ def resume_checkpoint(
         epochs=epochs,
         batch_size=batch_size,
         learning_rate=learning_rate,
+        model=model,
         resume=checkpoint,
     )

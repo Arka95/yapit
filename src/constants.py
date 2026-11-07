@@ -9,6 +9,8 @@ DEFAULT_MODELS_DIRECTORY = "models"
 MODEL_CACHE_DIRECTORY = "hub"
 DEFAULT_SPEECH_MODEL = "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
 DEFAULT_ASR_MODEL = "small.en"
+VIDEO_DURATION_BUFFER = 0.33
+BACKGROUND_MUSIC_DIRECTORY = "background_music"
 
 
 def models_directory() -> Path:

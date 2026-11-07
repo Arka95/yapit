@@ -107,6 +107,27 @@ distinct recordings. Invalid inputs are checked before imported files replace
 existing ones. Original external input files are not changed.
 
 Profiles are read only from this data layout; there are no old-profile fallbacks.
+Profiles accept and preserve additional custom metadata alongside validated
+voice fields. These writing preferences are part of the supported schema:
+
+```json
+{
+  "writing_style": "energetic and informal",
+  "frequent_words": ["insane", "mind-blowing", "so cool"],
+  "preferred_greeting": "yo guys"
+}
+```
+
+This is a metadata fragment, not a complete voice profile. `writing_style`
+defaults to `energetic and informal`, including when loading older profiles.
+`frequent_words` defaults to an empty list; `preferred_greeting` defaults to
+null. Other custom keys survive loading, saving and recording merges.
+Declared fields still require valid values; required voice fields cannot be omitted.
+
+Writing preferences are separate from the `styles` map of expressive audio
+references. They are currently stored metadata: adding them does not rewrite
+scripts, change speech delivery or retrain your checkpoint automatically.
+
 For an expressive reference on an existing validated profile, use
 `yapit enroll-style` as described in the [Yapper guide](../yapper/README.md).
 It saves the named style in the same profile without changing the baseline

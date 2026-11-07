@@ -7,6 +7,23 @@ source audio. See the [developer guide](dev.readme.md) and [project index](../..
 
 ## Generate narration
 
+For repeated requests, start `yapit voice-worker arka` in your GPU runtime and
+leave it running. Normal narration/reel commands with the same data root discover
+the authenticated loopback worker and reuse its loaded model. Use
+`yapit voice-worker-status` to see readiness, actual device/dtype, model-load
+time and last request/audio duration. `yapit voice-worker-stop` releases the
+resident model; it is not an OS service.
+
+Unchanged speech is cached privately under `data\.runtime\speech-cache`, bounded
+to 250 MiB. Voice/reference or checkpoint file changes invalidate the cache and
+reload the single resident model. Set `YAPIT_SPEECH_CACHE=0` to regenerate speech
+while retaining the model; set `YAPIT_VOICE_WORKER=0` to explicitly use one-shot
+inference. No worker means the existing one-shot behavior. An unavailable
+configured worker fails clearly rather than silently loading a second model.
+Weights/tokenizers must already be provisioned; worker startup is offline.
+Keeping a model loaded avoids startup cost, not the cost of new audio-token
+generation. Listening review remains necessary.
+
 Run from the repository root after installing the existing `.[voice]` dependencies
 and enrolling your own profile:
 
@@ -56,7 +73,9 @@ after the final beat. Script JSON permits explicit pauses and visual suggestions
 
 Words are not rewritten during narration. There is no semantic emphasis
 annotator or per-word emphasis field; model prosody and the selected reference
-provide delivery, while `pause_ms` specifies inserted silence.
+provide delivery, while `pause_ms` specifies inserted silence in addition to
+any pauses already present in synthesized speech. Short 5 ms edge ramps soften
+waveform joins without trimming words or adding time.
 
 ## Script planning
 
@@ -80,9 +99,12 @@ Model weights may
 need downloading if not already available. No general-purpose local script LLM
 or production CosyVoice adapter is added by this module.
 
-Target duration is 5-180 seconds with the existing +/-5-second tolerance and
-bounded 0.90-1.10x tempo fitting. Fitting affects the whole waveform, including
-inserted pauses. Measured beat timing follows the final encoded narration;
+Target duration is 5-180 seconds. Reels accept natural duration within +/-33%
+of the target, without tempo fitting or silence padding; 30 seconds permits
+20.1-39.9 seconds. Prioritize useful script content rather than exact length.
+Audio-only generation retains the existing +/-5-second tolerance and bounded
+0.90-1.10x tempo fitting, including scaling of inserted pauses.
+Measured beat timing follows the final encoded narration;
 phrase captions/cuts are approximate, not word-level alignment.
 
 Generated WAV/MP3 plus raw/fitted WAV intermediates remain in

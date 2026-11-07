@@ -8,12 +8,12 @@ from pathlib import Path
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
-from yapit.common_utils.fileutils import safe_name, save_json
-from yapit.common_utils.mediautils import SAMPLE_RATE, decode_audio
-from yapit.constants import DEFAULT_PROFILE
-from yapit.editor import render_guide
+from yapit.common_utils.fileutils import safe_name
+from yapit.constants import DEFAULT_PROFILE, VIDEO_DURATION_BUFFER
+from yapit.editor import AudioMix, generate_video
 from yapit.enrollment import enroll
 from yapit.models import Brief, DeliveryStyle, Script, Timeline
+from yapit.musicgen.planner import plan_music
 from yapit.pipeline import Pipeline
 from yapit.storage import Workspace
 from yapit.yapper import generate_audio
@@ -31,7 +31,12 @@ def create_server(root: Path | None = None) -> FastMCP:
         """Reusable non-agentic Instagram reel script prompt."""
         from yapit.yapper.script_planner import build_prompt
 
-        return build_prompt(Brief(topic=topic, seconds=seconds, kind=kind, facts=facts))
+        brief = Brief(topic=topic, seconds=seconds, kind=kind, facts=facts)
+        return build_prompt(
+            brief,
+            duration_tolerance=brief.seconds * VIDEO_DURATION_BUFFER,
+            end_buffer=AudioMix().end_buffer,
+        )
 
     @server.tool()
     def prepare_script_prompt(
@@ -73,6 +78,8 @@ def create_server(root: Path | None = None) -> FastMCP:
         auto_script: bool,
         video: bool,
         style: DeliveryStyle,
+        music_path: str | None = None,
+        mix: AudioMix | None = None,
     ) -> dict:
         if script is not None and auto_script:
             raise ValueError("Choose script or auto_script, not both.")
@@ -96,6 +103,8 @@ def create_server(root: Path | None = None) -> FastMCP:
                 auto_script,
                 render_video=video,
                 style=style,
+                music=workspace.inside(music_path) if music_path else None,
+                mix=mix,
             )
         finally:
             busy.release()
@@ -111,9 +120,24 @@ def create_server(root: Path | None = None) -> FastMCP:
         media_path: str | None = None,
         auto_script: bool = False,
         style: DeliveryStyle = DeliveryStyle.default,
+        music_path: str | None = None,
+        mix: AudioMix | None = None,
     ) -> dict:
         """Generate local MP3, measured timeline and 1080x1920 guide; or return a script prompt."""
-        return run(voice, seconds, script, topic, kind, facts, media_path, auto_script, True, style)
+        return run(
+            voice,
+            seconds,
+            script,
+            topic,
+            kind,
+            facts,
+            media_path,
+            auto_script,
+            True,
+            style,
+            music_path,
+            mix,
+        )
 
     @server.tool()
     def generate_narration(
@@ -126,7 +150,12 @@ def create_server(root: Path | None = None) -> FastMCP:
         return run(voice, seconds, script, "", "travel", "", None, False, False, style)
 
     @server.tool()
-    def render_timeline(timeline_path: str, audio_path: str) -> dict:
+    def render_timeline(
+        timeline_path: str,
+        audio_path: str,
+        music_path: str | None = None,
+        mix: AudioMix | None = None,
+    ) -> dict:
         """Render a guide from a timeline/audio inside the workspace or data root."""
         if not busy.acquire(blocking=False):
             raise ValueError("Yapit is busy; retry after the current job.")
@@ -135,34 +164,18 @@ def create_server(root: Path | None = None) -> FastMCP:
                 workspace.inside(timeline_path).read_text(encoding="utf-8"),
             )
             audio = workspace.inside(audio_path)
-            actual = len(decode_audio(audio)) / SAMPLE_RATE
-            if abs(actual - timeline.seconds) > 0.1:
-                raise ValueError("Timeline and audio duration differ by more than 100 ms.")
             if (timeline.width, timeline.height, timeline.fps) != (1080, 1920, 30):
                 raise ValueError("Only 1080x1920 at 30 fps is currently supported.")
-            job = workspace.output(audio.stem)
-            captions = job.path("captions.srt", job.transcripts)
-            try:
-                render_guide(
-                    timeline,
-                    audio,
-                    job.metadata,
-                    video=job.path("guide.mp4", job.video),
-                    captions=captions,
-                    prefix=job.name,
+            music = workspace.inside(music_path) if music_path else None
+            settings = mix or AudioMix()
+            if music is not None and not settings.beat_music_levels:
+                settings = AudioMix.model_validate(
+                    {
+                        **settings.model_dump(),
+                        "beat_music_levels": plan_music(timeline).beat_levels,
+                    }
                 )
-                result = {
-                    "status": "complete",
-                    "name": job.name,
-                    "status_file": str(job.path("status.json")),
-                    "video": str(job.path("guide.mp4", job.video)),
-                    "captions": str(captions),
-                }
-                save_json(job.path("status.json"), result)
-                return result
-            except Exception as exc:
-                save_json(job.path("status.json"), {"status": "failed", "error": str(exc)})
-                raise
+            return generate_video(timeline, audio, workspace=workspace, music=music, mix=settings)
         finally:
             busy.release()
 
