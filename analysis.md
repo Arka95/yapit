@@ -40,20 +40,20 @@ The following separates code evidence from quality claims:
 
 | Finding | Evidence and limitation |
 |---|---|
-| Default synthesis uses `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | `src\yapit\speech.py:16,31-73`; reference audio and its transcript construct the clone prompt |
-| Audio is generated independently for each script beat | `src\yapit\pipeline.py:92-104`; cross-beat expressive continuity is not evaluated |
-| Reference-driven style selection is now implemented provisionally | `src\yapit\models.py:66-90`; `src\yapit\voices.py:168-251`; this selects a different recording, not an emotion-trained model |
-| Missing styles and style use with a fine-tuned checkpoint fail explicitly | `src\yapit\voices.py:179-190,230-238`; no silent default-reference substitution |
-| Style provenance is recorded | `src\yapit\pipeline.py:75-90`; the description explicitly requires listening review |
+| Default synthesis uses `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | `src\speech.py:16,31-73`; reference audio and its transcript construct the clone prompt |
+| Audio is generated independently for each script beat | `src\pipeline.py:92-104`; cross-beat expressive continuity is not evaluated |
+| Reference-driven style selection is now implemented provisionally | `src\models.py:66-90`; `src\voices.py:168-251`; this selects a different recording, not an emotion-trained model |
+| Missing styles and style use with a fine-tuned checkpoint fail explicitly | `src\voices.py:179-190,230-238`; no silent default-reference substitution |
+| Style provenance is recorded | `src\pipeline.py:75-90`; the description explicitly requires listening review |
 | The existing CPU render is 34.20004 s; the source soundtrack is 28.02792 s | Local `soundfile.info` measurements of `data\generated_audio\7ab3df348947460c84dad25125e1aa14\raw.wav` and `tests\data\arka.ladakhi_marmots.wav` |
-| The duration rejection was correct | `34.20004 / 28.02792 = 1.2202`, outside the allowed post-processing factor; mismatch also exceeds 5 s. `src\yapit\media.py:97-113` |
+| The duration rejection was correct | `34.20004 / 28.02792 = 1.2202`, outside the allowed post-processing factor; mismatch also exceeds 5 s. `src\media.py:97-113` |
 | The user found the earlier delivery insufficiently expressive | User listening feedback, **not** a MOS study or controlled comparison |
 | Hardware is an NVIDIA GeForce RTX 4070 SUPER, driver 610.88, 12282 MiB VRAM | Local `nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader` |
 | Style-interface regression tests pass | 25 focused tests across `test_voices.py`, `test_pipeline.py`, and `test_interfaces.py`; these verify routing and safety, **not** emotion quality |
 
 No expressive reference recording has yet been supplied for the selected lively-vlog style. No local head-to-head experiment against the shortlisted models has been run. Therefore neither the new style option nor the GPU environment proves expressive quality.
 
-The current training wrapper performs supervised personal-voice adaptation through upstream Qwen scripts. Its records contain `audio`, `text`, and `ref_audio`, not a multi-style emotion-supervision schema. It currently rejects native-Windows training and requires Linux/WSL2 plus CUDA/bfloat16/FlashAttention. Its minimum-data checks are **project guardrails**, not guarantees of good adaptation. `src\yapit\training.py:16-99`.
+The current training wrapper performs supervised personal-voice adaptation through upstream Qwen scripts. Its records contain `audio`, `text`, and `ref_audio`, not a multi-style emotion-supervision schema. It currently rejects native-Windows training and requires Linux/WSL2 plus CUDA/bfloat16/FlashAttention. Its minimum-data checks are **project guardrails**, not guarantees of good adaptation. `src\training.py:16-99`.
 
 ### 3. Terminology and the ambiguous "emovide"
 
@@ -142,7 +142,7 @@ $$
 
 Qwen3-TTS uses discrete multi-codebook speech modeling with its 12 Hz tokenizer. **YapIt's Base checkpoint provides reference cloning; it does not expose the 1.7B CustomVoice instruction workflow.** The official released-model table also does not advertise instruction control for the 0.6B models. CustomVoice's stock speakers and VoiceDesign's newly created persona do not automatically satisfy "keep Arka." [8-10]
 
-Using an expressive recording of Arka as the Base reference is a sensible low-cost experiment. It transfers an example, rather than separately specifying identity and emotion. Temperature/top-p changes stochastic sampling, not a calibrated emotion axis. Qwen is worth retaining as the working comparator, not defending as an already established winner. `src\yapit\speech.py:63-92`; [9].
+Using an expressive recording of Arka as the Base reference is a sensible low-cost experiment. It transfers an example, rather than separately specifying identity and emotion. Temperature/top-p changes stochastic sampling, not a calibrated emotion axis. Qwen is worth retaining as the working comparator, not defending as an already established winner. `src\speech.py:63-92`; [9].
 
 #### Hybrid and continuous-latent models: finer control with different costs
 
@@ -415,19 +415,19 @@ flowchart LR
     D -->|"local files for listening"| H["Owner review"]
 ```
 
-Evidence: `src\yapit\speech.py:19-95`; `src\yapit\pipeline.py:29-166`; `src\yapit\voices.py:226-251`; `src\yapit\storage.py:41-171`; `src\yapit\media.py:97-131`.
+Evidence: `src\speech.py:19-95`; `src\pipeline.py:29-166`; `src\voices.py:226-251`; `src\storage.py:41-171`; `src\media.py:97-131`.
 
-**CLI/MCP entry point.** Accepts validated local inputs and style selection; calls Pipeline synchronously through Python. MCP paths are confined to configured workspace/data roots. It must not bypass missing-style or consent validation. `src\yapit\cli.py`; `src\yapit\server.py`; `src\yapit\storage.py:90-108`.
+**CLI/MCP entry point.** Accepts validated local inputs and style selection; calls Pipeline synchronously through Python. MCP paths are confined to configured workspace/data roots. It must not bypass missing-style or consent validation. `src\cli.py`; `src\server.py`; `src\storage.py:90-108`.
 
-**Pipeline.** Coordinates voice selection, unchanged script text, per-beat generation, pauses, duration fitting, and provenance. Its communication is synchronous Python calls to voice selection, speech, and media helpers, followed by local-file writes. `src\yapit\pipeline.py:46-155`.
+**Pipeline.** Coordinates voice selection, unchanged script text, per-beat generation, pauses, duration fitting, and provenance. Its communication is synchronous Python calls to voice selection, speech, and media helpers, followed by local-file writes. `src\pipeline.py:46-155`.
 
-**Voice profiles and references.** JSON metadata and local recordings identify the speaker and optional human-labeled styles. Selection supplies the reference directory and transcript to QwenSpeech; registration stores raw/prepared audio plus a transcript sidecar without training. `src\yapit\voices.py:168-251`.
+**Voice profiles and references.** JSON metadata and local recordings identify the speaker and optional human-labeled styles. Selection supplies the reference directory and transcript to QwenSpeech; registration stores raw/prepared audio plus a transcript sidecar without training. `src\voices.py:168-251`.
 
-**QwenSpeech.** Lazily loads one model, builds the reference prompt, and returns validated/resampled NumPy audio. Python calls to Qwen are synchronous; its lock protects that backend instance, **not every independent process using the GPU**. `src\yapit\speech.py:23-95`.
+**QwenSpeech.** Lazily loads one model, builds the reference prompt, and returns validated/resampled NumPy audio. Python calls to Qwen are synchronous; its lock protects that backend instance, **not every independent process using the GPU**. `src\speech.py:23-95`.
 
-**Media and duration gate.** Runs local media tools synchronously and checks fitted and encoded durations. This is a correctness barrier, not a shortcut for forcing all output into the requested runtime. `src\yapit\media.py:22-33,97-131`; `src\yapit\pipeline.py:106-118`.
+**Media and duration gate.** Runs local media tools synchronously and checks fitted and encoded durations. This is a correctness barrier, not a shortcut for forcing all output into the requested runtime. `src\media.py:22-33,97-131`; `src\pipeline.py:106-118`.
 
-**DataStore artifact folders.** Stores raw/reference recordings in `data\audio`, text artifacts in `data\transcripts`, and synthesized audio in `data\generated_audio`. New generated artifacts are flat, with `<profile>.<source>` names and numeric duplicate suffixes; operational metadata is flat under `workspace\outputs`. Existing voice/enrollment/import storage remains structured and old artifacts are not migrated. Communication is local filesystem I/O; there is no selected distributed database or broker. `src\yapit\storage.py:41-171`.
+**DataStore artifact folders.** Stores raw/reference recordings in `data\audio`, text artifacts in `data\transcripts`, and synthesized audio in `data\generated_audio`. New generated artifacts are flat, with `<profile>.<source>` names and numeric duplicate suffixes; operational metadata is flat under `workspace\outputs`. Existing voice/enrollment/import storage remains structured and old artifacts are not migrated. Communication is local filesystem I/O; there is no selected distributed database or broker. `src\storage.py:41-171`.
 
 **Owner review.** The human listens to local files and judges voice, delivery, and words. Automated routing/signal checks cannot supply this judgment; the review step is a required product gate, not an existing automated service.
 
@@ -459,7 +459,7 @@ erDiagram
     }
 ```
 
-Evidence: `src\yapit\models.py:26-54,66-90`; `src\yapit\pipeline.py:66-90,105-155`; `src\yapit\voices.py:196-222`. Here a narration job means a scripted synthesis attempt that reached artifact creation; prompt-only jobs and earlier validation failures are outside this diagram. Failed synthesis can produce zero final audio files.
+Evidence: `src\models.py:26-54,66-90`; `src\pipeline.py:66-90,105-155`; `src\voices.py:196-222`. Here a narration job means a scripted synthesis attempt that reached artifact creation; prompt-only jobs and earlier validation failures are outside this diagram. Failed synthesis can produce zero final audio files.
 
 **Storage/CAP applicability.** CAP describes consistency versus availability under partitions in distributed storage. This local single-machine design selects neither a distributed database nor a message queue, so labeling its directories "CP" or "AP" would be misleading. No DB/queue comparison or CAP classification is needed. The relevant file-storage tradeoffs are durability, atomic writes, path confinement, backup, and concurrent access.
 
@@ -500,7 +500,7 @@ These read/write counts simplify Pipeline's operations and exclude model-loading
 
 ### 1. Reproducible local experiment
 
-**Prerequisite:** obtain an owner-confirmed expressive recording with its exact spoken transcript. Do not manufacture a style reference from tones, another speaker, or an unverified soundtrack. Use a common **6-10 second** high-quality speaker excerpt for the principal experiment, subject to each model's documented requirements; this also satisfies Nano's more-than-five-second requirement. Keep longer style references as a separate ablation. [9, 27]; `src\yapit\voices.py:168-251`.
+**Prerequisite:** obtain an owner-confirmed expressive recording with its exact spoken transcript. Do not manufacture a style reference from tones, another speaker, or an unverified soundtrack. Use a common **6-10 second** high-quality speaker excerpt for the principal experiment, subject to each model's documented requirements; this also satisfies Nano's more-than-five-second requirement. Keep longer style references as a separate ablation. [9, 27]; `src\voices.py:168-251`.
 
 Proposed primary conditions:
 
@@ -586,7 +586,7 @@ Each item is sized as an approximately **one-to-two-week deliverable**, not a re
 | 5. Promote the winner reversibly | 4 | Explicit backend selection with a preserved baseline, documented CPU/GPU behavior, bounded execution, focused regression tests, and owner-approved marmot narration |
 | 6. Add specialist control or adaptation only if justified | 4; Index license approval if selected | IndexTTS2.5 control ablation, or style-labeled personal fine-tuning with held-out evaluation; proceed only when a documented failure motivates the extra complexity |
 
-**Proposed adapter boundary:** preserve `SpeechBackend.synthesize(text) -> np.ndarray` initially; style/reference settings belong to backend construction, not modifications to approved beat text. For incompatible Python environments, a persistent local subprocess per job can use bounded JSON requests and WAV artifacts under `data\generated_audio`; resample/validate in the parent. This is proposed IPC (interprocess communication), not an implemented service. Keep worker logs on stderr, impose timeouts, and avoid loading a model anew for every beat. `src\yapit\speech.py:19-20`; `src\yapit\pipeline.py:92-104`.
+**Proposed adapter boundary:** preserve `SpeechBackend.synthesize(text) -> np.ndarray` initially; style/reference settings belong to backend construction, not modifications to approved beat text. For incompatible Python environments, a persistent local subprocess per job can use bounded JSON requests and WAV artifacts under `data\generated_audio`; resample/validate in the parent. This is proposed IPC (interprocess communication), not an implemented service. Keep worker logs on stderr, impose timeouts, and avoid loading a model anew for every beat. `src\speech.py:19-20`; `src\pipeline.py:92-104`.
 
 **No premature training:** start with released zero-shot conditioning. The VoxCPM model card's few-minute LoRA claim and StyleTTS2's reference training examples are author recipes, not measured promises for this GPU or for emotional coverage. If adaptation is necessary, collect style-balanced own-voice examples and preserve style-specific holdouts rather than adding neutral recordings and expecting missing emotions to emerge. [13, 29]
 
@@ -604,8 +604,8 @@ Primary sources below were reviewed directly or by the bounded literature-resear
 8. Qwen Team. **Qwen3-TTS Technical Report.** 2026. [Paper](https://arxiv.org/abs/2601.15621). Released capabilities are checked against [9], not inferred solely from the report.
 9. Qwen Team. **Qwen3-TTS official README and released-model/API table.** [Repository](https://github.com/QwenLM/Qwen3-TTS); [README](https://github.com/QwenLM/Qwen3-TTS/blob/main/README.md).
 10. Qwen Team. **Qwen3-TTS-12Hz-1.7B-Base model card.** [Released weights and metadata](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base).
-11. YapIt implementation evidence: `src\yapit\speech.py:16-95`; `src\yapit\pipeline.py:46-155`; `src\yapit\media.py:97-131`; `src\yapit\training.py:16-99`.
-12. YapIt storage/style evidence: `src\yapit\storage.py:41-171`; `src\yapit\models.py:26-90`; `src\yapit\voices.py:130-251`; `tests\test_voices.py`; `tests\test_pipeline.py`; `tests\test_interfaces.py`.
+11. YapIt implementation evidence: `src\speech.py:16-95`; `src\pipeline.py:46-155`; `src\media.py:97-131`; `src\training.py:16-99`.
+12. YapIt storage/style evidence: `src\storage.py:41-171`; `src\models.py:26-90`; `src\voices.py:130-251`; `tests\test_voices.py`; `tests\test_pipeline.py`; `tests\test_interfaces.py`.
 13. OpenBMB. **VoxCPM2 released model card.** [Model and metadata](https://huggingface.co/openbmb/VoxCPM2), including author-reported memory/RTF and adaptation guidance.
 14. OpenBMB. **VoxCPM current official repository.** [README/API/release news](https://github.com/OpenBMB/VoxCPM/blob/main/README.md); [dependency manifest](https://github.com/OpenBMB/VoxCPM/blob/main/pyproject.toml).
 15. Yixuan Zhou et al. **VoxCPM2 Technical Report.** June 5, 2026, v1. [Paper](https://arxiv.org/abs/2606.06928v1); [full text](https://arxiv.org/html/2606.06928v1).

@@ -1,5 +1,26 @@
 # YapIt developer guide
 
+## Flat source layout
+
+Source lives directly under `src` (for example `src\enrollment` and `src\rescript`);
+there is no nested `src\yapit` folder. The public package/import name remains
+`yapit`, and the CLI commands are unchanged.
+
+Hatch maps `src` to `yapit` in release wheels. `scripts\hatch-build.py` supplies
+the corresponding editable-install import mapping without symlinks or another
+source folder. The small `editables` dependency is declared for editable builds.
+After moving source files, reinstall the package into each application runtime;
+old editable installs still point at the removed folder. Do not install YapIt
+into the separate Python 3.10 CosyVoice worker.
+
+For the approved-feed workflow with build isolation disabled, install the
+declared build dependencies first:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install "hatchling>=1.27,<2" "editables>=0.3,<1"
+.\.venv\Scripts\python.exe -m pip install --no-deps --no-build-isolation -e .
+```
+
 This guide covers development, component responsibilities, and advanced setup.
 For the everyday enrollment -> script -> narration -> editing workflow, use
 [README.md](README.md). Audio research and the listening-validation checklist
@@ -287,8 +308,8 @@ to external local recordings, which are preserved in the canonical audio store.
 Profile creation reuses lowercase names; imports merge and replace matching
 filenames. `constants.py` defines the unified data filename template and default
 profile; `storage.data_filename` normalizes filenames to lowercase. Enrollment has
-its own [README](src/yapit/enrollment/README.md),
-[developer guide](src/yapit/enrollment/dev.readme.md), and local tests.
+its own [README](src/enrollment/README.md),
+[developer guide](src/enrollment/dev.readme.md), and local tests.
 Generation has no durable job queue or
 cross-process GPU lock, so do not run competing model-heavy processes on the
 same constrained device.

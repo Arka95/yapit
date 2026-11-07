@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling>=1.27,<2"]
+requires = ["hatchling>=1.27,<2", "editables>=0.3,<1"]
 build-backend = "hatchling.build"
 
 [project]
@@ -31,8 +31,15 @@ dev = ["pytest>=8.3,<10", "ruff>=0.12,<1", "build>=1.2,<2", "mcp>=1.20,<2"]
 yapit = "yapit.cli:app"
 yapit-mcp = "yapit.server:main"
 
+[tool.hatch.build]
+dev-mode-dirs = ["."]
+
 [tool.hatch.build.targets.wheel]
-packages = ["src/yapit"]
+only-include = ["src"]
+sources = {"src" = "yapit"}
+
+[tool.hatch.build.hooks.custom]
+path = "scripts/hatch-build.py"
 
 [tool.ruff]
 line-length = 100
@@ -41,5 +48,8 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["yapit"]
+
 [tool.pytest.ini_options]
-testpaths = ["tests", "src/yapit/enrollment/tests"]
+testpaths = ["tests", "src/enrollment/tests"]

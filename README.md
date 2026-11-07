@@ -120,7 +120,7 @@ Double-click **`Start Enrollment.cmd`**, or run:
 2. Read the displayed passage naturally: **Record -> Stop -> Play take**.
 3. Confirm that you read the text exactly, then click **Save & Next**.
 4. Save at least **five distinct samples**, then click **Finish enrollment**.
-   The 16 shared static passages are under `src\yapit\enrollment\sampleScripts`;
+   The 16 shared static passages are under `src\enrollment\sampleScripts`;
    recording the full baseline is recommended, not required.
 
 Aim for 8-15 seconds per passage; recording stops at 20 seconds. Retake a passage
@@ -132,7 +132,7 @@ Reopen the same profile to add recordings or select a saved passage to replace
 its audio. Names are always lowercase; `ARKA` and `arka` are one profile.
 Recordings live under `data\<profile>\audio`, with profile metadata, session
 state, manifests and journals under `data\<profile>`. Files use the shared
-`<profile>.<name>.<extension>` format defined in `src\yapit\constants.py`, for example
+`<profile>.<name>.<extension>` format defined in `src\constants.py`, for example
 `arka.audio_sample_1.wav` and `arka.journal.json`. Imports merge by normalized
 filename and overwrite matching files; they do not create duplicate profiles.
 Legacy recordings are not deleted.
@@ -160,8 +160,8 @@ into an automatically trained voice. Signal checks cannot verify identity,
 background music, or transcript accuracy.
 
 Enrollment is a CPU-only, zero-model module with its own UI, CLI, static scripts,
-and tests. See [the module README](src/yapit/enrollment/README.md) and
-[developer README](src/yapit/enrollment/dev.readme.md). Standalone entry point:
+and tests. See [the module README](src/enrollment/README.md) and
+[developer README](src/enrollment/dev.readme.md). Standalone entry point:
 `python -m yapit.enrollment enroll-app`.
 
 ### Expressive narration from your own delivery
@@ -290,7 +290,7 @@ Use `yapit rescript extract_audio .\recording.mp4` to extract audio to
 `data\audio` or copy an already supported audio file there.
 Long recordings are split at sentence endings into parts over 30 and at most
 60 seconds; review recognition before generating narration. See
-[Rescript README](src/yapit/rescript/README.md).
+[Rescript README](src/rescript/README.md).
 
 **MCP clients:** install `.[mcp]`, copy `examples\mcp.config.json` into your
 client's MCP settings, and adjust its absolute paths. Tools can prepare prompts,

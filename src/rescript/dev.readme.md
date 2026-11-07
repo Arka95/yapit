@@ -1,6 +1,6 @@
 # Rescript developer guide
 
-Rescript is an optional subpackage under `src\yapit\rescript`, shipped in
+Rescript is an optional subpackage under `src\rescript`, shipped in
 YapIt's wheel. Its speech-recognition dependency is isolated in the
 `rescript` extra and imported only at recognition time. Existing narration,
 enrollment, and MCP commands do not load Whisper or download weights.

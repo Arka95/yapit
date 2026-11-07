@@ -96,7 +96,7 @@ flowchart TD
     Media -->|"local files"| Output["MP3, MP4, timeline and status"]
 ```
 
-Backed by: `src/yapit/{cli,server,pipeline,scripts,voices,speech,media}.py`.
+Backed by: `src/{cli,server,pipeline,scripts,voices,speech,media}.py`.
 Solid arrows are synchronous local calls/file access; the dotted edge is optional HTTPS.
 
 **Entry** consists of Typer CLI commands and the stdio MCP server. They validate
@@ -347,7 +347,7 @@ the independent preprint supplies a separate evaluation, not product certificati
 - **R10:** Actual upstream trainer, especially model loading and checkpoint saving:
   https://github.com/QwenLM/Qwen3-TTS/blob/main/finetuning/sft_12hz.py
 
-Local implementation source of truth: `src/yapit/models.py` (contracts),
+Local implementation source of truth: `src/models.py` (contracts),
 `voices.py` (curation), `speech.py` (reference/trained inference),
 `training.py` (upstream orchestration), `scripts.py`/`script_prompt.txt` (prompt),
 `pipeline.py` (artifacts/status), `timeline.py` (cuts), `media.py` (real encoding),

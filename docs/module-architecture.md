@@ -6,12 +6,12 @@ Inventory date: November 7, 2026. The CosyVoice setup/trial is independent backg
 work, not a prerequisite for choosing these boundaries.
 
 Enrollment now owns its UI, static `sampleScripts`, profile/sample management and
-tests under `src\yapit\enrollment`. Profiles require five accepted recordings,
+tests under `src\enrollment`. Profiles require five accepted recordings,
 use `data\<profile>\audio` plus profile-local metadata, and merge matching filenames.
 Lowercase data naming is centralized in `constants.py` and `storage.data_filename`.
-Evidence: `src\yapit\enrollment\session.py:46`;
-`src\yapit\enrollment\profiles.py:107`; `src\yapit\constants.py:1-3`;
-`src\yapit\storage.py:43-50`. The detailed provider-splitting proposal below remains
+Evidence: `src\enrollment\session.py:46`;
+`src\enrollment\profiles.py:107`; `src\constants.py:1-3`;
+`src\storage.py:43-50`. The detailed provider-splitting proposal below remains
 unimplemented.
 
 ## Problem Statement
@@ -22,16 +22,16 @@ action logic, model inference, application storage policy and interface code are
 not consistently separated. The objective is reusable action-oriented libraries
 without making extraction, conversion or transcript formatting depend on an LLM
 client, Torch, a particular GPU, or this checkout's directories.
-Evidence: `pyproject.toml:5-35`; `src\yapit\speech.py:19-24`;
-`src\yapit\rescript\transcription.py:36-40`.
+Evidence: `pyproject.toml:5-35`; `src\speech.py:19-24`;
+`src\rescript\transcription.py:36-40`.
 
 Here, **external LLM access** means a request to a hosted language-model API.
 **Local model inference** means running downloaded speech-model weights locally.
 ASR (automatic speech recognition) converts spoken audio to text; TTS
 (text-to-speech) synthesizes speech from text. A local TTS model can contain a
 language-model component without needing OpenAI or another hosted API.
-Evidence: `src\yapit\scripts.py:29-71`; `src\yapit\speech.py:31-95`;
-`src\yapit\rescript\transcription.py:59-106`.
+Evidence: `src\scripts.py:29-71`; `src\speech.py:31-95`;
+`src\rescript\transcription.py:59-106`.
 
 ### Current responsibility map
 
@@ -55,56 +55,56 @@ Evidence: `src\yapit\scripts.py:29-71`; `src\yapit\speech.py:31-95`;
 | Name/persist artifacts | `storage` | No | CPU filesystem I/O and exclusive name reservation |
 
 Inventory evidence:
-`src\yapit\rescript\audio.py:14-103`;
-`src\yapit\rescript\transcription.py:40-274`;
-`src\yapit\scripts.py:12-71`;
-`src\yapit\enrollment\profiles.py:18-198`;
-`src\yapit\enrollment\session.py:46`;
-`src\yapit\enrollment\desktop.py:25`;
-`src\yapit\speech.py:31-95`;
-`src\yapit\media.py:18-257`;
-`src\yapit\timeline.py:11-68`;
-`src\yapit\training.py:16-175`;
-`src\yapit\cli.py:23-198`;
-`src\yapit\server.py:18-167`;
-`src\yapit\storage.py:14-157`.
+`src\rescript\audio.py:14-103`;
+`src\rescript\transcription.py:40-274`;
+`src\scripts.py:12-71`;
+`src\enrollment\profiles.py:18-198`;
+`src\enrollment\session.py:46`;
+`src\enrollment\desktop.py:25`;
+`src\speech.py:31-95`;
+`src\media.py:18-257`;
+`src\timeline.py:11-68`;
+`src\training.py:16-175`;
+`src\cli.py:23-198`;
+`src\server.py:18-167`;
+`src\storage.py:14-157`.
 
 The supported-copy set is WAV, MP3, M4A, AAC, FLAC, OGG, OPUS, AIF/AIFF and WMA.
 Extraction and conversion are currently **one public operation**, not separate
 libraries. It always validates by decoding before deciding whether to copy the
-original. `src\yapit\rescript\audio.py:14-103`.
+original. `src\rescript\audio.py:14-103`.
 
 ### Important distinctions and coupling
 
 1. Providing a script to normal narration does not call OpenAI. `--auto-script`
    is the optional cloud route; `YAPIT_ALLOW_CLOUD=true`, a key and the cloud
    dependency are required. It sends the brief/optional frames, not the voice
-   reference recording. `src\yapit\scripts.py:29-71`;
-   `src\yapit\pipeline.py:50-108`.
+   reference recording. `src\scripts.py:29-71`;
+   `src\pipeline.py:50-108`.
 2. Downloading model weights can require internet access even when inference is
    local. A complete local cache and offline settings remove that download step;
    they do not turn local inference into hosted LLM access.
-   `src\yapit\speech.py:57-75`;
-   `src\yapit\rescript\transcription.py:66-80`.
+   `src\speech.py:57-75`;
+   `src\rescript\transcription.py:66-80`.
 3. MCP (Model Context Protocol) is an interface, not an LLM provider. This server
    runs over stdio; its client may be an assistant, but deterministic tools do not
    require a model API. Rescript commands are currently CLI/Python operations,
    not registered tools in this MCP server.
-   `src\yapit\server.py:18-167`; `src\yapit\rescript\cli.py:16-69`.
+   `src\server.py:18-167`; `src\rescript\cli.py:16-69`.
 4. `media.py` combines audio utilities, image/video sampling and guide rendering.
    `scripts.py` combines deterministic formatting and hosted generation.
    `rescript.transcribe` combines decoding, archiving, inference, composition and
    persistence. `storage` chooses application roots from environment settings.
    These are the principal seams to extract, not reasons to add a microservice.
-   `src\yapit\media.py:18-257`; `src\yapit\scripts.py:12-71`;
-   `src\yapit\rescript\transcription.py:176-274`;
-   `src\yapit\storage.py:84-157`.
+   `src\media.py:18-257`; `src\scripts.py:12-71`;
+   `src\rescript\transcription.py:176-274`;
+   `src\storage.py:84-157`.
 5. Source timestamps, delivery pauses, output duration and generation runtime are
    different things. Current composition turns source gaps into `pause_ms`, and
    Pipeline inserts those pauses after model-generated audio. The proposed
    architecture must make that mapping explicit to avoid stacked pauses.
-   `src\yapit\rescript\transcription.py:108-134`;
-   `src\yapit\pipeline.py:104-134`.
+   `src\rescript\transcription.py:108-134`;
+   `src\pipeline.py:104-134`.
 
 ## Implementation
 
@@ -130,9 +130,9 @@ This is a proposal, not the current folder layout.
 New contracts such as a delivery request or audio metadata are proposed, not
 existing schema fields. Reuse existing `SpeechBackend` and `TranscriptionBackend`
 as starting seams instead of inventing a generic agent framework.
-Evidence for feasibility: `src\yapit\speech.py:19-24`;
-`src\yapit\rescript\transcription.py:24-40`;
-`src\yapit\models.py:13-109`.
+Evidence for feasibility: `src\speech.py:19-24`;
+`src\rescript\transcription.py:24-40`;
+`src\models.py:13-109`.
 
 Within media, use cohesive `audio`, `video` and `render` modules rather than one
 distribution for every verb. Audio-only consumers should not have to install
@@ -232,8 +232,8 @@ validated at inventory time).
   No provider may upload private recordings to judge voice or emotion quality.
 
 Existing hardware gates:
-`src\yapit\rescript\transcription.py:40-80`;
-`src\yapit\speech.py:43-75`; `src\yapit\training.py:27-45`.
+`src\rescript\transcription.py:40-80`;
+`src\speech.py:43-75`; `src\training.py:27-45`.
 The faster-whisper authors document both CPU and GPU inference [R1].
 
 The existing `gpu` mode launcher checks CUDA before dispatching any command,
@@ -241,15 +241,15 @@ including CPU-only extraction. That is a launcher policy, not a GPU requirement
 of `extract_audio`; CPU mode or the normal CLI can perform extraction without the
 eGPU. Reusable libraries should select hardware per model operation rather than
 requiring Torch/device discovery for all media actions.
-`scripts\run-mode.py:23-56`; `src\yapit\rescript\audio.py:36-103`.
+`scripts\run-mode.py:23-56`; `src\rescript\audio.py:36-103`.
 
 Keep canonical storage/default profile/numeric duplicate handling in YapIt:
 `data\audio`, `data\transcripts`, `data\generated_audio`, flat run metadata and
 `<profile>.<source>` names with default `arka`. Libraries receive explicit paths;
 they must not enforce this particular application's folders or default speaker.
 Do not migrate old files or change standard narration duration behavior as a
-side effect of package extraction. `src\yapit\storage.py:41-157`;
-`src\yapit\pipeline.py:50-164`.
+side effect of package extraction. `src\storage.py:41-157`;
+`src\pipeline.py:50-164`.
 
 For future `add_emotion`, the proposed composition is media preparation ->
 optional ASR -> approved/unreviewed-draft transcript -> identity + delivery request
@@ -270,14 +270,14 @@ Keeping raw and final WAV plus a 192 kb/s MP3 gives approximately
 `(2 * 2.88 + 192000 / 8 * 60 / 1000000) * 20 * 30 = 4320 MB/month`.
 Fitted intermediates, recordings, model weights and training checkpoints are
 additional. Current audio format/encoding:
-`src\yapit\media.py:16,60-61,117-133`.
+`src\media.py:16,60-61,117-133`.
 
 The proposed bottleneck is model admission/VRAM, not filesystem request volume.
 Keep at most one model-heavy job admitted per local GPU worker initially.
 Reject busy requests or use a small bounded local work queue; do not silently
 queue unlimited audio in RAM. Current MCP already rejects concurrent protected
 operations per server instance, but it does not coordinate independent CLI
-processes. `src\yapit\server.py:23,47-61,64-95`.
+processes. `src\server.py:23,47-61,64-95`.
 
 Single points of failure are the eGPU/driver, local disk, model worker and optional
 hosted endpoint. Mitigations are explicit supported CPU selection, checked local
@@ -305,9 +305,9 @@ erDiagram
     TRANSCRIPT ||--|{ SCRIPT : exports
 ```
 
-Evidence: `src\yapit\models.py:26-90`;
-`src\yapit\pipeline.py:78-164`;
-`src\yapit\rescript\transcription.py:242-274`.
+Evidence: `src\models.py:26-90`;
+`src\pipeline.py:78-164`;
+`src\rescript\transcription.py:242-274`.
 
 ## Success Criteria
 
@@ -348,19 +348,19 @@ extraction, not training or adding another model.
 ## Reference Links
 
 - Current install/entry-point boundaries: `pyproject.toml:5-35`.
-- Audio extraction/conversion/copy: `src\yapit\rescript\audio.py:14-103`.
+- Audio extraction/conversion/copy: `src\rescript\audio.py:14-103`.
 - Recognition/preparation/composition/persistence:
-  `src\yapit\rescript\transcription.py:24-274`.
-- Deterministic vs hosted script generation: `src\yapit\scripts.py:12-71`.
-- Local synthesis and protocol: `src\yapit\speech.py:19-95`.
-- Media/timeline: `src\yapit\media.py:18-257`; `src\yapit\timeline.py:11-68`.
-- Enrollment/reference selection: `src\yapit\enrollment\profiles.py:18-198`;
-  `src\yapit\enrollment\session.py:46`; `src\yapit\enrollment\README.md`.
-- Orchestration/storage/hosted permission: `src\yapit\pipeline.py:25-164`;
-  `src\yapit\storage.py:14-157`.
-- Interfaces: `src\yapit\cli.py:23-198`; `src\yapit\server.py:18-167`;
-  `src\yapit\enrollment\desktop.py:25`.
-- Training prerequisites: `src\yapit\training.py:16-175`.
+  `src\rescript\transcription.py:24-274`.
+- Deterministic vs hosted script generation: `src\scripts.py:12-71`.
+- Local synthesis and protocol: `src\speech.py:19-95`.
+- Media/timeline: `src\media.py:18-257`; `src\timeline.py:11-68`.
+- Enrollment/reference selection: `src\enrollment\profiles.py:18-198`;
+  `src\enrollment\session.py:46`; `src\enrollment\README.md`.
+- Orchestration/storage/hosted permission: `src\pipeline.py:25-164`;
+  `src\storage.py:14-157`.
+- Interfaces: `src\cli.py:23-198`; `src\server.py:18-167`;
+  `src\enrollment\desktop.py:25`.
+- Training prerequisites: `src\training.py:16-175`.
 - Experimental Cosy runtime: `requirements-cosyvoice.txt`;
   `scripts\cosyvoice-trial.py`. Separate from production backend selection.
 - R1. faster-whisper authors, [official CPU/GPU usage and CTranslate2 requirements](https://github.com/SYSTRAN/faster-whisper/blob/master/README.md).

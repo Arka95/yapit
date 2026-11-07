@@ -51,7 +51,7 @@ Tests live in `tests` inside this module and are included in repository pytest
 discovery:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest src\yapit\enrollment\tests -q
+.\.venv\Scripts\python.exe -m pytest src\enrollment\tests -q
 .\.venv\Scripts\ruff.exe check src tests
 .\.venv\Scripts\ruff.exe format --check src tests
 ```
