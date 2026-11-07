@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import shutil
 import uuid
 from pathlib import Path
 
@@ -8,6 +9,7 @@ import numpy as np
 from pydantic import Field, model_validator
 
 from yapit.constants import AUDIO_SAMPLE_NAME_TEMPLATE
+from yapit.enrollment.artifacts import session_directory
 from yapit.enrollment.profiles import (
     MIN_SAMPLES,
     audio_name,
@@ -42,7 +44,8 @@ class EnrollmentSession:
         self.folder = store.profile_dir(alias)
         self.alias = self.folder.name
         self.audio_folder = self.folder / "audio"
-        self.path = self.folder / data_filename("session", self.alias, ".json")
+        self.scratch = session_directory(store, self.alias)
+        self.path = self.scratch / data_filename("session", self.alias, ".json")
         self._selected: int | None = None
         if self.path.exists():
             self.draft = Draft.model_validate_json(self.path.read_text(encoding="utf-8"))
@@ -58,6 +61,7 @@ class EnrollmentSession:
                 alias=self.alias,
                 readings=readings,
                 samples=[None] * len(readings),
+                completed=store.voice_path(self.alias).exists(),
             )
         if store.voice_path(self.alias).exists():
             voice = load_voice(store, self.alias)
@@ -111,7 +115,10 @@ class EnrollmentSession:
         self._selected = index
 
     def persist(self) -> None:
-        save_json(self.path, self.draft)
+        if self.draft.completed:
+            self.path.unlink(missing_ok=True)
+        else:
+            save_json(self.path, self.draft)
         samples = self.samples
         save_json(
             self.folder / data_filename("samples", self.alias, ".json"),
@@ -122,8 +129,9 @@ class EnrollmentSession:
     def new_take(self) -> Path:
         if self.index == len(self.draft.readings):
             raise ValueError("Choose a passage to record another sample.")
-        self.audio_folder.mkdir(parents=True, exist_ok=True)
-        return self.audio_folder / data_filename(
+        self.draft.completed = False
+        self.persist()
+        return self.scratch / data_filename(
             self.sample_name,
             self.alias,
             f".raw.{uuid.uuid4().hex[:12]}.wav",
@@ -142,9 +150,9 @@ class EnrollmentSession:
             )
         if self.index == len(self.draft.readings):
             raise ValueError("Choose a passage to record another sample.")
-        source = self.store.inside(source)
-        if not source.is_relative_to(self.audio_folder.resolve()):
-            raise ValueError("The recording does not belong to this enrollment session.")
+        source = source.resolve()
+        if not source.is_relative_to(self.scratch):
+            raise ValueError("The recording must stay inside this enrollment session workspace.")
         data = decode_audio(source, max_seconds=20)
         original_quality = audio_quality(data)
         if original_quality["seconds"] < 3:
@@ -178,8 +186,12 @@ class EnrollmentSession:
         if quality["reasons"]:
             raise ValueError(" ".join(quality["reasons"]))
         index = self.index
+        self.audio_folder.mkdir(parents=True, exist_ok=True)
         prepared = self.audio_folder / data_filename(self.sample_name, self.alias, ".wav")
-        temporary = prepared.with_name(f".{prepared.stem}.{uuid.uuid4().hex}.wav")
+        temporary = self.scratch / data_filename(
+            self.sample_name, self.alias, f".prepared.{uuid.uuid4().hex}.wav"
+        )
+        publication = prepared.with_name(f".{prepared.name}.{uuid.uuid4().hex}.tmp")
         try:
             write_wav(temporary, data)
             digest = hashlib.sha256(temporary.read_bytes()).hexdigest()
@@ -189,9 +201,11 @@ class EnrollmentSession:
                 for sample in self.samples
             ):
                 raise ValueError("This duplicates a saved recording. Read the current passage.")
-            temporary.replace(prepared)
+            shutil.copyfile(temporary, publication)
+            publication.replace(prepared)
         finally:
             temporary.unlink(missing_ok=True)
+            publication.unlink(missing_ok=True)
         self.draft.samples[index] = Sample(
             audio=str(prepared), text=self.draft.readings[index].text
         )
@@ -206,7 +220,7 @@ class EnrollmentSession:
             "transcript_confirmed": True,
             "notice": "Signal checks only. Listen for pronunciation, speaker identity and noise.",
         }
-        save_json(self.folder / f"{prepared.stem}.quality.json", report)
+        save_json(self.scratch / f"{prepared.stem}.quality.json", report)
         self.persist()
         self._selected = None
         return report

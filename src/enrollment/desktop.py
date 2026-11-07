@@ -29,6 +29,7 @@ class EnrollmentApp:
         self.session: EnrollmentSession | None = None
         self.recorder = MicrophoneRecorder()
         self.take: Path | None = None
+        self.take_ready = False
         self.recording = False
         self.busy = False
         self.started = 0.0
@@ -38,6 +39,9 @@ class EnrollmentApp:
         self.confirmed = tk.BooleanVar(value=False)
         self.normalize = tk.BooleanVar(value=True)
         self.heading = tk.StringVar(value="Create or select a voice profile")
+        self.recording_hint = tk.StringVar(
+            value="Read naturally for about 8-15 seconds; recording limit: 20 seconds."
+        )
         self.status = tk.StringVar(value="Finding microphones...")
         root.title("Yapit - Voice Enrollment")
         root.geometry("860x800")
@@ -99,7 +103,8 @@ class EnrollmentApp:
         self.passage.pack(fill="both", expand=True, pady=(8, 10))
         ttk.Label(
             frame,
-            text="Read naturally for about 8-15 seconds. Press Stop when done; 20-second limit.",
+            textvariable=self.recording_hint,
+            font=("Segoe UI", 12, "bold"),
         ).pack(anchor="w")
         self.progress = ttk.Progressbar(frame, mode="determinate")
         self.progress.pack(fill="x", pady=(8, 12))
@@ -113,14 +118,14 @@ class EnrollmentApp:
             button.pack(side="left", padx=(0, 8))
         self.confirm_check = ttk.Checkbutton(
             frame,
-            text="I listened back and read the displayed text exactly.",
+            text="Confirm before saving: I listened back and read the displayed text exactly.",
             variable=self.confirmed,
             command=self.refresh_controls,
         )
         self.confirm_check.pack(anchor="w", pady=(12, 4))
         self.normalize_check = ttk.Checkbutton(
             frame,
-            text="Normalize volume and trim outer silence (original take is kept).",
+            text="Normalize volume and trim outer silence (raw takes kept until Finish).",
             variable=self.normalize,
         )
         self.normalize_check.pack(anchor="w")
@@ -152,13 +157,14 @@ class EnrollmentApp:
             (self.open_button, idle),
             (self.record_button, idle and active and bool(self.device.get())),
             (self.stop_button, self.recording and not self.busy),
-            (self.play_button, idle and self.take is not None),
-            (self.save_button, idle and active and self.take is not None and self.confirmed.get()),
+            (self.play_button, idle and self.take_ready),
+            (self.save_button, idle and active and self.take_ready),
             (
                 self.finish_button,
                 idle
                 and self.session is not None
                 and self.session.ready
+                and self.take is None
                 and not self.session.draft.completed,
             ),
         ]:
@@ -223,7 +229,9 @@ class EnrollmentApp:
             ]
         )
         self.take = None
+        self.take_ready = False
         self.confirmed.set(False)
+        self.recording_hint.set("Ready. Press Record and wait for 'Recording - speak now'.")
         self.show_passage()
         self.status.set(
             f"Editing '{session.alias}'. Save at least {MIN_SAMPLES} samples. "
@@ -260,7 +268,9 @@ class EnrollmentApp:
             self.stop_playback()
             self.session.select_sample(self.reading_picker.current())
             self.take = None
+            self.take_ready = False
             self.confirmed.set(False)
+            self.recording_hint.set("Ready. Press Record and wait for 'Recording - speak now'.")
             self.show_passage()
             self.refresh_controls()
 
@@ -281,6 +291,7 @@ class EnrollmentApp:
             return
         self.stop_playback()
         self.confirmed.set(False)
+        self.take_ready = False
         try:
             self.take = self.session.new_take()
             self.recorder.start(self.device.get(), self.take)
@@ -291,6 +302,8 @@ class EnrollmentApp:
             return
         self.started = time.monotonic()
         self.recording = True
+        self.record_button.configure(text="Starting...")
+        self.recording_hint.set("Starting microphone - wait before speaking.")
         self.status.set("Starting microphone... wait for 'Recording' before speaking.")
         self.refresh_controls()
         self.root.after(100, self.recording_tick)
@@ -299,17 +312,26 @@ class EnrollmentApp:
         if not self.recording:
             return
         elapsed = time.monotonic() - self.started
-        if self.recorder.process.poll() is not None or elapsed >= 20:
+        captured = self.recorder.captured_seconds
+        if (
+            self.recorder.process.poll() is not None
+            or captured >= 20
+            or (captured == 0 and elapsed >= 20)
+        ):
             self.stop_recording()
             return
-        if self.take and self.take.exists() and self.take.stat().st_size > 44:
-            self.status.set(f"Recording: {elapsed:.1f}s / 20s. Speak now; press Stop when done.")
+        if captured > 0:
+            self.record_button.configure(text="Recording")
+            self.recording_hint.set("Recording - speak now. Press Stop when finished.")
+            self.status.set(f"Recorded audio: {captured:.1f}s / 20s.")
         self.root.after(100, self.recording_tick)
 
     def stop_recording(self) -> None:
         if not self.recording:
             return
         self.recording = False
+        self.record_button.configure(text="Record")
+        self.recording_hint.set("Recording stopped. Preparing playback...")
         self.status.set("Stopping microphone...")
 
         def stop_and_check():
@@ -319,14 +341,26 @@ class EnrollmentApp:
         self.work(stop_and_check, self.recording_stopped)
 
     def recording_stopped(self, quality: dict) -> None:
+        self.take_ready = True
+        self.recording_hint.set("Play take, check the confirmation below, then Save & Next.")
         note = " ".join(quality["reasons"]) or "Raw signal checks passed."
         self.status.set(
             f"Recorded {quality['seconds']:.1f}s. {note} "
-            "Play it back, confirm the text, then Save & Next. Prepared audio is checked on save."
+            "Play it back, then check 'Confirm before saving' and click Save & Next. "
+            "Prepared audio is checked on save."
         )
 
     def save_next(self) -> None:
         if self.session is None or self.take is None:
+            return
+        if not self.take_ready or self.busy or self.recording:
+            return
+        if not self.confirmed.get():
+            self.status.set(
+                "To save: play the take, then check 'Confirm before saving' below the buttons. "
+                "Save & Next needs confirmation that you read the displayed text exactly."
+            )
+            self.confirm_check.focus_set()
             return
         self.stop_playback()
         session, take = self.session, self.take
@@ -339,7 +373,9 @@ class EnrollmentApp:
 
     def take_saved(self, report: dict) -> None:
         self.take = None
+        self.take_ready = False
         self.confirmed.set(False)
+        self.recording_hint.set("Ready. Press Record and wait for 'Recording - speak now'.")
         self.show_passage()
         self.status.set(
             f"Saved {report['quality']['seconds']:.1f}s. "
@@ -352,6 +388,7 @@ class EnrollmentApp:
 
     def finish_enrollment(self) -> None:
         if self.session is not None:
+            self.stop_playback()
             self.status.set("Curating samples and creating the voice alias...")
             self.work(self.session.finish, self.enrollment_finished)
 
@@ -359,7 +396,8 @@ class EnrollmentApp:
         self.show_existing()
         self.status.set(
             f"Enrolled '{voice.name}' with {len(voice.samples)} samples. "
-            f"Use this alias for narration. Files: {self.store.voice_path(voice.name).parent}"
+            f"Temporary takes and session files removed. "
+            f"Files: {self.store.voice_path(voice.name).parent}"
         )
         messagebox.showinfo(
             "Voice enrolled",

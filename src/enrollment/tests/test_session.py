@@ -42,12 +42,16 @@ def test_existing_profile_opens_without_consent_and_alias_escape_rejected(enroll
 
 def test_saved_text_resume_and_final_enrollment(session):
     raw = take(session)
+    capture_log = raw.with_suffix(".capture.log")
+    capture_log.write_text("temporary capture progress", encoding="utf-8")
     original = raw.read_bytes()
     with pytest.raises(ValueError, match="confirm"):
         session.save_take(raw, confirmed=False, normalize=True)
     first = session.save_take(raw, confirmed=True, normalize=True)
     assert first["quality"]["reasons"] == []
-    assert raw.is_relative_to(session.store.root / session.alias / "audio")
+    assert raw.is_relative_to(
+        session.store.root.parent / "workspace" / "enrollment" / session.alias
+    )
     assert session.folder == session.store.root / session.alias
     assert raw.read_bytes() == original
     resumed = EnrollmentSession(session.store, session.alias)
@@ -56,6 +60,9 @@ def test_saved_text_resume_and_final_enrollment(session):
     assert len(json.loads((resumed.folder / "my-voice.samples.json").read_text())["samples"]) == 1
     with pytest.raises(ValueError, match="at least 5"):
         resumed.finish()
+    assert raw.exists()
+    assert capture_log.exists()
+    assert resumed.path.exists()
     for index in range(1, 5):
         resumed.save_take(take(resumed, frequency=200 + index * 30), True, True)
     assert resumed.ready
@@ -66,21 +73,55 @@ def test_saved_text_resume_and_final_enrollment(session):
     audio_folder = session.store.voice_audio_dir(voice.name)
     assert audio_folder == session.folder / "audio"
     assert all((audio_folder / sample.audio).exists() for sample in voice.samples)
-    assert len(list(audio_folder.glob("*.raw.*.wav"))) == 5
+    assert not list(audio_folder.glob("*.raw.*.wav"))
+    assert not raw.exists()
+    assert not capture_log.exists()
+    assert not resumed.path.exists()
+    assert not resumed.scratch.exists()
+    assert not list(session.store.root.rglob("*.log"))
+    assert not list(session.store.root.rglob("*.raw.*"))
     assert (session.folder / "my-voice.samples.json").is_file()
     assert load_voice(session.store, voice.name).consent
-    assert EnrollmentSession(session.store, voice.name).ready
+    reopened = EnrollmentSession(session.store, voice.name)
+    assert reopened.ready
+    assert reopened.draft.completed
+    assert not reopened.path.exists()
 
 
-def test_workspace_recording_is_not_an_enrollment_input(session):
-    outside = session.store.root.parent / "workspace" / "enrollment" / session.alias
+def test_completion_cleanup_preserves_other_sessions_and_external_files(session, tmp_path):
+    other = session.scratch.parent / "other-profile"
+    other.mkdir()
+    other_raw = other / "other-profile.sample.raw.wav"
+    other_raw.write_bytes(b"another session")
+    external = tmp_path / "external.wav"
+    write_wav(external, tone())
+    original = external.read_bytes()
+    for index in range(5):
+        session.save_take(take(session, frequency=200 + index * 30), True, True)
+    discarded = take(session, frequency=400)
+    session.finish()
+    assert not discarded.exists()
+    assert other_raw.read_bytes() == b"another session"
+    assert external.read_bytes() == original
+    assert len(list(session.audio_folder.glob("*.wav"))) == 5
+
+
+def test_enrollment_workspace_cannot_write_inside_data(session, monkeypatch):
+    monkeypatch.setenv("YAPIT_WORKSPACE", str(session.store.root))
+    with pytest.raises(ValueError, match="outside"):
+        EnrollmentSession(session.store, "other")
+    assert not (session.store.root / "enrollment").exists()
+
+
+def test_other_session_recording_is_not_an_enrollment_input(session):
+    outside = session.scratch.parent / "other-profile"
     outside.mkdir(parents=True)
     recording = outside / "sample.wav"
     write_wav(recording, tone(4))
     with pytest.raises(ValueError, match="inside"):
         session.save_take(recording, True, True)
     assert session.index == 0
-    assert session.path.is_relative_to(session.store.root)
+    assert session.path.is_relative_to(session.scratch)
 
 
 def test_low_level_cleanup_does_not_change_raw_and_silence_never_passes(session):
@@ -140,6 +181,11 @@ def test_record_stop_flushes_real_wav_without_accessing_a_microphone(session, mo
                 "-hide_banner",
                 "-loglevel",
                 "error",
+                "-nostats",
+                "-stats_period",
+                "0.1",
+                "-progress",
+                "pipe:2",
                 "-n",
                 "-re",
                 "-f",
@@ -157,14 +203,21 @@ def test_record_stop_flushes_real_wav_without_accessing_a_microphone(session, mo
 
     monkeypatch.setattr("yapit.enrollment.recorder.subprocess.Popen", synthetic_capture)
     recorder = MicrophoneRecorder()
+    assert recorder.captured_seconds == 0
     output = session.new_take()
     recorder.start("Test device; never opened", output)
     try:
-        time.sleep(1.3)
+        deadline = time.monotonic() + 10
+        while recorder.captured_seconds == 0:
+            assert recorder.process.poll() is None
+            assert time.monotonic() < deadline, "Capture did not become ready."
+            time.sleep(0.02)
+        time.sleep(0.35)
         assert recorder.stop() == output
         assert recorder.process.poll() == 0
         samples = decode_audio(output)
         assert 0.2 < len(samples) / SAMPLE_RATE < 4
+        assert recorder.captured_seconds == pytest.approx(len(samples) / SAMPLE_RATE, abs=1e-5)
     finally:
         if recorder.process.poll() is None:
             recorder.process.kill()
@@ -198,6 +251,7 @@ def test_real_tk_wizard_advances_after_saving_without_opening_microphone(session
         def __init__(self):
             self.process = None
             self.count = 0
+            self.captured_seconds = 0.0
 
         def start(self, device, output):
             assert device == "Test microphone"
@@ -205,6 +259,7 @@ def test_real_tk_wizard_advances_after_saving_without_opening_microphone(session
             self.count += 1
             write_wav(output, tone(4, 200 + self.count * 30))
             self.process = SimpleNamespace(poll=lambda: None)
+            self.captured_seconds = 4.0
 
         def stop(self):
             self.process = SimpleNamespace(poll=lambda: 0)
@@ -231,13 +286,29 @@ def test_real_tk_wizard_advances_after_saving_without_opening_microphone(session
         assert app.recorder.count == 0
         app.record_button.invoke()
         assert app.recording
+        assert str(app.save_button["state"]) == "disabled"
+        app.recorder.captured_seconds = 0
+        app.recording_tick()
+        assert app.take.stat().st_size > 44
+        assert app.recording_hint.get().startswith("Starting microphone")
+        app.started = time.monotonic() - 21
+        app.recorder.captured_seconds = 0.1
+        app.recording_tick()
+        assert app.recording
+        assert app.recording_hint.get().startswith("Recording - speak now")
+        assert "0.1s / 20s" in app.status.get()
         app.stop_button.invoke()
         pump_until(lambda: not app.busy)
         assert not app.recording
         app.play_button.invoke()
         assert playback[-1][0] == str(app.take)
-        app.confirmed.set(True)
-        app.refresh_controls()
+        assert str(app.save_button["state"]) == "normal"
+        app.save_button.invoke()
+        assert not app.busy
+        assert app.session.index == 0
+        assert app.take is not None
+        assert "check 'Confirm before saving'" in app.status.get()
+        app.confirm_check.invoke()
         app.save_button.invoke()
         pump_until(lambda: not app.busy)
         assert not errors
@@ -252,8 +323,7 @@ def test_real_tk_wizard_advances_after_saving_without_opening_microphone(session
             app.record_button.invoke()
             app.stop_button.invoke()
             pump_until(lambda: not app.busy)
-            app.confirmed.set(True)
-            app.refresh_controls()
+            app.confirm_check.invoke()
             app.save_button.invoke()
             pump_until(lambda: not app.busy)
         app.finish_button.invoke()

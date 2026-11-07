@@ -27,6 +27,16 @@ class MicrophoneRecorder:
         self.output: Path | None = None
         self.log = None
 
+    @property
+    def captured_seconds(self) -> float:
+        if self.output is None:
+            return 0.0
+        progress = self.output.with_suffix(".capture.log").read_text(
+            encoding="utf-8", errors="replace"
+        )
+        timestamps = re.findall(r"^out_time_us=(\d+)$", progress, flags=re.MULTILINE)
+        return int(timestamps[-1]) / 1_000_000 if timestamps else 0.0
+
     def start(self, device: str, output: Path) -> None:
         if os.name != "nt":
             raise RuntimeError("Recording is supported on Windows only.")
@@ -46,9 +56,15 @@ class MicrophoneRecorder:
                     "-loglevel",
                     "error",
                     "-nostats",
+                    "-stats_period",
+                    "0.1",
+                    "-progress",
+                    "pipe:2",
                     "-n",
                     "-f",
                     "dshow",
+                    "-audio_buffer_size",
+                    "50",
                     "-i",
                     f"audio={device}",
                     "-t",
@@ -59,6 +75,8 @@ class MicrophoneRecorder:
                     str(SAMPLE_RATE),
                     "-c:a",
                     "pcm_s16le",
+                    "-flush_packets",
+                    "1",
                     str(output),
                 ],
                 stdin=subprocess.PIPE,

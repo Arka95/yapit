@@ -93,7 +93,9 @@ def test_recorded_sample_replacement_reuses_filename_and_updates_journal(enrolle
     reopened.finish()
     assert profile_names(enrolled) == ["another", "test-voice"]
     assert len(load_voice(enrolled, "another").samples) == 5
-    assert source.exists()
+    assert not source.exists()
+    assert not reopened.path.exists()
+    assert target.exists()
 
 
 def test_profiles_are_read_only_from_data(tmp_path, monkeypatch):
@@ -161,7 +163,9 @@ result = CliRunner().invoke(main_app, [
     'voice-enroll', 'arka', '--manifest', str(session.folder / 'arka.samples.json')
 ])
 assert result.exit_code == 0, result.output
-assert not Path(sys.argv[2]).exists()
+assert not (Path(sys.argv[2]) / 'enrollment' / 'arka').exists()
+assert not list(session.store.root.rglob('*.log'))
+assert not list(session.store.root.rglob('*.raw.*'))
 """
     result = subprocess.run(
         [sys.executable, "-c", script, str(tmp_path / "data"), str(tmp_path / "workspace")],

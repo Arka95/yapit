@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
+from yapit.enrollment.artifacts import cleanup_session, session_directory
 from yapit.media import SAMPLE_RATE, decode_audio, write_wav
 from yapit.models import Sample, SampleManifest, Voice
 from yapit.storage import DataStore, data_filename, save_json
@@ -57,7 +58,7 @@ def profile_names(store: DataStore) -> list[str]:
             (path / filename).exists()
             for filename in (
                 data_filename("profile", path.name, ".json"),
-                data_filename("session", path.name, ".json"),
+                data_filename("samples", path.name, ".json"),
             )
         ):
             names.add(path.name.lower())
@@ -129,7 +130,9 @@ def enroll(
         additions[filename] = Sample(audio=str(source), text=sample.text)
     combined = merged_samples(store, name, list(additions.values()))
     audio_target = target / "audio"
-    with tempfile.TemporaryDirectory(prefix=".curate-", dir=store.root) as temp:
+    scratch = session_directory(store, name)
+    scratch.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".curate-", dir=scratch) as temp:
         staged = Path(temp)
         samples, report, seen = [], [], set()
         for sample in combined:
@@ -144,9 +147,6 @@ def enroll(
             seen.add(digest)
             filename = audio_name(name, source)
             write_wav(staged / filename, data)
-            if source != (audio_target / filename).resolve():
-                raw = f"{Path(filename).stem}.raw{source.suffix.lower()}"
-                shutil.copyfile(source, staged / raw)
             samples.append(Sample(audio=filename, text=sample.text))
             report.append({"audio": filename, "sha256": digest, **quality})
         if len(samples) < MIN_SAMPLES:
@@ -190,6 +190,7 @@ def enroll(
             {"samples": [sample.model_dump() for sample in exported]},
         )
         save_journal(target, name, exported)
+    cleanup_session(store, name)
     return voice
 
 

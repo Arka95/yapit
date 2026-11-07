@@ -117,25 +117,28 @@ Double-click **`Start Enrollment.cmd`**, or run:
 
 1. Create or select a voice profile, such as `arka`, choose your microphone,
    and click **Create / open profile**. There is no consent checkbox.
-2. Read the displayed passage naturally: **Record -> Stop -> Play take**.
-3. Confirm that you read the text exactly, then click **Save & Next**.
+2. Press **Record**, wait for **Recording - speak now**, then read the passage.
+   Press **Stop**, then **Play take**.
+3. Check **Confirm before saving**, then click **Save & Next**.
 4. Save at least **five distinct samples**, then click **Finish enrollment**.
    The 16 shared static passages are under `src\enrollment\sampleScripts`;
    recording the full baseline is recommended, not required.
 
 Aim for 8-15 seconds per passage; recording stops at 20 seconds. Retake a passage
 if you miss words or hear noise. Optional normalization and outer-silence trimming
-preserve the original recording. Unusable signal levels, clipping, excessive
+preserve the raw take until enrollment finishes. Unusable signal levels, clipping, excessive
 silence, and duplicate recordings are rejected.
 
 Reopen the same profile to add recordings or select a saved passage to replace
 its audio. Names are always lowercase; `ARKA` and `arka` are one profile.
-Recordings live under `data\<profile>\audio`, with profile metadata, session
-state, manifests and journals under `data\<profile>`. Files use the shared
+Accepted recordings live under `data\<profile>\audio`, with profile metadata,
+manifests and journals under `data\<profile>`. Files use the shared
 `<profile>.<name>.<extension>` format defined in `src\constants.py`, for example
 `arka.audio_sample_1.wav` and `arka.journal.json`. Imports merge by normalized
 filename and overwrite matching files; they do not create duplicate profiles.
-Enrollment uses only the data root and does not create or scan a workspace.
+Temporary raw takes, logs, preparation reports, and draft state live under
+`workspace\enrollment\<profile>` and are removed after successful **Finish enrollment**.
+Incomplete sessions retain them for retry; data contains no enrollment logs.
 
 The app is Windows-only and local-only. It needs no speech model or API key,
 and accesses your microphone only after you press **Record**.
@@ -304,8 +307,8 @@ for the workflow above. Setup and commands are in [dev.readme.md](dev.readme.md)
 
 ## Privacy and troubleshooting
 
-All modules use one data layout: **`data\audio`** for imported/raw recordings
-(including curated enrollment copies), **`data\transcripts`** for scripts,
+All modules use one data layout: **`data\audio`** for imported recordings,
+**`data\transcripts`** for scripts,
 transcripts, training text, and captions, and **`data\generated_audio`** for
 synthesized WAV/MP3 files and their audio intermediates. New generation and
 Rescript artifacts have readable flat filenames, without job-ID folders.
@@ -315,9 +318,9 @@ and archives externally supplied audio under `data\audio\imports`.
 Set `YAPIT_DATA_DIR` to choose a different data root; by default it is `data`
 beside the configured workspace. Set absolute workspace/data paths when launching
 from another directory. Job metadata and video guides remain in `workspace\outputs`;
-voice profiles and enrollment recordings belong only to `data\<profile>`.
-Enrollment independently defaults to `.\data`, ignores `YAPIT_WORKSPACE`, and has
-no old-profile/draft lookup. The explicitly selected
+voice profiles and accepted enrollment recordings belong to `data\<profile>`.
+Enrollment independently defaults to `.\data`; `YAPIT_WORKSPACE` controls only its
+temporary session files. There is no old-profile/draft lookup. The explicitly selected
 audio/transcript fixture under `tests\data` is a versionable test-only exception.
 
 Recordings and narration are processed locally. Model/dependency downloads need

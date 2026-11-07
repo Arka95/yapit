@@ -11,6 +11,7 @@ from yapit.voices import enroll
 @pytest.fixture(autouse=True)
 def isolated_data_root(tmp_path, monkeypatch):
     monkeypatch.setenv("YAPIT_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("YAPIT_WORKSPACE", str(tmp_path / "workspace"))
 
 
 def tone(seconds: float, frequency: float = 180) -> np.ndarray:

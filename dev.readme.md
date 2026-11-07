@@ -193,7 +193,7 @@ inference works.
 
 | Variable | Purpose / default |
 |---|---|
-| `YAPIT_WORKSPACE` | Generation metadata and edit guides; defaults to `workspace`; not used by enrollment |
+| `YAPIT_WORKSPACE` | Generation metadata/edit guides and temporary enrollment files; defaults to `workspace` |
 | `YAPIT_DATA_DIR` | Data/profile root; enrollment defaults independently to `.\data`; generation defaults beside the workspace |
 | `YAPIT_MODEL` | Base Hub model ID or local model directory; defaults to `Qwen/Qwen3-TTS-12Hz-1.7B-Base` |
 | `YAPIT_DEVICE` | `auto` selects CUDA when available, otherwise CPU; can be set explicitly |
@@ -252,19 +252,26 @@ playback through `winsound`. Blocking work runs in worker threads; results retur
 through a queue polled by Tk's event loop. `enrollment\recorder.py` discovers DirectShow
 microphones and captures mono 24 kHz WAVs through an FFmpeg subprocess. Record
 opens the microphone; Stop sends FFmpeg `q` so it can finalize the file.
-Capture has a 20-second limit and is never started just by opening the app.
+Capture has a 20-second audio limit and is never started just by opening the app.
+The UI waits for captured-audio progress before showing **Recording - speak now**;
+startup time is not deducted from the take. DirectShow uses a requested 50 ms buffer.
 
 **Enrollment state and curation.** `EnrollmentSession` saves each accepted take
 against the exact displayed static passage, with resumable state in
-`<profile>.session.json`, an inventory in `<profile>.journal.json`, and a manifest
+`workspace\enrollment\<profile>\<profile>.session.json`, an inventory in
+`data\<profile>\<profile>.journal.json`, and a manifest
 in `<profile>.samples.json`. Five accepted samples make a profile usable; more can
-be added later. There is no consent checkbox. Raw takes remain intact; optional preparation
+be added later. There is no consent checkbox. Raw takes remain temporary until Finish;
+optional preparation
 trims outer silence and applies constant gain to a separate file.
 `enrollment\profiles.py` checks duration, clipping, loudness, quiet frames, and duplicates,
-preserves original clips and copies accepted mono 24 kHz samples into
+preserves external source files and copies accepted mono 24 kHz samples into
 `data\<profile>\audio`, estimates
 speaking rate, and ranks one reference by signal characteristics. These checks
 are not transcription, speaker verification, or proof of a noise-free sample.
+Successful enrollment removes profile-owned workspace draft/raw/log/preparation
+files, while retaining accepted audio and final metadata. Incomplete/failed
+sessions remain resumable; data never holds enrollment logs.
 
 **Script preparation.** `scripts.py` combines `script_prompt.txt`, a validated
 brief, a word budget, and the Script JSON schema. The default flow returns this
@@ -323,9 +330,9 @@ directories, MCP clients, and WSL.
 | Location beneath the data root | Content |
 |---|---|
 | `<profile>\audio\<profile>.audio_sample_<number>.wav` | Prepared static-passage recordings |
-| `<profile>\audio\<profile>.<source>.*` | Imported recordings, raw takes and delivery references |
+| `<profile>\audio\<profile>.<source>.*` | Accepted imported recordings and delivery references |
 | `audio\imports` | Archived external inputs; video soundtrack extraction |
-| `<profile>\<profile>.session.json` / `.samples.json` / `.journal.json` | Draft state, exact sample manifests and inventory |
+| `<profile>\<profile>.samples.json` / `.journal.json` | Exact sample manifests and inventory |
 | `<profile>\<profile>.profile.json` / `.quality.json` | Usable voice profile and signal-quality reports |
 | `transcripts\<profile>.<source>.script.json` / `.transcript.json` | Recognition scripts and sidecars |
 | `transcripts\<name>.script.json` / `.captions.srt` | Rendering script and captions |
@@ -333,14 +340,16 @@ directories, MCP clients, and WSL.
 | `generated_audio\<name>.wav` / `.mp3` / `.raw.wav` / `.fitted.wav` | Final audio and intermediates |
 
 Profiles are stored only under `data\<profile>`. Enrollment receives a `DataStore`
-directly and never initializes or scans `YAPIT_WORKSPACE`.
+directly; canonical profiles are never read from the workspace. Temporary
+drafts, raw captures, capture logs, and preparation reports live in
+`YAPIT_WORKSPACE\enrollment\<profile>` and are deleted after successful enrollment.
 Under `YAPIT_WORKSPACE`, flat `outputs\<name>.*` files hold prompts/frames, timelines,
 provenance, status, guides and logs. Model checkpoints retain the upstream-required
 directory structure beneath the selected profile's `checkpoints\<readable-name>`.
 Profiles and draft
 state necessarily embed reference text as metadata; standalone transcript/script
-exports use the transcript store. No new recording or generated WAV/MP3 is saved
-in the workspace. An enrollment draft is not usable for
+exports use the transcript store. Accepted recordings and generated WAV/MP3
+remain in data. An enrollment draft is not usable for
 generation until **Finish enrollment** creates its voice profile.
 
 There are no old profile/draft fallback paths. Application voice paths delegate

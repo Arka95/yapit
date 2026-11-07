@@ -13,12 +13,15 @@ train weights or automatically verify spoken words.
 ```
 
 Create or select a profile, choose the microphone, and record the displayed
-passage. Replay the take, confirm the text is exact, and save. There is no consent
-checkbox. Save **at least five distinct recordings**, then finish enrollment;
+passage. Wait for the bold **Recording - speak now** cue before speaking; opening
+the microphone takes time. The timer measures captured audio, not launch time.
+Replay the take, check **Confirm before saving**, and save. If the confirmation
+is unchecked, **Save & Next** explains what is needed instead of staying grey.
+There is no consent checkbox. Save **at least five distinct recordings**, then finish enrollment;
 you can finish without recording the entire baseline and add more later.
 
 The passage selector lets you revisit a saved passage. Saving a new take replaces
-that passage's prepared audio at the same filename; raw takes remain separate.
+that passage's prepared audio at the same filename; raw takes remain temporary.
 Profile names are lowercase and case-insensitive. Opening `ARKA` opens `arka`,
 not another profile.
 
@@ -43,20 +46,21 @@ selection; downstream training remains separate and currently requires at least
 
 ## Data and filenames
 
-All runtime files belong to this repository's data root (`YAPIT_DATA_DIR`):
+Only accepted audio and reusable profile metadata belong to `YAPIT_DATA_DIR`:
 
 ```text
 data\arka\
   arka.profile.json
-  arka.session.json
   arka.samples.json
   arka.journal.json
   arka.quality.json
-  arka.audio_sample_1.quality.json
   audio\
     arka.audio_sample_1.wav
-    arka.audio_sample_1.raw.<take-id>.wav
-    arka.audio_sample_1.raw.<take-id>.capture.log
+workspace\enrollment\arka\
+  arka.session.json
+  arka.audio_sample_1.quality.json
+  arka.audio_sample_1.raw.<take-id>.wav
+  arka.audio_sample_1.raw.<take-id>.capture.log
 ```
 
 `constants.py` defines the shared `<profile>.<name><suffix>` filename template,
@@ -64,10 +68,19 @@ the default profile, and the numbered audio-sample stem. `storage.data_filename`
 enforces lowercase and sanitizes the stem. Recordings and metadata never go in
 the source module; only the reusable baseline scripts do.
 
+Raw takes are exactly what the microphone captured. Prepared samples are separate
+copies with optional outer-silence trimming and constant volume gain; they are not
+generated speech. Capture logs, raw takes, preparation reports, and draft state
+stay in the temporary workspace. Successful **Finish enrollment** removes those
+files, including unused/replaced takes. Save any wanted take before finishing.
+Incomplete or failed sessions retain their workspace files for retry/resumption.
+External import sources are never deleted. The data folder contains no capture logs.
+
 `journal.json` (with the profile prefix shown above) lists accepted sample paths,
 exact transcripts, file hashes, count, and the five-sample minimum. Draft state
-retains its reading snapshot so edited baseline text does not silently relabel
-old recordings. Signal checks reject clipping, excessive silence, unusable levels,
+retains its reading snapshot until completion. Reopening a completed profile
+compares saved transcript text with the current baseline instead of silently
+relabeling recordings. Signal checks reject clipping, excessive silence, unusable levels,
 short clips, and repeated recordings under different filenames.
 
 ## Import or merge recordings
@@ -85,9 +98,11 @@ audio and update its transcript. The merged profile must contain at least five
 distinct recordings. Invalid inputs are checked before imported files replace
 existing ones. Original external input files are not changed.
 
-Enrollment reads and writes only this data layout. It neither initializes a
-workspace nor searches old workspace/profile directories. Entry points use
+Profiles are read only from this data layout; there are no old-profile fallbacks.
+Entry points use
 `YAPIT_DATA_DIR`, or `data` beneath the current working directory independently
-of `YAPIT_WORKSPACE`. Library callers pass an explicit `DataStore`.
+of `YAPIT_WORKSPACE`. Temporary enrollment files use
+`YAPIT_WORKSPACE\enrollment\<profile>`, or `workspace` beside the data root.
+The workspace must be outside the data root. Library callers pass an explicit `DataStore`.
 
 See [dev.readme.md](dev.readme.md) for boundaries, tests, and implementation details.
