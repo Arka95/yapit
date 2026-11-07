@@ -9,6 +9,8 @@ there is no nested `src\yapit` folder. The public package/import name remains
 ```text
 yapit\
   README.md
+  VERSION
+  pyproject.toml
   docs\
     dev.readme.md
     analysis.md
@@ -93,6 +95,11 @@ source folder. The small `editables` dependency is declared for editable builds.
 After moving source files, reinstall the package into each application runtime;
 old editable installs still point at the removed folder. Do not install YapIt
 into the separate Python 3.10 CosyVoice worker.
+
+`VERSION` is the single source of the package version. Hatch reads its plain
+version string for wheel, source and editable builds; `pyproject.toml` declares
+the version as dynamic. Change `VERSION` for the next release, then build with
+`.\.venv\Scripts\python.exe -m build --no-isolation`.
 
 For the approved-feed workflow with build isolation disabled, install the
 declared build dependencies first:

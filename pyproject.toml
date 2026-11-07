@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "yapit"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Local personal-voice narration and vertical reel planning"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
@@ -33,6 +33,10 @@ yapit-mcp = "yapit.server:main"
 
 [tool.hatch.build]
 dev-mode-dirs = ["."]
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = '^(?P<version>\S+)\s*$'
 
 [tool.hatch.build.targets.wheel]
 only-include = ["src"]
