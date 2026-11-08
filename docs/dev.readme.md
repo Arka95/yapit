@@ -217,69 +217,6 @@ resolves runtime/build dependencies offline. PyTorch still uses its official
 index/cache, and the SoX archive still comes from its checksum-verified mirror.
 Only use public wheels whose upstream hashes or provenance you have verified.
 
-### Dependency management on `DESKTOP-A05R1KA`
-
-The owner reports that this Windows machine's VPN restricts PyPI access.
-Direct wheel/metadata requests have produced TLS `HandshakeFailure`; a successful
-index lookup is not proof that its redirected artifact host is reachable.
-The configured organization feed is
-`https://packagefeedproxy.microsoft.io/pypi/simple/`. pip successfully downloaded
-the bootstrap uv wheel from that feed, while uv dependency resolution still
-attempted blocked `files.pythonhosted.org` downloads. These are observations from
-this machine, not a claim that either installer always works.
-
-Prefer approved feeds and existing verified caches. If the feed lacks a wheel,
-prepare a wheelhouse on an authorized Windows machine/network using the exact
-backend requirements and matching interpreter/architecture. For the isolated
-CosyVoice trial, clone its source first, then collect/install its dependencies:
-
-```powershell
-# Authorized matching Windows/Python 3.10 environment:
-python -m pip download --dest .\verified-wheels -r .\requirements-cosyvoice.txt
-
-# Restricted machine, after verifying wheel provenance and hashes:
-.\.venv-cosyvoice-bootstrap\Scripts\python -m pip --python .\.venv-cosyvoice\Scripts\python.exe install --no-index --find-links .\verified-wheels -r .\requirements-cosyvoice.txt
-```
-
-Source distributions can require additional build tools/dependencies; a wheelhouse
-is complete only after installation succeeds without network access in a fresh,
-matching environment. Include the matching CUDA wheels, build requirements where
-needed, and all transitive dependencies. Record resolved versions and trusted
-SHA256 hashes. Model files, SoX archives, and managed Python downloads are separate
-artifacts and need their own approved provisioning paths.
-
-Do not disable certificate validation, change VPN policy, or substitute an
-unreviewed public mirror. Where corporate TLS inspection requires a CA certificate,
-use only the organization's supplied trust configuration. Keep index choices
-local to a command/environment, never embed credentials in tracked files, and
-do not modify the working Qwen `.venv-cpu`/`.venv-gpu` while resolving CosyVoice's
-different requirements.
-
-The initial CosyVoice source revision is
-`074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc`; its Matcha-TTS submodule is
-`dd9105b34bf2be2230f4aa1e4769fb586a3c824e`. Model files are downloaded separately
-to `models\cosyvoice3-2512`. `scripts\cosyvoice-trial.py` runs orchestration in the
-normal YapIt environment, then starts a Python 3.10 worker for the incompatible
-upstream dependencies. The worker explicitly checks CUDA placement of the
-language model, flow decoder, and vocoder. The upstream Windows ONNX frontend may
-remain CPU-only; reported PyTorch memory excludes other runtimes.
-
-One verified alternative worked for the blocked NetworkX 3.1 wheel: download it
-through the existing approved feed's artifact endpoint, verify its SHA256 against
-the feed's published link, and install that local wheel with `--no-index --no-deps`
-before continuing normal dependency resolution. Merely adding `--find-links`
-did not prevent pip from selecting blocked remote metadata. This is a targeted
-cache workaround, not proof that the entire CosyVoice environment is provisioned.
-
-`scripts\cache-feed-wheel.py` implements that verified-cache path for individual
-wheels on this machine. It accepts a wheel basename, requires a published SHA256,
-uses only the approved feed artifact endpoint, and refuses modified cached files:
-
-```powershell
-.\.venv\Scripts\python.exe .\scripts\cache-feed-wheel.py networkx-3.1-py3-none-any.whl
-.\.venv-cosyvoice-bootstrap\Scripts\python.exe -m pip --python .\.venv-cosyvoice\Scripts\python.exe install --no-index --no-deps .\.runtime-wheel-cache\cosyvoice\networkx-3.1-py3-none-any.whl
-```
-
 The wheel choices follow the official
 [PyTorch previous-versions matrix](https://pytorch.org/get-started/previous-versions/).
 The configured wheels target CUDA 12.8; a compatible NVIDIA driver/device must
