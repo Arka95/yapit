@@ -7,6 +7,7 @@ from typing import Annotated
 import typer
 from dotenv import load_dotenv
 
+from yapit.common_utils.metrics import configure_logging
 from yapit.enrollment.profiles import enroll, profile_names
 from yapit.storage import DataStore
 
@@ -15,6 +16,7 @@ app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 
 def data_store() -> DataStore:
     load_dotenv()
+    configure_logging()
     return DataStore(Path("data"))
 
 

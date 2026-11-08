@@ -2,7 +2,6 @@ import json
 
 import numpy as np
 import pytest
-from conftest import tone
 from typer.testing import CliRunner
 
 from yapit.cli import app
@@ -10,6 +9,7 @@ from yapit.common_utils.fileutils import save_json
 from yapit.common_utils.mediautils import SAMPLE_RATE, write_wav
 from yapit.enrollment import load_voice
 from yapit.enrollment.styles import enroll_style, select_voice
+from yapit.enrollment.tests.integration.conftest import tone
 from yapit.models import DeliveryStyle
 
 

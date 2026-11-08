@@ -43,7 +43,7 @@ only-include = ["src"]
 sources = {"src" = "yapit"}
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/data/**", "/.vscode/**"]
+exclude = ["/data/**", "/.vscode/**", "/.repo-stats/**"]
 
 [tool.hatch.build.hooks.custom]
 path = "scripts/hatch-build.py"
@@ -60,7 +60,13 @@ known-first-party = ["yapit"]
 known-third-party = ["mcp"]
 
 [tool.pytest.ini_options]
+markers = [
+  "agent: packaging, documentation, cold-import and agent-maintenance checks (non-rapid only)",
+  "integration: real media, GUI, subprocess or cross-module workflows (explicit opt-in)",
+  "llm: model inference or model-dependent tests (explicit opt-in)",
+]
 testpaths = [
+  "agenttests",
   "tests",
   "src/enrollment/tests",
   "src/rescript/tests",

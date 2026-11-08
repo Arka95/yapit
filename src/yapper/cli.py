@@ -8,6 +8,7 @@ from typing import Annotated
 import typer
 from dotenv import load_dotenv
 
+from yapit.common_utils.metrics import configure_logging
 from yapit.constants import DEFAULT_PROFILE
 from yapit.models import DeliveryStyle
 from yapit.storage import Workspace
@@ -36,6 +37,7 @@ def generate(
     if (text is None) == (script is None):
         raise typer.BadParameter("Choose exactly one of --text or --script.")
     load_dotenv()
+    configure_logging()
     try:
         result = generate_audio(
             load_script(script) if script is not None else text,

@@ -7,11 +7,13 @@ import sys
 import threading
 from contextlib import redirect_stdout
 from pathlib import Path
+from types import ModuleType
 from typing import Protocol
 
 import numpy as np
 
 from yapit.common_utils.mediautils import SAMPLE_RATE, resample
+from yapit.common_utils.metrics import timed
 from yapit.common_utils.modelutils import load_model
 from yapit.constants import DEFAULT_SPEECH_MODEL
 from yapit.models import Voice
@@ -30,7 +32,13 @@ class QwenSpeech:
         self.model = None
         self.prompt = None
         self.lock = threading.Lock()
+        self.accelerator = None
 
+    @property
+    def inference_backend(self) -> str:
+        return "cuda_graphs" if self.accelerator and self.accelerator.active else "sdpa"
+
+    @timed
     def _load(self) -> None:
         if self.model is not None:
             return
@@ -79,7 +87,20 @@ class QwenSpeech:
                     ref_text=self.voice.reference_text,
                     x_vector_only_mode=False,
                 )
+            self._enable_acceleration(torch, device)
 
+    def _enable_acceleration(self, torch: ModuleType, device: str) -> None:
+        if device == "cpu" or os.environ.get("YAPIT_CUDA_GRAPHS", "1") == "0":
+            return
+        from yapit.yapper.inference import CudaCodePredictor
+
+        talker = self.model.model.talker
+        self.accelerator = CudaCodePredictor(
+            talker.code_predictor, torch, talker.config.num_code_groups
+        )
+        talker.code_predictor.generate = self.accelerator.generate
+
+    @timed
     def synthesize(self, text: str) -> np.ndarray:
         with self.lock, redirect_stdout(sys.stderr):
             self._load()

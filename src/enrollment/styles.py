@@ -7,6 +7,7 @@ from pathlib import Path
 
 from yapit.common_utils.fileutils import data_filename, save_json
 from yapit.common_utils.mediautils import decode_audio, write_wav
+from yapit.common_utils.metrics import timed
 from yapit.enrollment.profiles import audio_quality, load_voice
 from yapit.models import DeliveryStyle, StyleReference, Voice
 from yapit.storage import DataStore
@@ -50,6 +51,7 @@ STYLE_GUIDES = {
 }
 
 
+@timed
 def enroll_style(
     store: DataStore,
     name: str,

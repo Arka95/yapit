@@ -14,7 +14,7 @@ from yapit.enrollment import (
     Reading,
 )
 from yapit.enrollment.profiles import load_voice
-from yapit.enrollment.tests.conftest import tone
+from yapit.enrollment.tests.integration.conftest import tone
 from yapit.storage import DataStore
 
 

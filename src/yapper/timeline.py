@@ -5,9 +5,11 @@ import re
 import numpy as np
 
 from yapit.common_utils.mediautils import SAMPLE_RATE, split_cut_count
+from yapit.common_utils.metrics import timed
 from yapit.models import Cue, Script, Timeline
 
 
+@timed
 def build_timeline(
     script: Script,
     durations: list[float],

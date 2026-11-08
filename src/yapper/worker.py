@@ -21,6 +21,7 @@ import numpy as np
 import soundfile as sf
 
 from yapit.common_utils.mediautils import SAMPLE_RATE
+from yapit.common_utils.metrics import timed
 from yapit.enrollment.styles import select_voice
 from yapit.models import Voice
 from yapit.storage import DataStore
@@ -184,6 +185,7 @@ class SpeechEngine:
             checkpoint=voice.checkpoint,
             device=str(parameter.device) if parameter is not None else "test",
             dtype=str(parameter.dtype) if parameter is not None else "test",
+            inference_backend=getattr(backend, "inference_backend", "test"),
             load_seconds=round(time.perf_counter() - started, 3),
         )
 
@@ -191,6 +193,7 @@ class SpeechEngine:
         with self.lock:
             self._load(voice, directory)
 
+    @timed
     def synthesize(self, voice: Voice, directory: Path, text: str, reuse: bool) -> np.ndarray:
         if not isinstance(text, str) or not text.strip() or len(text) > 4000:
             raise ValueError("Supply 1-4000 characters of speech text.")
@@ -248,6 +251,7 @@ class SpeechEngine:
                 last_request_seconds=round(elapsed, 3),
                 last_audio_seconds=round(len(wave) / SAMPLE_RATE, 3),
                 last_real_time_factor=round(elapsed / (len(wave) / SAMPLE_RATE), 3),
+                inference_backend=getattr(self.backend, "inference_backend", "test"),
             )
             return wave
         finally:

@@ -8,6 +8,7 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+/.repo-stats/
 dist/
 *.egg-info/
 .env
@@ -32,6 +33,7 @@ outputs/
 !tests/data/
 !tests/data/arka.ladakhi_marmots.wav
 
-# Keep Arka's clean profile data eligible for version control.
+# Keep Arka's data eligible for version control, except checkpoints.
 !/data/arka/
 !/data/arka/**
+/data/arka/checkpoints/

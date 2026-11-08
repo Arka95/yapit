@@ -10,6 +10,7 @@ import typer
 from dotenv import load_dotenv
 
 from yapit.common_utils.mediautils import ffmpeg
+from yapit.common_utils.metrics import configure_logging
 from yapit.constants import DEFAULT_PROFILE, DEFAULT_SPEECH_MODEL
 from yapit.editor import AudioMix, generate_video
 from yapit.enrollment import enroll
@@ -48,6 +49,7 @@ app.add_typer(yapper_app, name="yapper", hidden=True)
 
 def workspace() -> Workspace:
     load_dotenv()
+    configure_logging()
     return Workspace(os.environ.get("YAPIT_WORKSPACE", "workspace"))
 
 

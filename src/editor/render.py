@@ -3,30 +3,37 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from pydantic import Field
+
 from yapit.common_utils.fileutils import copy_file_exclusive
 from yapit.common_utils.mediautils import run_media, srt_time
-from yapit.editor.mixing import AudioMix, audio_filters
-from yapit.editor.templates import create_placeholder, placeholder_colour
-from yapit.models import Timeline
+from yapit.common_utils.metrics import timed
+from yapit.editor.mixing import AudioMix, audio_filters, prepare_audio_inputs
+from yapit.editor.templates import (
+    DEFAULT_STYLE,
+    PlaceholderStyle,
+    create_placeholder,
+    placeholder_colour,
+)
+from yapit.models import Model, Timeline
 
 
-def render_guide(
+class RenderSettings(Model):
+    video_codec: str = "libx264"
+    preset: str = "fast"
+    crf: int = Field(default=23, ge=0, le=51)
+    audio_codec: str = "aac"
+    audio_bitrate: str = "192k"
+
+
+def _prepare_slates(
     timeline: Timeline,
-    audio: Path,
     output: Path,
     *,
-    video: Path,
-    captions: Path | None = None,
-    prefix: str = "",
-    music: Path | None = None,
-    mix: AudioMix | None = None,
-) -> float:
-    if prefix and not re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9_.-]*", prefix):
-        raise ValueError("Video prefix must be a simple ASCII filename.")
-    settings = mix or AudioMix()
-    inputs, graph, seconds = audio_filters(timeline, audio, music, settings)
-    output.mkdir(parents=True, exist_ok=True)
-    stem = f"{prefix}." if prefix else ""
+    stem: str,
+    seconds: float,
+    style: PlaceholderStyle,
+) -> tuple[Path, str]:
     srt = []
     concat = []
     total_frames = 0
@@ -36,7 +43,7 @@ def render_guide(
         display = cue.model_copy(update={"end": seconds}) if index == len(timeline.cues) else cue
         colour = placeholder_colour(display.end - display.start)
         alternate = not alternate if colour == previous_colour else False
-        image = create_placeholder(timeline, display, index, alternate=alternate)
+        image = create_placeholder(timeline, display, index, alternate=alternate, style=style)
         previous_colour = colour
         slate = output / f"{stem}clip-{index:03}.png"
         image.save(slate)
@@ -55,12 +62,20 @@ def render_guide(
     concat += [f"file '{slate.name}'", f"option framerate {timeline.fps}"]
     playlist = output / f"{stem}slates.txt"
     playlist.write_text("\n".join(concat) + "\n", encoding="ascii")
-    if captions is None:
-        from yapit.storage import DataStore
+    return playlist, "\n".join(srt)
 
-        captions = DataStore().transcripts / f"{stem}captions.srt"
-    captions.parent.mkdir(parents=True, exist_ok=True)
-    captions.write_text("\n".join(srt), encoding="utf-8")
+
+def _encode_video(
+    timeline: Timeline,
+    audio: Path,
+    playlist: Path,
+    rendered: Path,
+    *,
+    inputs: list[str],
+    graph: str,
+    seconds: float,
+    settings: RenderSettings,
+) -> None:
     run_media(
         [
             "-y",
@@ -85,24 +100,67 @@ def render_guide(
             "-vf",
             f"fps={timeline.fps},format=yuv420p",
             "-c:v",
-            "libx264",
+            settings.video_codec,
             "-preset",
-            "fast",
+            settings.preset,
             "-crf",
-            "23",
+            str(settings.crf),
             "-c:a",
-            "aac",
+            settings.audio_codec,
             "-b:a",
-            "192k",
+            settings.audio_bitrate,
             "-t",
             f"{seconds:.8f}",
             "-movflags",
             "+faststart",
-            str(output / f"{stem}guide.mp4"),
+            str(rendered),
         ]
     )
-    video.parent.mkdir(parents=True, exist_ok=True)
+
+
+@timed
+def render_guide(
+    timeline: Timeline,
+    audio: Path,
+    output: Path,
+    *,
+    video: Path,
+    captions: Path | None = None,
+    prefix: str = "",
+    music: Path | None = None,
+    mix: AudioMix | None = None,
+    render_settings: RenderSettings | None = None,
+    style: PlaceholderStyle = DEFAULT_STYLE,
+    actual_seconds: float | None = None,
+) -> float:
+    if prefix and not re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9_.-]*", prefix):
+        raise ValueError("Video prefix must be a simple ASCII filename.")
+    settings = mix or AudioMix()
+    inputs, seconds = prepare_audio_inputs(
+        timeline, audio, music, settings, actual_seconds=actual_seconds
+    )
+    graph = audio_filters(timeline, settings, seconds=seconds, music=music is not None)
+    output.mkdir(parents=True, exist_ok=True)
+    stem = f"{prefix}." if prefix else ""
+    playlist, srt = _prepare_slates(timeline, output, stem=stem, seconds=seconds, style=style)
+    if captions is None:
+        from yapit.storage import DataStore
+
+        captions = DataStore().transcripts / f"{stem}captions.srt"
+    captions.parent.mkdir(parents=True, exist_ok=True)
+    captions.write_text(srt, encoding="utf-8")
     rendered = output / f"{stem}guide.mp4"
+    _encode_video(
+        timeline,
+        audio,
+        playlist,
+        rendered,
+        inputs=inputs,
+        graph=graph,
+        seconds=seconds,
+        settings=render_settings or RenderSettings(),
+    )
+    video.parent.mkdir(parents=True, exist_ok=True)
     copy_file_exclusive(rendered, video)
     rendered.unlink()
     return seconds

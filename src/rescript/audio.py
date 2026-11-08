@@ -12,10 +12,12 @@ from yapit.common_utils.mediautils import (
     has_video,
     validate_media_source,
 )
+from yapit.common_utils.metrics import timed
 from yapit.constants import DEFAULT_PROFILE
 from yapit.storage import DataStore
 
 
+@timed
 def extract_audio(
     media: Path, *, output_dir: Path | None = None, profile: str = DEFAULT_PROFILE
 ) -> dict:

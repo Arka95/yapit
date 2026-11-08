@@ -11,6 +11,7 @@ from tkinter import messagebox, ttk
 from dotenv import load_dotenv
 
 from yapit.common_utils.mediautils import decode_audio
+from yapit.common_utils.metrics import configure_logging
 from yapit.enrollment import (
     MIN_SAMPLES,
     EnrollmentSession,
@@ -462,6 +463,7 @@ def main() -> None:
     if os.name != "nt":
         raise RuntimeError("The native enrollment app currently supports Windows only.")
     load_dotenv()
+    configure_logging()
     root = tk.Tk()
     EnrollmentApp(root, DataStore(Path("data")))
     root.mainloop()

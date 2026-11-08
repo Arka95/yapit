@@ -8,6 +8,7 @@ import typer
 from dotenv import load_dotenv
 
 from yapit.common_utils.fileutils import save_json
+from yapit.common_utils.metrics import configure_logging
 from yapit.musicgen import download_music, plan_music, search_music
 from yapit.storage import DataStore
 from yapit.yapper.script_planner import load_script
@@ -22,6 +23,7 @@ def music_plan(
     output: Path | None = None,
 ) -> None:
     """Prepare an editable music brief from script/beat context, without network calls."""
+    configure_logging()
     plan = plan_music(load_script(script), video_type=video_type, emotion=emotion)
     if output:
         save_json(output, plan)
@@ -37,6 +39,7 @@ def music_search(
 ) -> None:
     """Find and rank CC0 music; sends generic music queries, not narration."""
     load_dotenv()
+    configure_logging()
     plan = plan_music(load_script(script), video_type=video_type, emotion=emotion)
     try:
         candidates = search_music(plan, limit=limit, page=page)
@@ -66,6 +69,7 @@ def music_download(
 ) -> None:
     """Download one CC0 track after source verification and save its licensing evidence."""
     load_dotenv()
+    configure_logging()
     plan = plan_music(load_script(script), video_type=video_type, emotion=emotion)
     try:
         result = download_music(id, plan, data=DataStore())

@@ -11,6 +11,8 @@ import numpy as np
 import soundfile as sf
 from PIL import Image
 
+from yapit.common_utils.metrics import timed
+
 SAMPLE_RATE = 24000
 SUPPORTED_AUDIO = {
     ".wav",
@@ -30,6 +32,7 @@ def ffmpeg() -> str:
     return os.environ.get("YAPIT_FFMPEG") or imageio_ffmpeg.get_ffmpeg_exe()
 
 
+@timed
 def run_media(
     args: list[str], *, timeout: int = 600, input: bytes | None = None
 ) -> subprocess.CompletedProcess:

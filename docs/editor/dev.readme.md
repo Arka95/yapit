@@ -50,7 +50,19 @@ render_guide(
 
 `Timeline` and paths are supplied by the caller. Application defaults/reservations
 remain in `storage.py`; normal workflows use `data\generated_video`.
-The renderer's return value is `None`, preserving the existing API.
+The renderer returns the published video duration as a float.
+
+`RenderSettings` controls codecs, preset, CRF and audio bitrate without changing
+the existing defaults. `AudioMix` also exposes ducking parameters, beat-transition
+duration and narration/timeline tolerance. `PlaceholderStyle` centralizes layout
+defaults; fonts are cached by name/size.
+
+`prepare_audio_inputs` validates files and measures duration; `audio_filters`
+builds the graph without file reads and accepts explicit audio input labels.
+Callers with a measured narration duration can pass `actual_seconds` to avoid
+probing. Otherwise libsndfile reads sample-count metadata, with full decoding
+only for unsupported formats. Slate preparation and encoding are separate
+stages in `render.py`.
 
 Colour selection uses the cue's unrounded duration. Encoding uses cumulative
 rounded end frames, avoiding independent per-cue rounding drift.
@@ -75,12 +87,13 @@ Publication follows successful encoding; failed encoding publishes nothing.
 .\.venv\Scripts\python.exe -m pytest -q src\editor\tests
 ```
 
-Module tests check every duration boundary, invalid durations, rendered PNG
-backgrounds and decoded MP4 RGB frames for all seven bands. The encoded colour
-sequence is checked frame-by-frame against cue durations, with only RGB codec
-rounding tolerance; synthetic audio duration and publication cleanup are checked
-too. Encoding-failure and prefix-injection cases are covered.
+Default tests are unit-only: palette/layout, slate planning, encoding arguments,
+timing and graph construction. External processes are mocked. There is no
+full-render test.
 
-Root reel/stdio-MCP tests remain cross-module integration tests. No model
-inference, model downloads, cloud requests, microphone sessions or GPU workloads
-are needed by Editor's test suite.
+Real audio-mixing tests live in `src\editor\tests\integration`, are automatically
+marked `integration`, and are skipped unless explicitly enabled with
+`--run-integration`. Model-dependent tests must also be marked `llm` and
+require `--run-llm`. Both flags require `--development-mode=full`; the default
+rapid mode skips these checks. These opt-ins apply across the repository.
+Unit tests cannot launch subprocesses or network connections.

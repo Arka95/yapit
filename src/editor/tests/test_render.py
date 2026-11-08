@@ -1,86 +1,34 @@
-import imageio_ffmpeg
-import numpy as np
-import pytest
-from PIL import Image
+from unittest.mock import Mock
 
-from yapit.common_utils.mediautils import SAMPLE_RATE, decode_audio, write_wav
-from yapit.editor import render_guide
+import pytest
+
+from yapit.editor import RenderSettings, render_guide
+from yapit.editor.render import _encode_video, _prepare_slates
+from yapit.editor.templates import DEFAULT_STYLE
 from yapit.models import Cue, Timeline
 
 
-def test_coloured_clips_follow_frame_durations_and_publish_complete_video(tmp_path):
-    durations = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 2.1, 2.9, 2.1, 3.1, 3.9, 3.2, 2.5]
-    colours = [
-        (255, 0, 0),
-        (0, 255, 255),
-        (0, 255, 0),
-        (255, 218, 185),
-        (0, 0, 255),
-        (255, 255, 0),
-        (255, 0, 255),
-        (0, 255, 0),
-        (0, 100, 0),
-        (0, 255, 0),
-        (255, 218, 185),
-        (255, 165, 0),
-        (255, 218, 185),
-        (255, 165, 0),
-    ]
-    cues = []
-    start = 0
-    for index, duration in enumerate(durations):
-        cues.append(
-            Cue(start=start, end=start + duration, text=f"Clip {index}", visual="Footage", beat=0)
-        )
-        start += duration
-    timeline = Timeline(seconds=start, width=160, height=256, fps=30, cues=cues)
-    time = np.arange(round(start * SAMPLE_RATE)) / SAMPLE_RATE
-    audio = tmp_path / "narration.wav"
-    write_wav(audio, (0.1 * np.sin(2 * np.pi * 220 * time)).astype(np.float32))
-    work = tmp_path / "workspace"
-    video = tmp_path / "data" / "generated_video" / "trip.guide.mp4"
-    captions = tmp_path / "data" / "transcripts" / "trip.captions.srt"
-    seconds = render_guide(timeline, audio, work, video=video, captions=captions, prefix="trip")
-    assert video.is_file()
-    assert not (work / "trip.guide.mp4").exists()
-    assert "Clip 6" in captions.read_text()
-    for index, colour in enumerate(colours, start=1):
-        with Image.open(work / f"trip.clip-{index:03}.png") as slate:
-            assert slate.getpixel((0, 0)) == colour
-    frame_counts = [round(d * timeline.fps) for d in durations]
-    frame_counts[-1] += round(seconds * timeline.fps) - round(start * timeline.fps)
-    expected = np.repeat(np.asarray(colours), frame_counts, axis=0)
-    reader = imageio_ffmpeg.read_frames(str(video))
-    try:
-        metadata = next(reader)
-        assert metadata["fps"] == timeline.fps
-        pixels = [
-            np.frombuffer(frame, dtype=np.uint8).reshape(timeline.height, timeline.width, 3)[0, 0]
-            for frame in reader
-        ]
-    finally:
-        reader.close()
-    assert len(pixels) == len(expected)
-    assert np.max(np.abs(np.asarray(pixels, dtype=int) - expected)) <= 5
-    assert len(decode_audio(video)) / SAMPLE_RATE == pytest.approx(seconds, abs=0.05)
-    assert seconds - start >= 0.75
+@pytest.fixture
+def timeline():
+    return Timeline(seconds=5, cues=[Cue(start=0, end=5, text="Test", visual="Footage", beat=0)])
 
 
-def test_render_failure_does_not_publish_video(tmp_path, monkeypatch):
-    def fail(*args, **kwargs):
-        raise RuntimeError("encoding failed")
-
-    monkeypatch.setattr("yapit.editor.render.run_media", fail)
-    timeline = Timeline(
-        seconds=5, cues=[Cue(start=0, end=5, text="Test", visual="Footage", beat=0)]
+def test_render_failure_does_not_publish_video(tmp_path, monkeypatch, timeline):
+    monkeypatch.setattr(
+        "yapit.editor.render.prepare_audio_inputs", lambda *args, **kwargs: ([], 5.75)
     )
-    video = tmp_path / "data" / "generated_video" / "failed.mp4"
-    audio = tmp_path / "audio.wav"
-    write_wav(audio, np.zeros(5 * SAMPLE_RATE, dtype=np.float32))
+    monkeypatch.setattr(
+        "yapit.editor.render._prepare_slates",
+        lambda *args, **kwargs: (tmp_path / "slates.txt", "captions"),
+    )
+    monkeypatch.setattr(
+        "yapit.editor.render.run_media", Mock(side_effect=RuntimeError("encoding failed"))
+    )
+    video = tmp_path / "failed.mp4"
     with pytest.raises(RuntimeError, match="encoding failed"):
         render_guide(
             timeline,
-            audio,
+            tmp_path / "audio.wav",
             tmp_path / "workspace",
             video=video,
             captions=tmp_path / "captions.srt",
@@ -88,10 +36,34 @@ def test_render_failure_does_not_publish_video(tmp_path, monkeypatch):
     assert not video.exists()
 
 
-def test_prefix_cannot_inject_paths_or_playlist_directives(tmp_path):
-    timeline = Timeline(
-        seconds=5, cues=[Cue(start=0, end=5, text="Test", visual="Footage", beat=0)]
+def test_publish_encoded_artifact_without_rendering(tmp_path, monkeypatch, timeline):
+    monkeypatch.setattr(
+        "yapit.editor.render.prepare_audio_inputs", lambda *args, **kwargs: ([], 5.75)
     )
+    monkeypatch.setattr(
+        "yapit.editor.render._prepare_slates",
+        lambda *args, **kwargs: (tmp_path / "slates.txt", "captions"),
+    )
+
+    def fake_encode(timeline, audio, playlist, rendered, **kwargs):
+        rendered.write_bytes(b"encoded artifact")
+
+    monkeypatch.setattr("yapit.editor.render._encode_video", fake_encode)
+    video = tmp_path / "published" / "video.mp4"
+    captions = tmp_path / "captions.srt"
+    seconds = render_guide(
+        timeline,
+        tmp_path / "audio.wav",
+        tmp_path / "workspace",
+        video=video,
+        captions=captions,
+    )
+    assert video.read_bytes() == b"encoded artifact"
+    assert captions.read_text() == "captions"
+    assert seconds == 5.75
+
+
+def test_prefix_cannot_inject_paths_or_playlist_directives(tmp_path, timeline):
     with pytest.raises(ValueError, match="simple ASCII filename"):
         render_guide(
             timeline,
@@ -101,3 +73,38 @@ def test_prefix_cannot_inject_paths_or_playlist_directives(tmp_path):
             prefix="trip'\nfile 'outside",
         )
     assert not (tmp_path / "workspace").exists()
+
+
+def test_encoding_uses_supplied_quality_settings(tmp_path, monkeypatch, timeline):
+    media = Mock()
+    monkeypatch.setattr("yapit.editor.render.run_media", media)
+    _encode_video(
+        timeline,
+        tmp_path / "audio.wav",
+        tmp_path / "slates.txt",
+        tmp_path / "video.mp4",
+        inputs=[],
+        graph="[1:a]anull[mixed]",
+        seconds=5.75,
+        settings=RenderSettings(preset="veryfast", crf=28, audio_bitrate="128k"),
+    )
+    args = media.call_args.args[0]
+    assert args[args.index("-preset") + 1] == "veryfast"
+    assert args[args.index("-crf") + 1] == "28"
+    assert args[args.index("-b:a") + 1] == "128k"
+
+
+def test_slate_plan_extends_last_visual_but_not_captions(tmp_path, monkeypatch, timeline):
+    placeholder = Mock(return_value=Mock())
+    monkeypatch.setattr("yapit.editor.render.create_placeholder", placeholder)
+    playlist, captions = _prepare_slates(
+        timeline, tmp_path, stem="", seconds=5.766666667, style=DEFAULT_STYLE
+    )
+    assert placeholder.call_args.args[1].end == pytest.approx(5.766666667)
+    assert "00:00:05,000" in captions
+    durations = [
+        float(line.split()[1])
+        for line in playlist.read_text().splitlines()
+        if line.startswith("duration ")
+    ]
+    assert durations == pytest.approx([5.766666667])

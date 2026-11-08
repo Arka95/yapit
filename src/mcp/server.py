@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
 from yapit.common_utils.fileutils import safe_name
+from yapit.common_utils.metrics import configure_logging, timed
 from yapit.constants import DEFAULT_PROFILE, VIDEO_DURATION_BUFFER
 from yapit.editor import AudioMix, generate_video
 from yapit.enrollment import enroll
@@ -19,8 +20,10 @@ from yapit.storage import Workspace
 from yapit.yapper import generate_audio
 
 
+@timed
 def create_server(root: Path | None = None) -> FastMCP:
     load_dotenv()
+    configure_logging()
     workspace = Workspace(root or os.environ.get("YAPIT_WORKSPACE", "workspace"))
     pipeline = Pipeline(workspace)
     server = FastMCP("Yapit")

@@ -70,7 +70,20 @@
     }
   ],
   "words_per_minute": 131.46828382984376,
-  "checkpoint": null,
-  "speaker": null,
-  "styles": {}
+  "checkpoint": "C:\\projects\\yapit\\data\\arka\\checkpoints\\arka.training\\checkpoint-epoch-2",
+  "speaker": "arka",
+  "styles": {},
+  "writing_style": "energetic and informal",
+  "frequent_words": [
+    "insane",
+    "mind-blowing",
+    "I cannot believe it",
+    "oh yeah",
+    "this is extraordinary",
+    "so cool",
+    "hell yeah",
+    "absolutely sucks",
+    "totally avoid"
+  ],
+  "preferred_greeting": "yo guys"
 }

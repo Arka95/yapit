@@ -10,6 +10,7 @@ import numpy as np
 
 from yapit.common_utils.fileutils import data_filename, file_sha256, save_json
 from yapit.common_utils.mediautils import SAMPLE_RATE, decode_audio, write_wav
+from yapit.common_utils.metrics import timed
 from yapit.enrollment.artifacts import cleanup_session, session_directory
 from yapit.models import Sample, SampleManifest, Voice
 from yapit.storage import DataStore
@@ -105,6 +106,7 @@ def save_journal(folder: Path, name: str, samples: list[Sample]) -> None:
     )
 
 
+@timed
 def enroll(
     store: DataStore,
     name: str,

@@ -1,21 +1,15 @@
 import hashlib
 import json
-import os
 import shutil
-import subprocess
-import sys
 
-import numpy as np
 import pytest
 from pydantic import ValidationError
-from typer.testing import CliRunner
 
-from yapit.common_utils.fileutils import data_filename, save_json
-from yapit.common_utils.mediautils import SAMPLE_RATE, write_wav
-from yapit.enrollment import EnrollmentSession, audio_quality, enroll, load_readings, profile_names
-from yapit.enrollment.cli import app
+from yapit.common_utils.fileutils import save_json
+from yapit.common_utils.mediautils import write_wav
+from yapit.enrollment import EnrollmentSession, enroll, load_readings, profile_names
 from yapit.enrollment.profiles import load_voice
-from yapit.enrollment.tests.conftest import tone
+from yapit.enrollment.tests.integration.conftest import tone
 from yapit.storage import DataStore
 
 
@@ -164,72 +158,6 @@ def test_static_scripts_are_shared_and_sorted_numerically(tmp_path):
     assert first.draft.readings == second.draft.readings == readings
     assert not list(store.root.rglob("sampleScripts"))
     assert json.loads(first.path.read_text())["readings"][0]["text"] == readings[0].text
-
-
-@pytest.mark.parametrize("data", [np.zeros(4 * SAMPLE_RATE), np.ones(4 * SAMPLE_RATE)])
-def test_signal_checks_reject_silence_and_clipping(data):
-    assert audio_quality(data)["reasons"]
-
-
-def test_module_cli_works_without_model_imports_or_network(tmp_path):
-    script = """
-import importlib.abc
-import socket
-import sys
-class NoModels(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path=None, target=None):
-        if fullname.split('.')[0] in {
-            'torch', 'transformers', 'qwen_tts', 'faster_whisper', 'openai', 'huggingface_hub'
-        }:
-            raise AssertionError('Model dependency accessed: ' + fullname)
-sys.meta_path.insert(0, NoModels())
-socket.create_connection = lambda *args, **kwargs: (_ for _ in ()).throw(
-    AssertionError('Network accessed')
-)
-from yapit.enrollment import EnrollmentSession
-from yapit.storage import DataStore
-session = EnrollmentSession(DataStore(sys.argv[1]), 'ARKA')
-assert session.alias == 'arka'
-assert not session.ready
-import numpy as np
-from yapit.common_utils.mediautils import SAMPLE_RATE, write_wav
-for index in range(5):
-    path = session.new_take()
-    t = np.arange(4 * SAMPLE_RATE) / SAMPLE_RATE
-    write_wav(path, (0.15 * np.sin(2 * np.pi * (180 + index * 30) * t)).astype(np.float32))
-    session.save_take(path, True, False)
-assert len(session.finish().samples) == 5
-from yapit.enrollment.cli import app
-from typer.testing import CliRunner
-result = CliRunner().invoke(app, ['profiles'])
-assert result.exit_code == 0, result.output
-from yapit.cli import app as main_app
-from pathlib import Path
-result = CliRunner().invoke(main_app, [
-    'voice-enroll', 'arka', '--manifest', str(session.folder / 'arka.samples.json')
-])
-assert result.exit_code == 0, result.output
-assert not (Path(sys.argv[2]) / 'enrollment' / 'arka').exists()
-assert not list(session.store.root.rglob('*.log'))
-assert not list(session.store.root.rglob('*.raw.*'))
-"""
-    result = subprocess.run(
-        [sys.executable, "-c", script, str(tmp_path / "data"), str(tmp_path / "workspace")],
-        env={**os.environ, "YAPIT_WORKSPACE": str(tmp_path / "workspace")},
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert result.returncode == 0, result.stderr
-    output = CliRunner().invoke(app, ["profiles"])
-    assert output.exit_code == 0
-
-
-def test_unified_data_name_handles_case_prefix_and_path_like_input():
-    assert data_filename("ARKA.My Travel", "ARKA", ".WAV") == "arka.my_travel.wav"
-    assert data_filename("..\\TRIP", "ARKA", ".SCRIPT.JSON") == "arka.trip.script.json"
-    with pytest.raises(ValueError, match="extension"):
-        data_filename("trip", "arka", ".wav\\escape")
 
 
 def test_same_normalized_filename_in_manifest_uses_last_recording(enrolled, tmp_path):

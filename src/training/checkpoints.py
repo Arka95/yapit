@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 
 from yapit.common_utils.fileutils import save_json
+from yapit.common_utils.metrics import timed
 from yapit.enrollment import load_voice
 from yapit.storage import Workspace
 
@@ -48,6 +49,7 @@ def _link_or_copy(source: str | Path, destination: str | Path) -> None:
         shutil.copy2(source, destination)
 
 
+@timed
 def prepare_resume_model(base: Path, checkpoint: Path, destination: Path, name: str) -> None:
     """Restore Base training components while retaining fine-tuned checkpoint weights."""
     from safetensors import safe_open

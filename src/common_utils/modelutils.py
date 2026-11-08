@@ -4,11 +4,13 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TypeVar
 
+from yapit.common_utils.metrics import timed
 from yapit.constants import MODEL_CACHE_DIRECTORY, models_directory
 
 T = TypeVar("T")
 
 
+@timed
 def load_model(
     loader: Callable[..., T],
     model: str | Path,

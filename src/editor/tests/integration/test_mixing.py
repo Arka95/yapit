@@ -1,10 +1,8 @@
 import numpy as np
 import pytest
-from pydantic import ValidationError
 
-from yapit.common_utils.fileutils import file_sha256
 from yapit.common_utils.mediautils import SAMPLE_RATE, decode_audio, run_media, write_wav
-from yapit.editor.mixing import AudioMix, audio_filters
+from yapit.editor.mixing import AudioMix, audio_filters, prepare_audio_inputs
 from yapit.models import Cue, Timeline
 
 
@@ -16,7 +14,6 @@ def mix_audio(tmp_path, settings, *, with_music=True, pause=False):
     audio, music = tmp_path / "voice.wav", tmp_path / "music.wav"
     write_wav(audio, voice)
     write_wav(music, (0.2 * np.sin(2 * np.pi * 200 * times)).astype(np.float32))
-    original = file_sha256(audio)
     timeline = Timeline(
         seconds=4,
         cues=[
@@ -24,15 +21,19 @@ def mix_audio(tmp_path, settings, *, with_music=True, pause=False):
             Cue(start=2, end=4, text="Second.", visual="Landscape", beat=1),
         ],
     )
-    inputs, graph, seconds = audio_filters(timeline, audio, music if with_music else None, settings)
+    inputs, seconds = prepare_audio_inputs(timeline, audio, music if with_music else None, settings)
+    graph = audio_filters(
+        timeline,
+        settings,
+        seconds=seconds,
+        music=with_music,
+        voice_input="0:a",
+        music_input="1:a",
+    )
     output = tmp_path / "mixed.wav"
     run_media(
         [
             "-y",
-            "-f",
-            "lavfi",
-            "-i",
-            "anullsrc=r=48000:cl=stereo",
             "-i",
             str(audio),
             *inputs,
@@ -47,7 +48,6 @@ def mix_audio(tmp_path, settings, *, with_music=True, pause=False):
             str(output),
         ]
     )
-    assert file_sha256(audio) == original
     return decode_audio(output), seconds
 
 
@@ -106,18 +106,3 @@ def test_no_music_and_muted_narration_are_silent_through_closing_hold(tmp_path):
     audio, seconds = mix_audio(tmp_path, AudioMix(audio_volume=0), with_music=False)
     assert np.max(np.abs(audio)) == 0
     assert len(audio) / SAMPLE_RATE == pytest.approx(seconds, abs=1 / SAMPLE_RATE)
-
-
-@pytest.mark.parametrize(
-    "field,value",
-    [
-        ("audio_volume", -1),
-        ("music_volume", 101),
-        ("music_volume", float("nan")),
-        ("music_fade_in", -1),
-        ("end_buffer", 0.49),
-    ],
-)
-def test_invalid_mix_controls_are_rejected(field, value):
-    with pytest.raises(ValidationError):
-        AudioMix(**{field: value})

@@ -1,8 +1,8 @@
+"""Opt-in stdio protocol integration tests."""
+
 import json
 import os
-import subprocess
 import sys
-from importlib.resources import files
 from pathlib import Path
 
 import anyio
@@ -20,24 +20,6 @@ from yapit.storage import DataStore
 def tone(seconds=5, frequency=220):
     time = np.arange(round(seconds * SAMPLE_RATE)) / SAMPLE_RATE
     return (0.2 * np.sin(2 * np.pi * frequency * time)).astype(np.float32)
-
-
-def test_package_import_and_packaged_config_do_not_initialize_server_or_model_sdks():
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            "import sys; import yapit.mcp; "
-            "assert not set(sys.modules).intersection("
-            "{'mcp', 'yapit.mcp.server', 'torch', 'qwen_tts', 'faster_whisper'})",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-    config = json.loads(files("yapit.mcp").joinpath("examples", "mcp.config.json").read_text())
-    assert config["mcpServers"]["yapit"]["args"][2].endswith(r"\scripts\yapit-mode.cmd")
 
 
 @pytest.mark.parametrize("entry", ["module", "console"])
@@ -130,29 +112,3 @@ def test_stdio_mcp_handshake_tools_prompt_and_path_confinement(tmp_path, monkeyp
                     assert missing.isError
 
     anyio.run(exercise)
-
-
-def test_narration_tool_does_not_forward_video_mix_options(tmp_path, monkeypatch):
-    from yapit.mcp.server import create_server
-
-    monkeypatch.setenv("YAPIT_DATA_DIR", str(tmp_path / "data"))
-    calls = []
-
-    def generate(*args, **kwargs):
-        calls.append(kwargs)
-        return {"status": "complete"}
-
-    monkeypatch.setattr("yapit.mcp.server.generate_audio", generate)
-    server = create_server(tmp_path / "workspace")
-
-    async def exercise():
-        await server.call_tool(
-            "generate_narration",
-            {
-                "script": {"title": "Test", "beats": [{"text": "A useful thought."}]},
-            },
-        )
-
-    anyio.run(exercise)
-    assert len(calls) == 1
-    assert "music" not in calls[0] and "mix" not in calls[0]

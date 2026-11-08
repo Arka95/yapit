@@ -9,6 +9,7 @@ from pathlib import Path
 
 from yapit.common_utils.fileutils import file_sha256, save_json
 from yapit.common_utils.mediautils import decode_audio
+from yapit.common_utils.metrics import timed
 from yapit.common_utils.modelutils import load_model
 from yapit.constants import DEFAULT_SPEECH_MODEL
 from yapit.enrollment import load_voice
@@ -16,6 +17,7 @@ from yapit.storage import Workspace
 from yapit.training.checkpoints import prepare_resume_model, validate_checkpoint
 
 
+@timed
 def train(
     workspace: Workspace,
     name: str,

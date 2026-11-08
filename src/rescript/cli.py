@@ -7,6 +7,7 @@ from typing import Annotated
 import typer
 from dotenv import load_dotenv
 
+from yapit.common_utils.metrics import configure_logging
 from yapit.constants import DEFAULT_ASR_MODEL
 from yapit.rescript.audio import extract_audio as extract_audio_file
 from yapit.rescript.transcription import transcribe
@@ -23,6 +24,7 @@ def extract_audio(
 ) -> None:
     """Extract/convert media audio or copy an already supported audio file."""
     load_dotenv()
+    configure_logging()
     try:
         result = extract_audio_file(media, output_dir=output_dir)
     except (ValueError, RuntimeError, OSError) as exc:
@@ -51,6 +53,7 @@ def transcript(
 ) -> None:
     """Transcribe local audio/video into reviewed-before-use Script JSON."""
     load_dotenv()
+    configure_logging()
     try:
         result = transcribe(
             media,

@@ -38,7 +38,7 @@ and module-local tests belong in the linked developer guides.
 | `workspace\outputs\` | Job metadata, prompts, measured timelines, logs and temporary rendering artifacts |
 | `.venv*` | Isolated application runtimes and optional experimental worker environments |
 
-There are no Python files at the repository root. Shared contracts, configuration,
+The root `conftest.py` owns test opt-ins and timing statistics. Shared contracts, configuration,
 storage and thin application adapters still live directly under `src`; this
 refactor does not move those into additional packages.
 
@@ -124,6 +124,43 @@ For the everyday enrollment -> script -> narration -> editing workflow, use
 are in [audio-design.md](audio-design.md).
 
 ## Local development
+
+### Fast validation and local statistics
+
+Do not run models, training, GPU preflights or long/integration tests during
+routine development. Use only the smallest relevant unit selection and Ruff.
+`--development-mode=rapid` is the default. Integration/model tests require
+explicit authorization, `--development-mode=full` and their opt-in flags;
+unit tests cannot launch subprocesses or network connections. Legacy tests
+using the expensive `enrolled` fixture are also skipped by default.
+
+Packaging, README/catalog, file-layout and cold-import maintenance checks live
+in `agenttests`, not the unit suite. They are skipped in rapid mode; use
+`pytest agenttests --development-mode=full` only for explicitly authorized
+non-rapid validation.
+
+`@timed` in `common_utils\metrics.py` records duration/outcome at operation
+boundaries and logs completion/failure through standard Python logging.
+CLI/MCP logs go to stderr; arguments, narration and exception messages are
+not included. No external telemetry service or extra dependency is used.
+
+Git-ignored local records:
+
+| Path | Records |
+|---|---|
+| `.repo-stats\<module>\functions.jsonl` | Function name, duration, outcome, exception type and test/runtime context |
+| `.repo-stats\<module>\tests.jsonl` | Test setup/call/teardown durations and outcomes, grouped by run ID |
+| `.repo-stats\tests\runs.jsonl` | Pytest session time including collection, development mode, counts and exit code |
+
+Previous statistics are overwritten at each fresh pytest session or runtime
+process's first measurement. Only current-run records are retained;
+child processes share the active run rather than clearing their parent's
+measurements. `duration_s` is rounded to at most two decimal places.
+`YAPIT_REPO_STATS_DIR` overrides the statistics root; `YAPIT_METRICS=0` disables
+records. Pytest captures this setting at session start, so tests temporarily
+disabling runtime metrics do not suppress their own timing reports.
+`YAPIT_LOG_LEVEL` controls logging (default `INFO`). Statistics are
+best-effort and excluded from source distributions as well as Git.
 
 Use Python 3.11 or 3.12. From the repository root in PowerShell:
 

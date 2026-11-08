@@ -10,6 +10,7 @@ under `docs`, not beside Python sources. See [usage](README.md) and the
 |---|---|
 | `script_planner.py`, `script_prompt.txt` | Text/JSON loading, deterministic prompt composition and explicitly opted-in cloud writing |
 | `speech.py` | `SpeechBackend` protocol and lazy native Qwen model/reference/checkpoint adapter |
+| `inference.py` | CUDA-graph replay of the fixed-length codebook predictor, with SDK fallback |
 | `worker.py` | Authenticated loopback worker, one resident model, bounded private speech cache and load/request telemetry |
 | `generation.py` | Narration workflow, reusable synthesis/encoding renderer and failure/status handling |
 | `timeline.py` | Measured beat/pause scaling, quiet-window cuts and approximate phrase grouping |
@@ -69,6 +70,14 @@ separate load/request timings are reported by `voice-worker-status`.
 The worker's runtime controls the device even for CPU-only frontend clients;
 `YAPIT_VOICE_WORKER=0` restores the frontend's one-shot device selection.
 This is not a machine-wide GPU lock, hosted API or durable job queue.
+
+CUDA narration uses codebook CUDA graphs by default. The first uncached request
+captures the loop; later requests replay it without per-token Python dispatch.
+Weights, precision and SDK sampling processors are unchanged. CPU, unsupported
+batches/configurations and failed captures retain SDK generation.
+Set `YAPIT_CUDA_GRAPHS=0` before starting the worker (or one-shot generation)
+to disable this optimization. Worker health reports
+`inference_backend` after synthesis; speech-cache hits are not inference benchmarks.
 
 One Qwen backend and clone prompt are reused across a render. SDK imports/model
 loading stay lazy; supplied-text parsing and prompt preparation need no model.

@@ -106,6 +106,7 @@ in the [developer guide](docs/dev.readme.md).
 | `workspace\outputs` | Prompts, measured timelines, provenance/status, logs and temporary rendering files |
 | `workspace\enrollment` | Resumable drafts/raw takes; removed after successful enrollment |
 | `models` | Shared model assets/cache, configurable with `YAPIT_MODELS_DIR` |
+| `.repo-stats\<module>` | Git-ignored function/test timings and outcomes; no narration or credentials |
 
 Use `YAPIT_DATA_DIR`, `YAPIT_WORKSPACE` and `YAPIT_MODELS_DIR` to override roots.
 Worker state/cached speech live privately under `data\.runtime`.

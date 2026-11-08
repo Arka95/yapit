@@ -10,6 +10,7 @@ from pathlib import Path
 
 from yapit.common_utils.fileutils import data_filename
 from yapit.common_utils.mediautils import SAMPLE_RATE, ffmpeg
+from yapit.common_utils.metrics import timed
 
 
 def microphone_devices() -> list[str]:
@@ -51,6 +52,7 @@ class MicrophoneRecorder:
     def ready(self) -> bool:
         return self._ready.is_set() and self.process is not None and self.process.poll() is None
 
+    @timed
     def prepare(self, device: str, directory: Path) -> None:
         if os.name != "nt":
             raise RuntimeError("Recording is supported on Windows only.")
@@ -159,6 +161,7 @@ class MicrophoneRecorder:
                 self._file.close()
                 self._file = None
 
+    @timed
     def start(self, device: str, output: Path) -> None:
         if output.exists():
             raise ValueError("Refusing to overwrite an existing raw take.")
@@ -187,6 +190,7 @@ class MicrophoneRecorder:
                     self._file = None
                 raise
 
+    @timed
     def stop(self) -> Path:
         if self.output is None:
             raise ValueError("There is no active recording.")

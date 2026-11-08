@@ -14,6 +14,7 @@ from pydantic import Field, ValidationError, model_validator
 
 from yapit.common_utils.fileutils import reserve_artifact_name, save_json
 from yapit.common_utils.mediautils import extract_audio_stream, has_video, validate_media_source
+from yapit.common_utils.metrics import timed
 from yapit.common_utils.modelutils import load_model
 from yapit.constants import DEFAULT_ASR_MODEL, DEFAULT_PROFILE
 from yapit.models import Beat, Model, Script
@@ -59,6 +60,7 @@ class WhisperTranscriber:
         self.language = language
         self.offline = offline
 
+    @timed
     def recognize(self, audio: Path) -> list[Segment]:
         try:
             from faster_whisper import WhisperModel
@@ -110,6 +112,7 @@ class WhisperTranscriber:
         )
 
 
+@timed
 def compose_scripts(segments: list[Segment], title: str) -> list[tuple[Script, float, float]]:
     """Partition at sentence endings without discarding or repeating recognized text."""
     if not segments:
@@ -178,6 +181,7 @@ def compose_scripts(segments: list[Segment], title: str) -> list[tuple[Script, f
     return list(reversed(result))
 
 
+@timed
 def transcribe(
     media: Path,
     *,

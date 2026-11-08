@@ -93,7 +93,16 @@ discovery:
 .\.venv\Scripts\ruff.exe format --check src tests
 ```
 
-Coverage includes five-sample readiness, case-insensitive profile reuse,
+The default suite runs only unit tests for signal checks, filename normalization
+and passage selection. Media/profile workflows, subprocess checks, prepared-stream
+recording and Tk UI tests live in `src\enrollment\tests\integration`, are
+automatically marked `integration`, and are skipped by default.
+Run them explicitly with `--run-integration`; model-dependent tests marked `llm`
+require `--run-llm`. Both require `--development-mode=full`; rapid is the default.
+Unit tests cannot launch subprocesses. These defaults apply
+across the repository.
+
+Opt-in coverage includes five-sample readiness, case-insensitive profile reuse,
 filename replacement, retained unrelated audio/settings, inventories and hashes,
 rejected duplicate/bad audio, rejected other-session recordings, successful
 scratch cleanup, retained incomplete sessions/external inputs, clean data roots,

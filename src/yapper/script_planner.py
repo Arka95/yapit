@@ -6,6 +6,7 @@ import os
 from importlib.resources import files
 from pathlib import Path
 
+from yapit.common_utils.metrics import timed
 from yapit.models import Brief, Script
 
 
@@ -31,6 +32,7 @@ def load_script(path: Path) -> Script:
     return Script.from_text(path.read_text(encoding="utf-8"))
 
 
+@timed
 def generate_script(
     brief: Brief, frames: list[Path], *, duration_tolerance: float = 5, end_buffer: float = 0
 ) -> Script:

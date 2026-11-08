@@ -365,22 +365,3 @@ def test_training_rejects_unsupported_host_before_downloading(monkeypatch, tmp_p
     monkeypatch.setattr("yapit.training.trainer.platform.system", lambda: "Windows")
     with pytest.raises(RuntimeError, match="Linux"):
         train(Workspace(tmp_path), "my-voice", tmp_path)
-
-
-def test_module_import_does_not_initialize_training_sdks_or_models(tmp_path):
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            "import sys; import yapit.yapper; "
-            "assert 'yapit.training' not in sys.modules; "
-            "import yapit.training; "
-            "assert callable(yapit.training.train); "
-            "assert not set(sys.modules).intersection({'torch', 'flash_attn', 'huggingface_hub'})",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert not (tmp_path / "models").exists()

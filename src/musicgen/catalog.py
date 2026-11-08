@@ -15,6 +15,7 @@ from uuid import UUID
 
 from yapit.common_utils.fileutils import copy_file_exclusive, file_sha256, save_json
 from yapit.common_utils.mediautils import SAMPLE_RATE, decode_audio, run_media
+from yapit.common_utils.metrics import timed
 from yapit.musicgen.models import MusicCandidate, MusicPlan, slug
 from yapit.storage import DataStore
 
@@ -146,6 +147,7 @@ def _candidate(record: dict, plan: MusicPlan) -> MusicCandidate | None:
     return candidate
 
 
+@timed
 def search_music(plan: MusicPlan, *, limit: int = 5, page: int = 1) -> list[MusicCandidate]:
     if not 1 <= limit <= 20 or not 1 <= page <= 10:
         raise ValueError("Use limit 1-20 and page 1-10.")
@@ -236,6 +238,7 @@ def _verify_source(candidate: MusicCandidate) -> dict:
     }
 
 
+@timed
 def download_music(candidate_id: str, plan: MusicPlan, *, data: DataStore | None = None) -> dict:
     identifier = str(UUID(candidate_id))
     candidate = _candidate(_json(f"{API}{identifier}/?format=json"), plan)

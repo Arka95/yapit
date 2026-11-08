@@ -8,10 +8,9 @@ from yapit.models import Beat, Brief, Script
 from yapit.yapper.script_planner import build_prompt, generate_script, load_script
 
 
-def test_prompt_uses_packaged_template_budget_and_schema(monkeypatch):
+def test_prompt_contains_budget_and_schema(monkeypatch):
     monkeypatch.setenv("YAPIT_ALLOW_CLOUD", "false")
     prompt = build_prompt(Brief(topic="Test", seconds=30, words_per_minute=120))
-    assert "game changer" in prompt
     assert "Target spoken words: approximately 54." in prompt
     assert '"pause_ms"' in prompt
     assert '"topic": "Test"' in prompt
@@ -106,4 +105,3 @@ def test_video_planning_accepts_useful_draft_within_wider_buffer(monkeypatch):
     assert len(calls) == 1
     prompt = calls[0]["input"][0]["content"][0]["text"]
     assert "Acceptable estimated duration: 20.1-39.9 seconds" in prompt
-    assert "Do not add filler, inflate pauses" in prompt

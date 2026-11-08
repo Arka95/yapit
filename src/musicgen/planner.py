@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+from yapit.common_utils.metrics import timed
 from yapit.models import Script, Timeline
 from yapit.musicgen.models import BeatMusic, MusicPlan, slug
 
@@ -28,6 +29,7 @@ SCENES = {
 }
 
 
+@timed
 def plan_music(
     source: Script | Timeline, *, video_type: str = "travel", emotion: str | None = None
 ) -> MusicPlan:

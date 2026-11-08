@@ -14,6 +14,7 @@ from yapit.common_utils.mediautils import (
     fit_audio,
     write_wav,
 )
+from yapit.common_utils.metrics import timed
 from yapit.constants import DEFAULT_PROFILE
 from yapit.enrollment.styles import select_voice
 from yapit.models import Brief, DeliveryStyle, Script, Timeline, Voice
@@ -23,6 +24,7 @@ from yapit.yapper.timeline import build_timeline
 from yapit.yapper.worker import backend_for
 
 
+@timed
 def render_audio(
     script: Script,
     voice: Voice,
@@ -115,6 +117,7 @@ def render_audio(
     }, timeline
 
 
+@timed
 def generate_audio(
     script: Script | str,
     *,

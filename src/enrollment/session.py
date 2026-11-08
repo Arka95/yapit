@@ -9,6 +9,7 @@ from pydantic import Field, model_validator
 
 from yapit.common_utils.fileutils import data_filename, file_sha256, save_json
 from yapit.common_utils.mediautils import SAMPLE_RATE, decode_audio, write_wav
+from yapit.common_utils.metrics import timed
 from yapit.constants import AUDIO_SAMPLE_NAME_TEMPLATE
 from yapit.enrollment.artifacts import session_directory
 from yapit.enrollment.profiles import (
@@ -144,6 +145,7 @@ class EnrollmentSession:
         number = reading.sample_id.removeprefix("sample_") if reading.sample_id else self.index + 1
         return AUDIO_SAMPLE_NAME_TEMPLATE.format(number=number)
 
+    @timed
     def save_take(self, source: Path, confirmed: bool, normalize: bool) -> dict:
         if not confirmed:
             raise ValueError(
@@ -226,6 +228,7 @@ class EnrollmentSession:
         self._selected = None
         return report
 
+    @timed
     def finish(self) -> Voice:
         if not self.ready:
             raise ValueError(f"Save at least {MIN_SAMPLES} distinct samples before enrollment.")

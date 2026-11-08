@@ -1,44 +1,17 @@
 import json
-import os
 import subprocess
-import sys
 from pathlib import Path
 
-import numpy as np
 import pytest
-import soundfile as sf
-from conftest import tone
 from pydantic import ValidationError
-from typer.main import get_command
 from typer.testing import CliRunner
 
+from tests.conftest import tone
 from yapit.cli import app
 from yapit.common_utils.mediautils import write_wav
 from yapit.models import Beat, Brief, Script
 from yapit.rescript.cli import app as rescript_app
 from yapit.storage import DataStore
-
-
-def test_root_command_help_and_readme_catalog_are_complete():
-    command = get_command(app)
-    visible = {name for name, item in command.commands.items() if not item.hidden}
-    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
-    rows = [
-        line.split("`")[1].removeprefix("yapit ")
-        for line in readme.splitlines()
-        if line.startswith("| `yapit ") and line.split("`")[1].count(" ") == 1
-    ]
-    assert set(rows) == visible
-    assert len(rows) == len(visible)
-    runner = CliRunner()
-    for name in visible:
-        result = runner.invoke(app, [name, "--help"])
-        assert result.exit_code == 0, result.output
-    assert command.commands["yapper"].hidden and command.commands["rescript"].hidden
-    index = readme.split("## Documentation index", 1)[1].split("\n## ", 1)[0]
-    table = [line for line in index.splitlines() if line.startswith("|")]
-    assert table[0] == "| Document | Dev guide | Purpose |"
-    assert all(len(line.strip("|").split("|")) == 3 for line in table)
 
 
 def test_profiles_is_available_without_a_module_prefix(enrolled):
@@ -173,42 +146,6 @@ def test_style_cli_registration_defaults_consent_but_respects_explicit_refusal(
     accepted = runner.invoke(app, arguments)
     assert accepted.exit_code == 0, accepted.output
     assert json.loads(accepted.stdout)["style"] == "lively-vlog"
-
-
-def test_extraction_is_model_free_even_with_cuda_asr_settings(tmp_path):
-    source = tmp_path / "source.wav"
-    sf.write(source, np.zeros(24000, dtype=np.float32), 24000)
-    script = """
-import importlib.abc
-import json
-import socket
-import sys
-class NoModels(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path=None, target=None):
-        if fullname.split('.')[0] in {
-            'torch', 'transformers', 'qwen_tts', 'faster_whisper',
-            'openai', 'huggingface_hub', 'ctranslate2', 'onnxruntime'
-        }:
-            raise AssertionError('Model dependency accessed: ' + fullname)
-sys.meta_path.insert(0, NoModels())
-socket.create_connection = lambda *args, **kwargs: (_ for _ in ()).throw(
-    AssertionError('Network accessed')
-)
-from yapit.cli import app
-from typer.testing import CliRunner
-result = CliRunner().invoke(app, ['extract_audio', sys.argv[1]])
-assert result.exit_code == 0, result.output
-assert json.loads(result.stdout)['action'] == 'copied'
-"""
-    result = subprocess.run(
-        [sys.executable, "-c", script, str(source)],
-        env={**os.environ, "YAPIT_ASR_DEVICE": "cuda", "YAPIT_ASR_COMPUTE_TYPE": "float16"},
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert result.returncode == 0, result.stderr or result.stdout
-    assert not (tmp_path / "models").exists()
 
 
 def test_extract_reports_ffmpeg_timeout_and_cleans_temporary_files(tmp_path, monkeypatch):

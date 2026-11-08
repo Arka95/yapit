@@ -5,6 +5,7 @@ from pathlib import Path
 
 from yapit.common_utils.fileutils import save_json
 from yapit.common_utils.mediautils import media_frames
+from yapit.common_utils.metrics import timed
 from yapit.constants import DEFAULT_PROFILE, VIDEO_DURATION_BUFFER
 from yapit.editor import AudioMix, render_guide
 from yapit.editor.mixing import video_seconds
@@ -54,6 +55,7 @@ class Pipeline:
             "next": "Use this prompt with the frames, then pass the returned Script JSON to reel.",
         }
 
+    @timed
     def reel(
         self,
         brief: Brief,
@@ -147,6 +149,7 @@ class Pipeline:
                     prefix=job.name,
                     music=music,
                     mix=settings,
+                    actual_seconds=result["seconds"],
                 )
             result.update(
                 {

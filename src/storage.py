@@ -10,6 +10,7 @@ from yapit.common_utils.fileutils import (
     reserve_artifact_name,
     safe_name,
 )
+from yapit.common_utils.metrics import timed
 from yapit.constants import BACKGROUND_MUSIC_DIRECTORY, DEFAULT_PROFILE, GENERATED_VIDEO_DIRECTORY
 
 
@@ -52,6 +53,7 @@ class Workspace:
     def profile_dir(self, name: str) -> Path:
         return self.data.profile_dir(name)
 
+    @timed
     def output(self, source: str, profile: str = DEFAULT_PROFILE) -> OutputArtifacts:
         return OutputArtifacts(self, source, profile)
 
@@ -115,6 +117,7 @@ class DataStore:
             raise ValueError(f"Output must stay inside {directory}.")
         return path
 
+    @timed
     def archive_recording(self, source: Path, profile: str = DEFAULT_PROFILE) -> Path:
         source = source.resolve()
         if source.is_relative_to(self.audio) or source.is_relative_to(self.generated_audio):
