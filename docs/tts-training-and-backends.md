@@ -143,10 +143,13 @@ Audiogen and voice-worker expose `--backend` and `--model`. Qwen remains the
 compatibility default; other routes can use the worker's startup selection or
 `YAPIT_TTS_BACKEND` / `YAPIT_TTS_MODEL`. Dependency errors are explicit.
 Keep optional backends in separate environments when their
-requirements conflict. CosyVoice currently exists only as a standalone trial,
-not a production-selectable Yapper adapter.
+requirements conflict. CosyVoice2/3 are selectable through the `cosyvoice`
+SDK-family adapter and reusable private JSON/WAV bridge. CosyVoice2 has a
+real Arka-reference CPU sample; CosyVoice3 selection remains unvalidated by
+real synthesis. Training is still Qwen-specific.
 Sources: `src\yapper\cli.py`; `src\cli.py` (`voice_worker`);
-`src\yapper\backends.py:57-70`; `scripts\cosyvoice-trial.py:25-47,97-147`.
+`src\yapper\backends.py`; `src\yapper\cosyvoice.py`;
+`src\yapper\cosyvoice_runtime.py`; `src\yapper\isolated.py`.
 
 Agent-selected models must be verified latest appropriate stable releases from
 2026 or later. Pocket defaults to the dated `english_2026-10` model, supported

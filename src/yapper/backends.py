@@ -42,6 +42,7 @@ class BackendSelection:
 BUILTINS = {
     "qwen": "yapit.yapper.speech:QwenSpeech",
     "pocket": "yapit.yapper.pocket:PocketSpeech",
+    "cosyvoice": "yapit.yapper.cosyvoice:CosyVoiceSpeech",
 }
 FACTORIES: dict[str, Callable[..., ModelBackend]] = {}
 

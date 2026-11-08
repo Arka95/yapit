@@ -21,3 +21,7 @@ applyTo: "**"
 - Verify latest appropriate stable 2026+ model releases from official sources.
   Documentation work does not authorize inference, downloads, weight conversion,
   training, checkpoint replacement or dependency installation.
+- Onboard TTS SDK families through the existing managed backend registry/plugin
+  contract, reusing the generic isolated-runtime bridge when dependencies conflict.
+  Do not add model-specific branches to Pipeline, Editor or core CLI workflows.
+  Model IDs select compatible variants; new architectures need trusted adapters.

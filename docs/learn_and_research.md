@@ -974,3 +974,239 @@ research, not implemented training or a demonstrated fit on the 12 GB GPU.
 
 Source: owner feedback in this session; generated
 `data\generated_video\arka.puerto_princesa.pocket_2026_10.3.guide.mp4`.
+
+
+---
+
+## November 8, 2026: generic CosyVoice onboarding and real Arka-reference sample
+
+**Decision and release policy.** The owner explicitly requested
+`FunAudioLLM/CosyVoice2-0.5B`, overriding the earlier 2026+ agent-selection rule
+for this model. The official roadmap dates CosyVoice2 to December 2024 and
+Fun-CosyVoice3-0.5B-2512 to December 2025. No official 2026 weight release was
+found in the inspected official inventory/roadmap; recent repository or card
+edits are not weight releases. Requested CosyVoice2 weights were downloaded at
+revision `eec1ae6c79877dbd9379285cf8789c9e0879293d`, not substituted with another
+speaker/model. Existing SDK source is
+`074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc` with its Matcha-TTS submodule.
+
+**Generic boundary.** A `cosyvoice` factory implements the existing
+`ModelBackend` lifecycle/metadata/cache contract. It handles compatible
+CosyVoice2/3 variants without changing Pipeline, Editor, worker or CLI behavior.
+Other architectures still need trusted factories/plugins: a different Hub ID
+cannot make incompatible model weights interchangeable. Reusable
+`RuntimeProcess` and `isolated_runtime.serve` provide private bounded JSON
+request/response and an SDK session with `load`/`synthesize`; audio moves through
+an adapter-owned temporary WAV, not JSON/base64 or an external service.
+SDK imports/loading are lazy; reference conditioning is retained across beats;
+close, failure and timeout release the owned process/files. Cache identity
+includes model/reference/runtime/source/transport assets. Actual component
+precision is reported rather than assuming all CUDA modules use FP16.
+
+**Provisioning and compatibility.** Dependencies were installed only into
+`.venv-cosyvoice`, Python 3.10.22, through the approved feed. Qwen/Pocket
+environments were not changed. Installed Torch/Torchaudio are 2.3.1+cpu,
+ONNX Runtime is 1.18.0, and CUDA availability is false. This is CPU validation,
+not GPU readiness. Older Whisper build tooling requires `setuptools<81`;
+the manifest constraint also covered isolated build dependencies. `pip check`
+exposed missing `tiktoken`; SDK import exposed Matcha's required `gdown` and
+`wget`. These were added to the inference manifest; final `pip check` passed.
+
+Wetext was initially installed from the upstream stack, but its normalizer
+attempted a Modelscope asset download during SDK construction even with
+`text_frontend=False`. The bounded owned attempt was stopped. Because narration
+is approved supplied text and the SDK supports absent normalization, Wetext
+was removed from this isolated environment/manifest. Final synthesis used the
+SDK's supported no-normalizer path, without rewriting vendor code. Optional
+GUI/server/training/TensorRT/vLLM dependencies were not installed. Installing
+extra normalizers later can reintroduce their initialization downloads.
+
+**Measured output, not a quality verdict.** The authorized sample says:
+Puerto Princesa's underground river feels mysterious, beautiful, and thrilling;
+welcome to Palawan. The actual script JSON preserves the supplied wording.
+It used `data\arka\audio\arka.audio_sample_1.wav` and its exact enrolled transcript,
+not Qwen's checkpoint, other clips, a stock voice, training, music or a writing
+service. Output:
+`data\generated_audio\arka.cosyvoice2.validation.2.mp3` and `.wav`.
+Narration is 8.52 seconds at tempo factor 1.0, 24 kHz mono; all LLM/flow/HiFT
+components reported FP32. Pipeline time was 138.58 seconds, including a measured
+26.36-second model/reference load. Upstream per-beat progress reported 70.31 and
+41.30 seconds; these nested timings must not be added to the whole pipeline
+as independent costs. This slow CPU sample is not a matched Pocket/Qwen
+benchmark, and no memory optimization or CUDA performance claim follows.
+
+WAV and decoded MP3 were finite, non-silent and unclipped. WAV peak was
+0.4591064453125; decoded MP3 peak was 0.8161669373512268; WAV clipped fraction
+was zero. Isolated PID 14168 exited, and no managed worker state remained.
+The earlier long-running Qwen worker PID 15396 had already been stopped
+gracefully. No resident worker was restarted. Neither listening/ASR word
+verification nor objective speaker-identity evaluation was performed; Arka
+must review pronunciation, identity and delivery. CosyVoice3 selection is
+supported in this same adapter but has not been executed in the new integration.
+Global backend defaults remain unchanged; Pocket remains the owner's accepted
+candidate for comparable travel narration.
+
+**Validation.** 35 focused mocked CosyVoice/backend units passed in 1.10 seconds;
+Ruff lint/format checks passed. Cases cover registration, conditioning reuse,
+native-rate normalization, invalid/silent audio, output confinement, timeout,
+failure recovery and owned-process/file cleanup. This is not a full repository
+audit or training implementation.
+
+Sources:
+- Official roadmap and setup: https://github.com/FunAudioLLM/CosyVoice
+- Requested model: https://huggingface.co/FunAudioLLM/CosyVoice2-0.5B
+- Latest reviewed family: https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
+- Local integration: `src\yapper\backends.py`, `cosyvoice.py`,
+  `cosyvoice_runtime.py`, `isolated.py`, `isolated_runtime.py`,
+  `tests\test_cosyvoice.py`, `scripts\cosyvoice-runtime.requirements.txt`.
+- SDK no-normalizer fallback: `models\cosyvoice_source\cosyvoice\cli\frontend.py`.
+- Persistent evidence: `workspace\outputs\arka.cosyvoice2.validation.2.status.json`,
+  `.provenance.json`, `.timeline.json`; session
+  `files\cosyvoice2-validation-result.json`, `cosyvoice2-validation-verification.json`.
+
+
+---
+
+## November 8, 2026: KV caching versus vLLM for sequential personalized narration
+
+Read-only inspection confirms KV caching is already present; vLLM is not
+enabled in the current YapIt adapters. These are separate concepts. KV caching
+reuses earlier attention keys/values during token generation. Model residency
+avoids reloading weights; reference conditioning avoids re-extracting speaker
+features; finished-speech caching skips exact repeated synthesis altogether.
+
+- Qwen: installed SDK talker/code-predictor configurations default to
+  `use_cache=True`; decoder updates `past_key_values`. YapIt's accelerated
+  codebook loop explicitly carries `output.past_key_values` into the next step
+  with `use_cache=True`. This is code/config evidence, not a new runtime trace.
+- Pocket: streaming attention stores K/V in model state. YapIt retains the
+  state from `get_state_for_audio_prompt`; SDK `generate_audio` defaults to
+  `copy_state=True`, preserving reference-prefix state for subsequent beats.
+  It does not simply reuse a previous narration's whole generated history.
+- CosyVoice2: `Qwen2Encoder.forward_one_step` sets `use_cache=True` and accepts/
+  returns `past_key_values`. The standard inference loop starts with
+  `cache=None` and carries it across generated tokens. YapIt caches extracted
+  zero-shot reference conditioning across beats, but this is not persistent
+  transformer KV-prefix sharing across independent beats.
+
+The local official CosyVoice source offers `load_vllm`, exports the speech LLM
+and attaches a vLLM engine to it. Its flow model and HiFT vocoder still use
+their separate SDK paths. YapIt currently passes `load_vllm=False` and
+`load_trt=False`; neither optimization was benchmarked here.
+
+**Decision:** keep SDK KV caching. For one English profile and sequential reels,
+do not replace every SDK with vLLM. Prefer the accepted Pocket CPU baseline;
+if CosyVoice speed warrants more work, first measure a separately authorized
+plain-CUDA baseline and LLM/flow/vocoder stages, then compare a supported vLLM
+configuration on identical script/reference. vLLM can help batch-one workloads
+through optimized execution too; lack of concurrency does not prove no benefit.
+However, serving/batching features alone do not establish a latency win here.
+
+Official stable GPU installation requires Linux and Python 3.11-3.14, with no
+native Windows support; WSL is a documented route. It is not a drop-in install
+into the present Python 3.10/Torch 2.3.1 CosyVoice environment. Choose a compatible
+SDK/runtime combination in a separate environment rather than blindly selecting
+the newest engine or changing working Qwen/Pocket dependencies.
+Automatic prefix caching reuses exact shared prompt computation; upstream
+explicitly says it speeds prefill, not generation of new tokens. Whether
+CosyVoice's embedding-based prompts can reuse an equivalent prefix in a chosen
+engine/configuration remains unverified.
+
+No dependency changes, inference processes, model loads, downloads or benchmarks
+were started for this investigation.
+
+Sources:
+- `src\yapper\inference.py:128-154`, `pocket.py:61-74`,
+  `cosyvoice_runtime.py:34-39`.
+- Installed `qwen_tts\core\models\configuration_qwen3_tts.py:198-200,381-383`;
+  `modeling_qwen3_tts.py:1064-1083`.
+- Installed `pocket_tts\modules\attention.py:9-19,184-197`;
+  `models\tts_model.py:582-588,764-765`.
+- `models\cosyvoice_source\cosyvoice\llm\llm.py:242-254,504-541`;
+  `cosyvoice\cli\model.py:281-289`.
+- https://docs.vllm.ai/en/stable/getting_started/installation/gpu/
+- https://docs.vllm.ai/en/stable/features/automatic_prefix_caching/
+- https://docs.vllm.ai/en/stable/
+
+
+---
+
+## November 8, 2026: actual TTS inputs and CosyVoice2 prefix ordering
+
+YapIt passes script text and prepared voice conditioning to SDKs, not manually
+constructed token IDs. Pocket prepares reference state from audio; Qwen Base
+and CosyVoice zero-shot cloning also use the recording's exact transcript.
+SDKs encode text into text tokens and reference audio into model-specific
+speech tokens/latents and speaker/acoustic features.
+
+The inspected CosyVoice2 non-streaming LLM path concatenates prompt transcript
+and new script tokens, then constructs start embedding, those text embeddings,
+task embedding and reference speech-token embeddings. Thus the new script
+comes BEFORE the reference speech tokens. Even with the same recording, the
+speech-token block does not have an identical preceding context across
+different scripts; its complete KV state cannot simply be reused as a prefix.
+The reference transcript/start portion may share a prefix, subject to engine
+matching rules. Extracted speaker/acoustic/reference tokens remain reusable
+through the existing cached zero-shot state. This resolves the earlier
+input-order uncertainty for this specific inspected CosyVoice2 path, not for
+every TTS architecture or a future engine implementation.
+
+Sources: `models\cosyvoice_source\cosyvoice\llm\llm.py:475-496`;
+`cosyvoice\cli\frontend.py:170-191`; `src\yapper\speech.py:122-127,164-176`;
+`src\yapper\pocket.py:61-74`. No inference or dependency changes were performed.
+
+
+---
+
+## November 8, 2026: optimization scope when Arka is shared across models
+
+**Decision:** share canonical profile source assets, but keep derived conditioning
+specific to the backend, immutable model revision/configuration and reference/
+transcript/style/preprocessing identity. Different architectures or incompatible
+variants cannot safely share arbitrary speaker embeddings, codec tokens or
+transformer KV tensors merely because the person is the same.
+
+First proposed enhancement is adapter-owned persistent prepared-profile caching.
+Pocket already accepts a profile `pocket_voice_state` pointing to a safetensors
+export; upstream documents that this avoids repeatedly encoding the recording.
+Its exporter is available in the installed SDK. YapIt does not yet automatically
+prepare/export/manage state caches for every model. CosyVoice currently caches
+zero-shot features in memory; its SDK `save_spkinfo` writes inside the model folder,
+so do not use that as a shared-model/profile persistence strategy. A future
+adapter-owned profile cache should not rewrite immutable model assets. Qwen Base
+currently retains the prepared clone prompt in memory for its adapter lifetime.
+
+Exact generated-speech caching is already implemented in the optional worker,
+with selected backend/model, adapter identity and exact text in the key. A shared
+cache usable by one-shot generation is a proposed improvement, not implemented.
+It must not serve output from a different requested model or voice configuration.
+Compatible reference preprocessing can be reused, but no speed gain was measured.
+Keep model-specific computation/serialization inside adapters, not core workflows.
+
+For multiple sequential reels, an explicitly owned injected adapter can remain
+loaded across jobs and then be closed by the caller. This avoids an indefinite
+worker; automatic idle expiry is not implemented. Existing worker replacement
+retains only one active model. Keeping all models simultaneously resident is
+not justified by sharing a profile, especially on the 12 GB GPU.
+
+**Measured upper bound:** the latest CosyVoice2 CPU pipeline took 138.58s,
+including 26.36s load/reference preparation. Eliminating that WHOLE stage would
+still leave 112.22s (about 1.23x maximum end-to-end speedup for that hypothetical
+change). A profile-state cache removes only some of the stage, not weight
+loading or subsequent speech generation. Do not promise a large decoding
+speedup from sharing a speaker. A separately authorized plain-GPU and per-stage
+comparison is the more important next investigation for CosyVoice latency;
+vLLM/precision/quantization still require their own quality and runtime evidence.
+
+Sources:
+- `src\yapper\pocket.py:17-24,61-74`, `speech.py:122-127`;
+  `cosyvoice_runtime.py` (cached zero-shot preparation);
+  `worker.py:172-195,225-227`; `generation.py` (caller owns injected adapters).
+- Installed `pocket_tts\models\model_state.py:1-17`.
+- `models\cosyvoice_source\cosyvoice\cli\cosyvoice.py:69-78`.
+- https://github.com/kyutai-labs/pocket-tts/blob/main/docs/CLI%20Commands/export_voice.md
+- https://huggingface.co/docs/transformers/cache_explanation
+- `workspace\outputs\arka.cosyvoice2.validation.2.status.json`;
+  measured 26.36s load reported in this session.
+
+No inference, dependency changes or new worker was started for this assessment.

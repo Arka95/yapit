@@ -12,6 +12,8 @@ under `docs`, not beside Python sources. See [usage](README.md) and the
 | `backends.py` | Backend protocols, lazy adapter selection, plugin registration and shared PCM validation |
 | `speech.py` | Qwen-specific loading, reference/checkpoint handling and acceleration |
 | `pocket.py` | Pocket TTS loading, reusable reference/voice state and CPU synthesis |
+| `cosyvoice.py`, `cosyvoice_runtime.py` | CosyVoice family adapter and isolated SDK reference-cloning session |
+| `isolated.py`, `isolated_runtime.py` | Reusable bounded JSON transport/server for incompatible Python SDK runtimes |
 | `inference.py` | CUDA-graph replay of the fixed-length codebook predictor, with SDK fallback |
 | `worker.py` | Authenticated loopback worker, one resident model, bounded private speech cache and load/request telemetry |
 | `generation.py` | Narration workflow, reusable synthesis/encoding renderer and failure/status handling |
@@ -103,8 +105,71 @@ weights: cache identity stamps the config/reference, not every referenced weight
 Restart after changing those weights. The SDK interface/model-selection routes
 are unit-tested with mocks. A separately authorized Pocket `english_2026-10`
 Arka-reference CPU run produced the Puerto Princesa guide on November 8, 2026;
-encoded-video/signal checks passed, but listening quality remains unapproved.
+encoded-video/signal checks passed and Arka preferred this clip over prior Qwen
+output; this is not a controlled quality benchmark.
 Cloning weights require publisher access approval and a local Hugging Face login.
+
+## Model onboarding
+
+1. Verify the official model, code revision, license, reference requirements and
+   native sample rate. Distinguish model release dates from repository updates.
+2. Implement one SDK-family factory with the existing `ModelBackend` contract.
+   Keep model variants in selection/configuration rather than changing Pipeline,
+   Editor or the CLI. Register it locally or through `yapit.tts`.
+3. Use the current interpreter only when dependencies are compatible. Otherwise
+   use `RuntimeProcess` and an SDK session exposing `load(request)` /
+   `synthesize(request)` through `isolated_runtime.serve`. The bridge carries
+   bounded JSON on private pipes; audio stays in an adapter-owned temporary
+   directory, not JSON/base64 or external services.
+4. Include model/reference/configuration, SDK code and runtime identity in
+   `cache_identity`; supply actual runtime metadata through `describe`.
+   Constructors do not load models or start processes.
+5. Cover selection, conditioning reuse, native-rate conversion, failure/path
+   handling and cleanup with mocked units. Provision and run real samples only
+   when authorized, then record results and limitations in `analysis.md` and the
+   append-only research archive.
+
+### CosyVoice runtime
+
+CosyVoice is installed independently because its Python 3.10/Torch 2.3.1 SDK
+stack conflicts with the app's Qwen/Pocket runtime. From the project root:
+
+```powershell
+# Use the existing isolated interpreter; this does not install into .venv-cpu.
+$env:PIP_CONSTRAINT = "$PWD\scripts\cosyvoice-runtime.requirements.txt"
+.\.venv-cpu\Scripts\python.exe -m pip --python .\.venv-cosyvoice\Scripts\python.exe install -r scripts\cosyvoice-runtime.requirements.txt
+Remove-Item Env:\PIP_CONSTRAINT
+```
+
+The build constraint retains `pkg_resources` for the older Whisper dependency.
+The inference manifest omits optional GUI/server/training/TensorRT/vLLM tools
+and Wetext normalization, which can download extra assets during initialization.
+Approved narration is supplied with `text_frontend=False`; no text-normalization
+package is needed.
+The source checkout defaults to `models\cosyvoice_source`, including its
+Matcha-TTS submodule; the interpreter defaults to
+`.venv-cosyvoice\Scripts\python.exe`. Override with trusted local
+`YAPIT_COSYVOICE_SOURCE` / `YAPIT_COSYVOICE_PYTHON` paths when necessary.
+
+Provision the exact model revision into `models\cosyvoice2-0.5b`; the adapter
+does not download weights at startup. Required assets are the model YAML,
+LLM/flow/HiFT weights, CAMPPlus/speech-tokenizer ONNX files and
+`CosyVoice-BlankEN` assets. Cached CosyVoice3 uses `models\cosyvoice3-2512`.
+These SDK YAMLs execute trusted Python constructors: do not accept untrusted
+model directories. Explicit `YAPIT_DEVICE=cuda:N` fails if CUDA is unavailable;
+CPU/auto are supported. TensorRT/vLLM are disabled, speed remains 1.0, and
+reference conditioning is cached in memory without rewriting model speaker files.
+
+The isolated child runs only for its owning adapter's lifetime. Close/timeout/
+failure terminates and reaps it and removes its private temporary audio.
+An explicitly started `voice-worker` can retain it, but integration does not
+start such a worker or change the global default backend.
+
+Authorized CosyVoice2 validation on November 8, 2026 generated
+`data\generated_audio\arka.cosyvoice2.validation.2.mp3`: 8.52 seconds of
+Arka-reference narration, natural speed, CPU FP32, 138.58 seconds end-to-end.
+WAV/MP3 signal checks passed and the child exited. Owner listening review is
+still required; CUDA and real CosyVoice3 synthesis have not been validated.
 
 ## Preserved policies and limitations
 

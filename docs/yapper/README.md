@@ -49,12 +49,22 @@ Qwen remains the default, not a requirement:
 ```powershell
 yapit audiogen --text "Leave time to enjoy the view." --voice arka --seconds 5 --backend pocket --model english_2026-10
 yapit voice-worker arka --backend pocket --model english_2026-10
+yapit audiogen --text "Discover a hidden river beneath Palawan." --voice arka --seconds 5 --backend cosyvoice --model FunAudioLLM/CosyVoice2-0.5B
 ```
 
 Pocket TTS requires `.[pocket]` and uses your profile's reference recording on CPU,
 not its Qwen checkpoint. `--model` accepts Pocket language/model names or a YAML
 config path. An explicit Qwen `--model` overrides the profile's selected checkpoint;
 omitting it retains the existing checkpoint/reference behavior.
+
+CosyVoice uses a separate Python 3.10 runtime and provisioned local SDK/weights,
+not the Pocket/Qwen environment or the profile's Qwen checkpoint. It clones the
+profile reference with its exact transcript. One isolated process is reused
+across beats and closed with the owning generation; no resident worker is
+started automatically. The same adapter accepts the cached
+`FunAudioLLM/Fun-CosyVoice3-0.5B-2512` or a local CosyVoice2/3 model directory.
+These are older releases selected explicitly, not 2026 model releases.
+See [runtime setup and onboarding](dev.readme.md#model-onboarding).
 
 The worker can switch adapters/models on explicit requests and keeps one loaded
 at a time. Without selection flags, requests inherit the worker's startup choice.
