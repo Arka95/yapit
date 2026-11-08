@@ -9,7 +9,9 @@ under `docs`, not beside Python sources. See [usage](README.md) and the
 | File | Responsibility |
 |---|---|
 | `script_planner.py`, `script_prompt.txt` | Text/JSON loading, deterministic prompt composition and explicitly opted-in cloud writing |
-| `speech.py` | `SpeechBackend` protocol and lazy native Qwen model/reference/checkpoint adapter |
+| `backends.py` | Backend protocols, lazy adapter selection, plugin registration and shared PCM validation |
+| `speech.py` | Qwen-specific loading, reference/checkpoint handling and acceleration |
+| `pocket.py` | Pocket TTS loading, reusable reference/voice state and CPU synthesis |
 | `inference.py` | CUDA-graph replay of the fixed-length codebook predictor, with SDK fallback |
 | `worker.py` | Authenticated loopback worker, one resident model, bounded private speech cache and load/request telemetry |
 | `generation.py` | Narration workflow, reusable synthesis/encoding renderer and failure/status handling |
@@ -35,7 +37,8 @@ result = generate_audio(
 ```
 
 `generate_audio` accepts `Script | str`, optional `Workspace`, voice/style,
-target seconds, source name and an injected `SpeechBackend`. It normalizes plain
+target seconds, source name, an injected `SpeechBackend`, or `backend_name`/`model`.
+It normalizes plain
 text, validates the target, selects a profile and reserves outputs before calling
 the renderer. It never calls the script-writing provider or Editor.
 
@@ -53,6 +56,55 @@ Shared contracts remain in `models.py`, profile/style selection in
 in `storage.py`. Yapper reuses
 `common_utils` for atomic JSON, native model loading, resampling, FFmpeg fitting,
 WAV/MP3 encoding and decode validation. Do not duplicate these utilities here.
+
+## TTS adapters
+
+The renderer accepts a minimal `synthesize(text) -> np.ndarray` backend for
+injection. Managed adapters implement `ModelBackend`: `load`, `close`,
+`synthesize`, `cache_identity` and `describe`. Constructors stay lightweight;
+SDK imports/model loading happen in `load`. Return validated mono float32
+24 kHz PCM, converting the SDK's native rate inside the adapter.
+
+`cache_identity` returns JSON-serializable model/version/conditioning information
+and relevant asset stamps; exclude writing metadata. `describe` supplies model,
+voice mode, device, dtype and inference-backend metadata without exposing SDK
+internals to the worker. The worker also includes the selected adapter/model in
+its cache key, closes replaced/failed models and retains one active model.
+One-shot rendering closes adapters it creates; callers own injected adapters.
+
+Register a trusted local adapter:
+
+```python
+from yapit.yapper import register_backend
+from my_tts_adapter import MySpeech
+
+register_backend("my-model", MySpeech)
+```
+
+Factories accept `(voice, voice_dir, *, model=None)`. In-memory registration is
+process-local; install a package entry point to make it available in separate
+CLI/worker processes:
+
+```toml
+[project.entry-points."yapit.tts"]
+my-model = "my_tts_adapter:MySpeech"
+```
+
+Then select `--backend my-model --model MODEL_ID`. Plugins are trusted installed
+Python code, not arbitrary imports supplied in HTTP requests. Unsupported
+architectures need adapters; changing a Hugging Face ID alone cannot change SDKs.
+Qwen's training/checkpoint validation stays in its training module.
+
+Pocket optionally accepts `pocket_voice_state` in profile metadata, pointing to
+an exported state inside the profile folder. Otherwise it uses `reference_audio`.
+Its model/reference are retained between worker calls; custom configs should live
+under the configured model/data root. Use immutable revisions for custom YAML
+weights: cache identity stamps the config/reference, not every referenced weight.
+Restart after changing those weights. The SDK interface/model-selection routes
+are unit-tested with mocks. A separately authorized Pocket `english_2026-10`
+Arka-reference CPU run produced the Puerto Princesa guide on November 8, 2026;
+encoded-video/signal checks passed, but listening quality remains unapproved.
+Cloning weights require publisher access approval and a local Hugging Face login.
 
 ## Preserved policies and limitations
 

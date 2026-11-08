@@ -32,6 +32,12 @@ def generate(
     voice: str = DEFAULT_PROFILE,
     seconds: float = 30,
     style: DeliveryStyle = DeliveryStyle.default,
+    backend: Annotated[
+        str | None, typer.Option(help="TTS backend or installed plugin name.")
+    ] = None,
+    model: Annotated[
+        str | None, typer.Option(help="Model identifier/path for that backend.")
+    ] = None,
 ) -> None:
     """Generate local narration and measured timing, without video or script rewriting."""
     if (text is None) == (script is None):
@@ -46,6 +52,8 @@ def generate(
             seconds=seconds,
             style=style,
             source_name=script.stem if script is not None else None,
+            backend_name=backend,
+            model=model,
         )
     except (ValueError, RuntimeError, OSError) as exc:
         typer.echo(f"Yapper: {exc}", err=True)

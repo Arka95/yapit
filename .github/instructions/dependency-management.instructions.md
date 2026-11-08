@@ -16,3 +16,7 @@ applyTo: "**"
   credentials in tracked files. Report blocked downloads instead.
 - Keep CosyVoice in its separate Python 3.10 environment; do not change the
   working Qwen `.venv-cpu` or `.venv-gpu` to resolve its dependencies.
+- For agent-selected models, verify the latest appropriate stable release from
+  official sources and require a 2026-or-later model release. Prefer dated model
+  identifiers; a recent repository edit is not a model release. Do not download,
+  replace checkpoints or retrain without authorization.

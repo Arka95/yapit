@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-import gc
 import getpass
 import hashlib
-import importlib.metadata
 import json
 import os
 import secrets
 import subprocess
-import sys
 import tempfile
 import threading
 import time
@@ -22,13 +19,19 @@ import soundfile as sf
 
 from yapit.common_utils.mediautils import SAMPLE_RATE
 from yapit.common_utils.metrics import timed
+from yapit.constants import models_directory
 from yapit.enrollment.styles import select_voice
 from yapit.models import Voice
 from yapit.storage import DataStore
-from yapit.yapper.speech import QwenSpeech
+from yapit.yapper.backends import (
+    MAX_CHUNK_SECONDS,
+    BackendSelection,
+    create_backend,
+    select_backend,
+)
 
 MAX_REQUEST = 1024 * 1024
-MAX_AUDIO = 45 * SAMPLE_RATE * 4
+MAX_AUDIO = MAX_CHUNK_SECONDS * SAMPLE_RATE * 4
 CACHE_BYTES = 250 * 1024 * 1024
 
 
@@ -84,10 +87,23 @@ def _request(state: dict, route: str, payload: dict | None = None) -> tuple[byte
 
 
 class WorkerSpeech:
-    def __init__(self, voice: Voice, voice_dir: Path, state: dict):
+    def __init__(self, voice: Voice, voice_dir: Path, state: dict, *, backend=None, model=None):
         self.voice = voice
         self.voice_dir = voice_dir
         self.state = state
+        self.backend = backend
+        self.model = model
+        if (backend is not None or model is not None) and not state.get("backend_selection"):
+            raise RuntimeError("Restart the voice worker to enable backend/model selection.")
+
+    def describe(self) -> dict:
+        content, _ = _request(self.state, "/health")
+        status = json.loads(content)
+        return {
+            key: status[key]
+            for key in ("backend", "model", "voice_mode", "device", "dtype", "inference_backend")
+            if key in status
+        }
 
     def synthesize(self, text: str) -> np.ndarray:
         content, _ = _request(
@@ -98,6 +114,8 @@ class WorkerSpeech:
                 "voice_dir": str(self.voice_dir.resolve()),
                 "text": text,
                 "cache": os.environ.get("YAPIT_SPEECH_CACHE", "1") != "0",
+                "backend": self.backend,
+                "model": self.model,
             },
         )
         if not content or len(content) % 4:
@@ -108,18 +126,23 @@ class WorkerSpeech:
         return wave
 
 
-def backend_for(voice: Voice, voice_dir: Path, *, fallback=QwenSpeech):
+def backend_for(voice: Voice, voice_dir: Path, *, backend_name=None, model=None, fallback=None):
+    name = backend_name or os.environ.get("YAPIT_TTS_BACKEND")
+    model = model if model is not None else os.environ.get("YAPIT_TTS_MODEL")
     if os.environ.get("YAPIT_VOICE_WORKER", "auto") != "0":
         state = read_state(DataStore())
         if state is not None:
-            return WorkerSpeech(voice, voice_dir, state)
-    return fallback(voice, voice_dir)
+            return WorkerSpeech(voice, voice_dir, state, backend=name, model=model)
+    if fallback is not None and name is None and model is None:
+        return fallback(voice, voice_dir)
+    return create_backend(voice, voice_dir, select_backend(name, model))
 
 
 class SpeechEngine:
-    def __init__(self, data: DataStore, factory=None):
+    def __init__(self, data: DataStore, factory=None, *, backend=None, model=None):
         self.data = data
-        self.factory = factory or QwenSpeech
+        self.factory = factory
+        self.selection = select_backend(backend, model)
         self.backend = None
         self.identity = None
         self.lock = threading.Lock()
@@ -129,63 +152,58 @@ class SpeechEngine:
             raise ValueError("Speech cache must stay inside the data root.")
         self.cache.mkdir(parents=True, exist_ok=True)
 
-    def _identity(self, voice: Voice, directory: Path) -> str:
+    def _validate_assets(self, voice: Voice, directory: Path, selection: BackendSelection) -> None:
         if not directory.resolve().is_relative_to(self.data.root):
             raise ValueError("Voice directory must stay inside the data root.")
-        paths = (
-            [
-                Path(voice.checkpoint) / name
-                for name in ("model.safetensors", "config.json", "generation_config.json")
-            ]
-            if voice.checkpoint
-            else [directory / voice.reference_audio]
-        )
-        stamps = []
-        for path in paths:
+        for path in (
+            directory / voice.reference_audio,
+            Path(voice.checkpoint) if voice.checkpoint else directory,
+        ):
             if not path.resolve().is_relative_to(self.data.root):
                 raise ValueError("Voice weights/reference must stay inside the data root.")
-            if path.is_file():
-                stamps.append((str(path.resolve()), path.stat().st_size, path.stat().st_mtime_ns))
-        identity = (
-            {"checkpoint": voice.checkpoint, "speaker": voice.speaker or voice.name}
-            if voice.checkpoint
-            else {
-                "reference_audio": str((directory / voice.reference_audio).resolve()),
-                "reference_text": voice.reference_text,
-            }
-        )
-        value = [identity, stamps]
-        try:
-            version = importlib.metadata.version("qwen-tts")
-        except importlib.metadata.PackageNotFoundError:
-            version = "not-installed"
-        value.extend([version, os.environ.get("YAPIT_MODEL") if not voice.checkpoint else None])
-        return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+        if selection.model:
+            path = Path(selection.model)
+            if (path.is_absolute() or path.exists()) and not (
+                path.resolve().is_relative_to(self.data.root)
+                or path.resolve().is_relative_to(models_directory())
+            ):
+                raise ValueError("Local model assets must stay inside the data or model root.")
 
-    def _load(self, voice: Voice, directory: Path) -> None:
-        identity = self._identity(voice, directory)
+    def _load(self, voice: Voice, directory: Path, *, backend=None, model=None) -> None:
+        selection = select_backend(backend, model, default=self.selection)
+        self._validate_assets(voice, directory, selection)
+        candidate = (
+            self.factory(voice, directory)
+            if self.factory is not None
+            else create_backend(voice, directory, selection)
+        )
+        value = [selection.backend, selection.model, candidate.cache_identity()]
+        identity = hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
         if identity == self.identity:
             return
         self.status["ready"] = False
+        if self.backend is not None:
+            self.backend.close()
         self.backend = None
         self.identity = None
-        gc.collect()
-        torch = sys.modules.get("torch")
-        if torch is not None and torch.cuda.is_available():
-            torch.cuda.empty_cache()
         started = time.perf_counter()
-        backend = self.factory(voice, directory)
-        backend._load()
-        self.backend, self.identity = backend, identity
-        model = getattr(backend.model, "model", None)
-        parameter = next(model.parameters()) if model is not None else None
+        try:
+            candidate.load()
+        except Exception:
+            candidate.close()
+            raise
+        self.backend, self.identity = candidate, identity
+        info = candidate.describe()
         self.status.update(
             ready=True,
             voice=voice.name,
-            checkpoint=voice.checkpoint,
-            device=str(parameter.device) if parameter is not None else "test",
-            dtype=str(parameter.dtype) if parameter is not None else "test",
-            inference_backend=getattr(backend, "inference_backend", "test"),
+            checkpoint=voice.checkpoint if info.get("voice_mode") == "fine_tuned" else None,
+            backend=selection.backend,
+            model=info.get("model", selection.model),
+            voice_mode=info.get("voice_mode", "reference"),
+            device=info.get("device", "unknown"),
+            dtype=info.get("dtype", "unknown"),
+            inference_backend=info.get("inference_backend", selection.backend),
             load_seconds=round(time.perf_counter() - started, 3),
         )
 
@@ -194,7 +212,9 @@ class SpeechEngine:
             self._load(voice, directory)
 
     @timed
-    def synthesize(self, voice: Voice, directory: Path, text: str, reuse: bool) -> np.ndarray:
+    def synthesize(
+        self, voice: Voice, directory: Path, text: str, reuse: bool, *, backend=None, model=None
+    ) -> np.ndarray:
         if not isinstance(text, str) or not text.strip() or len(text) > 4000:
             raise ValueError("Supply 1-4000 characters of speech text.")
         if not self.lock.acquire(blocking=False):
@@ -202,7 +222,7 @@ class SpeechEngine:
         started = time.perf_counter()
         self.status["busy"] = True
         try:
-            self._load(voice, directory)
+            self._load(voice, directory, backend=backend, model=model)
             key = hashlib.sha256(f"{self.identity}\0{text}".encode()).hexdigest()
             path = self.cache / f"{key}.wav"
             if not path.resolve().is_relative_to(self.cache.resolve()):
@@ -251,7 +271,9 @@ class SpeechEngine:
                 last_request_seconds=round(elapsed, 3),
                 last_audio_seconds=round(len(wave) / SAMPLE_RATE, 3),
                 last_real_time_factor=round(elapsed / (len(wave) / SAMPLE_RATE), 3),
-                inference_backend=getattr(self.backend, "inference_backend", "test"),
+                inference_backend=self.backend.describe().get(
+                    "inference_backend", self.status["backend"]
+                ),
             )
             return wave
         finally:
@@ -327,6 +349,8 @@ class WorkerHandler(BaseHTTPRequestHandler):
                 Path(payload["voice_dir"]),
                 payload["text"],
                 payload.get("cache", True) is True,
+                backend=payload.get("backend"),
+                model=payload.get("model"),
             )
             self._reply(200, np.asarray(wave, dtype="<f4").tobytes())
         except (ValueError, OSError, KeyError, TypeError) as exc:
@@ -393,16 +417,23 @@ def stop_worker(data: DataStore) -> dict:
     return json.loads(content)
 
 
-def run_worker(data: DataStore, voice_name: str) -> None:
+def run_worker(
+    data: DataStore, voice_name: str, *, backend: str | None = None, model: str | None = None
+) -> None:
     if state_path(data).exists():
         raise RuntimeError("Worker state already exists; use voice-worker-status/stop first.")
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
     voice, directory = select_voice(data, voice_name)
-    engine = SpeechEngine(data)
+    engine = SpeechEngine(data, backend=backend, model=model)
     token = secrets.token_urlsafe(32)
     server = WorkerServer(engine, token)
-    state = {"port": server.server_port, "token": token, "pid": os.getpid()}
+    state = {
+        "port": server.server_port,
+        "token": token,
+        "pid": os.getpid(),
+        "backend_selection": True,
+    }
     thread = None
     try:
         _write_state(data, state)
@@ -416,5 +447,7 @@ def run_worker(data: DataStore, voice_name: str) -> None:
         if thread is not None:
             server.shutdown()
         server.server_close()
+        if engine.backend is not None:
+            engine.backend.close()
         if read_state(data) == state:
             state_path(data).unlink()

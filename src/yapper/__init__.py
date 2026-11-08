@@ -1,6 +1,7 @@
 """Script planning and local text/Script-to-audio generation with measured timing."""
 
+from yapit.yapper.backends import SpeechBackend, register_backend
 from yapit.yapper.generation import generate_audio
-from yapit.yapper.speech import QwenSpeech, SpeechBackend
+from yapit.yapper.speech import QwenSpeech
 
-__all__ = ["generate_audio", "QwenSpeech", "SpeechBackend"]
+__all__ = ["generate_audio", "QwenSpeech", "SpeechBackend", "register_backend"]

@@ -105,7 +105,10 @@ def test_style_generation_passes_real_reference_and_preserves_script(
         selected.append((voice, directory))
         return ToneSpeech()
 
-    monkeypatch.setattr("yapit.yapper.generation.QwenSpeech", speech)
+    monkeypatch.setattr(
+        "yapit.yapper.generation.backend_for",
+        lambda voice, directory, **kwargs: speech(voice, directory),
+    )
     result = generate_audio(
         script(),
         workspace=enrolled,

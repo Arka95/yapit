@@ -41,6 +41,31 @@ The old `yapit yapper generate` form remains a hidden compatibility alias;
 it is not needed for normal use. Standalone module entry points are documented
 in the developer guide.
 
+### Choose a model
+
+`--backend` selects an adapter; `--model` selects the model that adapter loads.
+Qwen remains the default, not a requirement:
+
+```powershell
+yapit audiogen --text "Leave time to enjoy the view." --voice arka --seconds 5 --backend pocket --model english_2026-10
+yapit voice-worker arka --backend pocket --model english_2026-10
+```
+
+Pocket TTS requires `.[pocket]` and uses your profile's reference recording on CPU,
+not its Qwen checkpoint. `--model` accepts Pocket language/model names or a YAML
+config path. An explicit Qwen `--model` overrides the profile's selected checkpoint;
+omitting it retains the existing checkpoint/reference behavior.
+
+The worker can switch adapters/models on explicit requests and keeps one loaded
+at a time. Without selection flags, requests inherit the worker's startup choice.
+`YAPIT_TTS_BACKEND` and `YAPIT_TTS_MODEL` configure defaults. Restart workers started
+before this selection API; they reject explicit selectors rather than ignore them.
+
+Other models need their own adapter, registered locally or through an installed
+`yapit.tts` plugin. Model weights are not interchangeable between architectures.
+See the developer guide for the adapter contract. Optional dependencies and model
+assets must be provisioned separately; these commands are not a speed/quality claim.
+
 Register a style once using your own expressive recording and its exact words:
 
 ```powershell
@@ -90,7 +115,7 @@ recordings. Supplied text/JSON narration never invokes that adapter.
 
 ## Models, timing and files
 
-Default synthesis uses local Qwen3-TTS Base voice conditioning: one selected
+The default Qwen adapter uses local Qwen3-TTS Base voice conditioning: one selected
 recording and its verified transcript, not automatic weight training. A separately
 selected fine-tuned checkpoint uses its named custom speaker instead. CPU
 inference is supported; `YAPIT_DEVICE=auto` selects CUDA when available or logs

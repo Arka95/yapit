@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import logging
 import os
 import shutil
@@ -8,38 +9,72 @@ import threading
 from contextlib import redirect_stdout
 from pathlib import Path
 from types import ModuleType
-from typing import Protocol
 
 import numpy as np
 
-from yapit.common_utils.mediautils import SAMPLE_RATE, resample
 from yapit.common_utils.metrics import timed
 from yapit.common_utils.modelutils import load_model
 from yapit.constants import DEFAULT_SPEECH_MODEL
 from yapit.models import Voice
+from yapit.yapper.backends import SpeechBackend as SpeechBackend
+from yapit.yapper.backends import (
+    asset_stamps,
+    normalize_audio,
+    package_version,
+)
 
 MODEL_ID = DEFAULT_SPEECH_MODEL
 
 
-class SpeechBackend(Protocol):
-    def synthesize(self, text: str) -> np.ndarray: ...
-
-
 class QwenSpeech:
-    def __init__(self, voice: Voice, voice_dir: Path):
+    def __init__(self, voice: Voice, voice_dir: Path, *, model: str | None = None):
         self.voice = voice
         self.voice_dir = voice_dir
         self.model = None
         self.prompt = None
         self.lock = threading.Lock()
         self.accelerator = None
+        self.source = model or voice.checkpoint or os.environ.get("YAPIT_MODEL", MODEL_ID)
+        self.mode = "custom_voice" if voice.checkpoint and model is None else "base"
+        self.explicit_model = model is not None
+        self.device = "unloaded"
+        self.dtype = "unloaded"
+
+    def cache_identity(self) -> dict:
+        source = Path(self.source)
+        paths = []
+        if source.is_dir():
+            paths.extend(source.glob("model*.safetensors"))
+            paths.extend((source / "speech_tokenizer").glob("model*.safetensors"))
+            paths.extend(source / name for name in ("config.json", "generation_config.json"))
+        if self.mode == "base" or self.explicit_model:
+            paths.append(self.voice_dir / self.voice.reference_audio)
+        return {
+            "model": self.source,
+            "speaker": self.voice.speaker or self.voice.name,
+            "reference_text": (
+                self.voice.reference_text if self.mode == "base" or self.explicit_model else None
+            ),
+            "assets": asset_stamps(paths),
+            "version": package_version("qwen-tts"),
+        }
+
+    def describe(self) -> dict:
+        return {
+            "backend": "qwen",
+            "model": self.source,
+            "voice_mode": "fine_tuned" if self.mode == "custom_voice" else "reference",
+            "device": self.device,
+            "dtype": self.dtype,
+            "inference_backend": self.inference_backend,
+        }
 
     @property
     def inference_backend(self) -> str:
         return "cuda_graphs" if self.accelerator and self.accelerator.active else "sdpa"
 
     @timed
-    def _load(self) -> None:
+    def load(self) -> None:
         if self.model is not None:
             return
         scripts = Path(sys.executable).parent
@@ -68,26 +103,41 @@ class QwenSpeech:
             else torch.float16
         )
         with redirect_stdout(sys.stderr):
-            self.model = load_model(
+            model = load_model(
                 Qwen3TTSModel.from_pretrained,
-                self.voice.checkpoint or os.environ.get("YAPIT_MODEL", MODEL_ID),
+                self.source,
                 device_map=device,
                 dtype=dtype,
                 attn_implementation="sdpa",
             )
-            if self.voice.checkpoint is None:
+            mode = getattr(getattr(model, "model", None), "tts_model_type", self.mode)
+            if mode not in {"base", "custom_voice"}:
+                raise ValueError("This Qwen adapter supports Base and CustomVoice models.")
+            prompt = None
+            if mode == "base":
                 reference = (self.voice_dir / self.voice.reference_audio).resolve()
                 if (
                     not reference.is_relative_to(self.voice_dir.resolve())
                     or not reference.is_file()
                 ):
                     raise ValueError("Invalid local reference path in voice profile.")
-                self.prompt = self.model.create_voice_clone_prompt(
+                prompt = model.create_voice_clone_prompt(
                     ref_audio=str(reference),
                     ref_text=self.voice.reference_text,
                     x_vector_only_mode=False,
                 )
+            self.model, self.prompt, self.mode = model, prompt, mode
             self._enable_acceleration(torch, device)
+        self.device, self.dtype = device, str(dtype)
+
+    def close(self) -> None:
+        with self.lock:
+            self.model = self.prompt = self.accelerator = None
+            self.device = self.dtype = "unloaded"
+            gc.collect()
+            torch = sys.modules.get("torch")
+            if torch is not None and torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
     def _enable_acceleration(self, torch: ModuleType, device: str) -> None:
         if device == "cpu" or os.environ.get("YAPIT_CUDA_GRAPHS", "1") == "0":
@@ -103,9 +153,9 @@ class QwenSpeech:
     @timed
     def synthesize(self, text: str) -> np.ndarray:
         with self.lock, redirect_stdout(sys.stderr):
-            self._load()
+            self.load()
             kwargs = {"text": text, "language": "English", "max_new_tokens": 2048}
-            if self.voice.checkpoint:
+            if self.mode == "custom_voice":
                 waves, sample_rate = self.model.generate_custom_voice(
                     **kwargs,
                     speaker=self.voice.speaker or self.voice.name,
@@ -115,10 +165,4 @@ class QwenSpeech:
                     **kwargs,
                     voice_clone_prompt=self.prompt,
                 )
-        data = np.asarray(waves[0], dtype=np.float32).reshape(-1)
-        if not len(data) or not np.isfinite(data).all() or np.max(np.abs(data)) < 1e-5:
-            raise ValueError("Speech model produced empty, invalid or silent audio.")
-        data = resample(data, sample_rate)
-        if len(data) / SAMPLE_RATE > 45:
-            raise ValueError("A beat exceeded 45 seconds; split the script into shorter beats.")
-        return data
+        return normalize_audio(waves[0], sample_rate)

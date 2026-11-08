@@ -1,8 +1,11 @@
 # YapIt
 
-Generate local narration in your enrolled/trained voice and a portrait edit guide.
+**YapIt is profile-based personalized voice generation for engaging travel and
+product reels.** Create a voice profile from your recordings, choose a TTS model,
+and reuse your voice for narration and portrait edit guides.
+
 **Videos contain numbered placeholders, not travel footage.** Replace them with
-your clips. Music is opt-in; training is always separate.
+your own clips. Music is opt-in; voice training is always a separate step.
 
 ## Documentation index
 
@@ -27,7 +30,8 @@ python -m venv .venv
 .\.venv\Scripts\yapit --help
 ```
 
-Install `.[voice]`, `.[rescript]` or `.[mcp]` for the corresponding module.
+Install `.[voice]` for Qwen, `.[pocket]` for Pocket TTS, or `.[rescript]` / `.[mcp]`
+for transcription / MCP.
 Weights/tokenizers are provisioned separately. Windows CPU/GPU setup and offline
 instructions are in the [developer guide](docs/dev.readme.md).
 Without activation, replace `yapit` below with `.\.venv\Scripts\yapit` or
@@ -35,8 +39,8 @@ Without activation, replace `yapit` below with `.\.venv\Scripts\yapit` or
 
 ## Available commands
 
-Commands are flat; use `yapit COMMAND --help`. Narration uses local Qwen3-TTS;
-transcription uses local Whisper.
+Commands are flat; use `yapit COMMAND --help`. Narration uses selectable TTS
+backends (Qwen by default); transcription uses local Whisper.
 
 <details>
 <summary>All commands</summary>
@@ -110,5 +114,6 @@ in the [developer guide](docs/dev.readme.md).
 
 Use `YAPIT_DATA_DIR`, `YAPIT_WORKSPACE` and `YAPIT_MODELS_DIR` to override roots.
 Worker state/cached speech live privately under `data\.runtime`.
-Keep credentials, profiles, recordings, weights and generated media out of commits.
+Keep credentials, model weights and generated media out of commits. Commit profile
+data or audio samples only when intentionally selected; Arka's checkpoints are ignored.
 Review transcripts, pronunciation, voice quality and music before publishing.

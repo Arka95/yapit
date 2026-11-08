@@ -1,6 +1,6 @@
 import secrets
 import threading
-from types import SimpleNamespace
+from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import ProxyHandler, Request, build_opener
 
@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from yapit.enrollment.styles import select_voice
+from yapit.yapper.backends import asset_stamps
 from yapit.yapper.worker import (
     SpeechEngine,
     WorkerServer,
@@ -29,10 +30,29 @@ class FakeSpeech:
     generations = 0
 
     def __init__(self, voice, directory):
-        self.model = SimpleNamespace()
+        self.voice = voice
+        self.directory = directory
 
-    def _load(self):
+    def load(self):
         FakeSpeech.loads += 1
+
+    def close(self):
+        pass
+
+    def cache_identity(self):
+        paths = (
+            [self.directory / self.voice.reference_audio]
+            if self.voice.checkpoint is None
+            else [Path(self.voice.checkpoint) / "model.safetensors"]
+        )
+        return {
+            "assets": asset_stamps(paths),
+            "checkpoint": self.voice.checkpoint,
+            "reference_text": self.voice.reference_text,
+        }
+
+    def describe(self):
+        return {"device": "test", "dtype": "test"}
 
     def synthesize(self, text):
         FakeSpeech.generations += 1

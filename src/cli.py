@@ -80,11 +80,15 @@ def doctor() -> None:
 
 
 @app.command("voice-worker")
-def voice_worker(voice: Annotated[str, typer.Argument()] = DEFAULT_PROFILE) -> None:
+def voice_worker(
+    voice: Annotated[str, typer.Argument()] = DEFAULT_PROFILE,
+    backend: str | None = None,
+    model: str | None = None,
+) -> None:
     """Keep one local speech model loaded; cache unchanged speech until explicitly stopped."""
     from yapit.yapper.worker import run_worker
 
-    run_worker(data_store(), voice)
+    run_worker(data_store(), voice, backend=backend, model=model)
 
 
 @app.command("voice-worker-status")

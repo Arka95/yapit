@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import traceback
+from contextlib import ExitStack
 from pathlib import Path
 
 import numpy as np
@@ -19,9 +20,35 @@ from yapit.constants import DEFAULT_PROFILE
 from yapit.enrollment.styles import select_voice
 from yapit.models import Brief, DeliveryStyle, Script, Timeline, Voice
 from yapit.storage import OutputArtifacts, Workspace
-from yapit.yapper.speech import QwenSpeech, SpeechBackend
+from yapit.yapper.backends import SpeechBackend
 from yapit.yapper.timeline import build_timeline
 from yapit.yapper.worker import backend_for
+
+
+def _synthesize_chunks(
+    script: Script, speech: SpeechBackend, maximum: float
+) -> tuple[np.ndarray, list[float]]:
+    pieces = []
+    durations = []
+    total = 0.0
+    for beat in script.beats:
+        wave = np.asarray(speech.synthesize(beat.text), dtype=np.float32).reshape(-1).copy()
+        if not len(wave) or not np.isfinite(wave).all():
+            raise ValueError("Speech backend returned empty or invalid audio.")
+        # Five-millisecond ramps soften joins without trimming speech or changing timing.
+        fade_samples = min(SAMPLE_RATE // 200, len(wave) // 2)
+        if fade_samples > 1:
+            ramp = np.linspace(0, 1, fade_samples, dtype=np.float32)
+            wave[:fade_samples] *= ramp
+            wave[-fade_samples:] *= ramp[::-1]
+        pause = np.zeros(round(beat.pause_ms * SAMPLE_RATE / 1000), dtype=np.float32)
+        duration = (len(wave) + len(pause)) / SAMPLE_RATE
+        total += duration
+        if total > maximum:
+            raise ValueError(f"Narration exceeds {maximum:g} seconds; shorten the supplied script.")
+        pieces.extend([wave, pause])
+        durations.append(duration)
+    return np.concatenate(pieces), durations
 
 
 @timed
@@ -36,48 +63,44 @@ def render_audio(
     backend: SpeechBackend | None = None,
     cloud_script: bool = False,
     natural_duration_tolerance: float | None = None,
+    backend_name: str | None = None,
+    model: str | None = None,
 ) -> tuple[dict, Timeline]:
     script_path = job.path("script.json", job.transcripts)
     save_json(script_path, script)
-    save_json(
-        job.path("provenance.json"),
-        {
-            "voice": voice.name,
-            "voice_mode": "fine_tuned" if voice.checkpoint else "reference",
-            "checkpoint": voice.checkpoint,
-            "synthetic_audio": True,
-            "cloud_script": cloud_script,
-            "delivery_style": style.value,
-            "delivery_method": (
-                "human-labeled reference audio; listening review required"
-                if style != DeliveryStyle.default
-                else "default voice reference or checkpoint"
-            ),
-            "reference_audio": str(voice_dir / voice.reference_audio),
-        },
-    )
-    speech = backend or backend_for(voice, voice_dir, fallback=QwenSpeech)
-    pieces = []
-    durations = []
+    provenance = {
+        "voice": voice.name,
+        "voice_mode": "fine_tuned" if voice.checkpoint else "reference",
+        "checkpoint": voice.checkpoint,
+        "synthetic_audio": True,
+        "cloud_script": cloud_script,
+        "delivery_style": style.value,
+        "delivery_method": (
+            "human-labeled reference audio; listening review required"
+            if style != DeliveryStyle.default
+            else "default voice reference or checkpoint"
+        ),
+        "reference_audio": str(voice_dir / voice.reference_audio),
+    }
+    save_json(job.path("provenance.json"), provenance)
+    speech = backend or backend_for(voice, voice_dir, backend_name=backend_name, model=model)
     tolerance = 5 if natural_duration_tolerance is None else natural_duration_tolerance
     maximum = max(190, seconds + tolerance)
-    for beat in script.beats:
-        wave = np.asarray(speech.synthesize(beat.text), dtype=np.float32).reshape(-1).copy()
-        if not len(wave) or not np.isfinite(wave).all():
-            raise ValueError("Speech backend returned empty or invalid audio.")
-        # Five-millisecond ramps soften hard joins without trimming speech or changing timing.
-        fade_samples = min(SAMPLE_RATE // 200, len(wave) // 2)
-        if fade_samples > 1:
-            ramp = np.linspace(0, 1, fade_samples, dtype=np.float32)
-            wave[:fade_samples] *= ramp
-            wave[-fade_samples:] *= ramp[::-1]
-        pause = np.zeros(round(beat.pause_ms * SAMPLE_RATE / 1000), dtype=np.float32)
-        pieces.extend([wave, pause])
-        durations.append((len(wave) + len(pause)) / SAMPLE_RATE)
-        if sum(durations) > maximum:
-            raise ValueError(f"Narration exceeds {maximum:g} seconds; shorten the supplied script.")
+    with ExitStack() as resources:
+        close = getattr(speech, "close", None)
+        if backend is None and callable(close):
+            resources.callback(close)
+        load = getattr(speech, "load", None)
+        if callable(load):
+            load()
+        wave, durations = _synthesize_chunks(script, speech, maximum)
+        describe = getattr(speech, "describe", None)
+        provenance.update(describe() if callable(describe) else {"backend": "custom"})
+        if provenance["voice_mode"] != "fine_tuned":
+            provenance["checkpoint"] = None
+    save_json(job.path("provenance.json"), provenance)
     raw = job.path("raw.wav", job.audio)
-    write_wav(raw, np.concatenate(pieces))
+    write_wav(raw, wave)
     fitted, factor = fit_audio(
         raw,
         job.path("fitted.wav", job.audio),
@@ -127,8 +150,12 @@ def generate_audio(
     style: DeliveryStyle = DeliveryStyle.default,
     source_name: str | None = None,
     backend: SpeechBackend | None = None,
+    backend_name: str | None = None,
+    model: str | None = None,
 ) -> dict:
     """Speak supplied text unchanged; no script-writing model or video renderer."""
+    if backend is not None and (backend_name is not None or model is not None):
+        raise ValueError("Choose an injected backend or backend/model selection, not both.")
     script = Script.from_text(script) if isinstance(script, str) else script
     if not isinstance(script, Script):
         raise TypeError("Supply plain text or a validated Script.")
@@ -142,7 +169,15 @@ def generate_audio(
     save_json(job.path("status.json"), {"status": "running", "name": job.name})
     try:
         result, _ = render_audio(
-            script, voice, voice_dir, job, seconds=seconds, style=style, backend=backend
+            script,
+            voice,
+            voice_dir,
+            job,
+            seconds=seconds,
+            style=style,
+            backend=backend,
+            backend_name=backend_name,
+            model=model,
         )
         save_json(job.path("status.json"), result)
         return result
