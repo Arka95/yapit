@@ -16,7 +16,7 @@ from yapit.musicgen.planner import plan_music
 from yapit.storage import Workspace
 from yapit.yapper import SpeechBackend
 from yapit.yapper.generation import render_audio
-from yapit.yapper.script_planner import build_prompt, generate_script
+from yapit.yapper.script_planner import _write_script, build_prompt
 
 
 class Pipeline:
@@ -94,12 +94,10 @@ class Pipeline:
         try:
             transcript_dir = job.transcripts
             cloud_script = script is None and auto_script
-            frames = media_frames(media, job.metadata, prefix=job.name) if media else []
             if script is None:
                 tolerance = brief.seconds * VIDEO_DURATION_BUFFER if render_video else 5
-                script = generate_script(
+                script = _write_script(
                     brief,
-                    frames,
                     duration_tolerance=tolerance,
                     end_buffer=settings.end_buffer if render_video else 0,
                 )

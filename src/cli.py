@@ -29,6 +29,7 @@ from yapit.rescript.cli import extract_audio, transcript
 from yapit.storage import Workspace
 from yapit.training import resume_checkpoint, select_checkpoint, train
 from yapit.yapper import generate_audio
+from yapit.yapper import generate_script as write_script
 from yapit.yapper.cli import app as yapper_app
 from yapit.yapper.cli import generate as audiogen_command
 from yapit.yapper.script_planner import load_script
@@ -189,6 +190,21 @@ def prompt(
     """Create a reusable script prompt plus local visual context."""
     brief = Brief(topic=topic, seconds=seconds, kind=kind, facts=facts)
     emit(Pipeline(workspace()).prompt(brief, media))
+
+
+@app.command()
+def generate_script(
+    prompt: Annotated[str, typer.Argument(help="Text prompt for the narration script.")],
+    seconds: float = 30,
+) -> None:
+    """Generate YapIt Script JSON from a text prompt; requires explicit cloud opt-in."""
+    load_dotenv()
+    configure_logging()
+    try:
+        result = write_script(prompt, seconds=seconds)
+    except (ValueError, RuntimeError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    emit(result.model_dump(mode="json"))
 
 
 @app.command()

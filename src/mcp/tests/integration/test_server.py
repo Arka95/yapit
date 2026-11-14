@@ -44,6 +44,7 @@ def test_stdio_mcp_handshake_tools_prompt_and_path_confinement(tmp_path, monkeyp
                     tools = {tool.name for tool in (await session.list_tools()).tools}
                     assert {
                         "prepare_script_prompt",
+                        "generate_script",
                         "generate_reel",
                         "generate_narration",
                         "enroll_voice",

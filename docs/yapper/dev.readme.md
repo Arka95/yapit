@@ -65,11 +65,20 @@ Model comparisons/history belong in [analysis](../analysis.md) and
 
 ## Script planning
 
-`load_script`, `build_prompt` and `generate_script` own text/JSON parsing,
-word budgets and the packaged prompt. Supplied scripts never call the writer.
-Explicit `reel --auto-script` needs `.[cloud]`, `YAPIT_ALLOW_CLOUD=true` and
+The public Python contract, exported by `yapit.yapper`, is
+`generate_script(prompt: str, seconds: float = 30) -> Script`.
+CLI `generate-script` and MCP `generate_script` delegate to it and return JSON.
+No image, frame or media input is accepted by this contract.
+
+`load_script` parses approved text/JSON; `build_prompt` prepares writing instructions.
+The internal text writer retains voice-rate, duration-buffer and closing-hold
+planning for the full reel pipeline. Supplied scripts never call the writer;
+Editor owns video templates and rendering.
+
+Explicit script generation or `reel --auto-script` needs `.[cloud]`,
+`YAPIT_ALLOW_CLOUD=true` and
 `OPENAI_API_KEY`; optional `YAPIT_SCRIPT_MODEL` selects the writer.
-Only the brief/sampled visual frames are sent, not voice recordings.
+Only text is sent, not images, video frames or voice recordings.
 There is one bounded estimated-duration revision, not unbounded retries.
 
 ## Input examples

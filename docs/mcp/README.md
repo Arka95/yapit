@@ -32,6 +32,7 @@ GPU dispatch remains strict; use CPU when CUDA is unavailable.
 | Tool | Purpose |
 |---|---|
 | `prepare_script_prompt` | Prepare a script-writing brief |
+| `generate_script` | Text prompt to Script JSON; `seconds` defaults to 30 |
 | `enroll_voice` | Create/update a profile from verified recordings |
 | `generate_narration` | Narrate an approved script |
 | `generate_reel` | Narration plus vertical edit guide |
@@ -43,7 +44,9 @@ The reusable prompt is `reel_script`. These are MCP tools, not extra CLI command
 Tool execution has the same model requirements as its underlying workflow:
 prompt preparation/enrollment are model-free, narration uses the selected local backend,
 and rendering consumes existing audio/timing without loading a speech model.
-Cloud script writing requires explicit `auto_script`, permission and credentials.
+`generate_script(prompt, seconds=30)` accepts text only, with no image/frame/media
+parameters. Cloud writing requires permission and credentials; the full reel
+pipeline additionally needs `auto_script=true` to invoke the writer.
 Rescript transcription and fine-tuning are not registered MCP tools.
 
 File inputs are confined to configured workspace/data roots. Calls are synchronous;

@@ -18,6 +18,7 @@ from yapit.musicgen.planner import plan_music
 from yapit.pipeline import Pipeline
 from yapit.storage import Workspace
 from yapit.yapper import generate_audio
+from yapit.yapper import generate_script as write_script
 
 
 @timed
@@ -52,6 +53,16 @@ def create_server(root: Path | None = None) -> FastMCP:
         """Return a reusable prompt and extracted local frame paths; no cloud requests."""
         media = workspace.inside(media_path) if media_path else None
         return pipeline.prompt(Brief(topic=topic, seconds=seconds, kind=kind, facts=facts), media)
+
+    @server.tool()
+    def generate_script(prompt: str, seconds: float = 30) -> dict:
+        """Generate YapIt Script JSON from text; requires explicit cloud opt-in."""
+        if not busy.acquire(blocking=False):
+            raise ValueError("Yapit is busy; retry after the current job.")
+        try:
+            return write_script(prompt, seconds=seconds).model_dump(mode="json")
+        finally:
+            busy.release()
 
     @server.tool()
     def enroll_voice(name: str, manifest_path: str, consent: bool = True) -> dict:

@@ -180,7 +180,7 @@ it. The worker keeps one model loaded and caches unchanged speech; see
 
 ## Use YapIt from an AI agent
 
-YapIt has **one local stdio MCP server**, with six tools and one reusable prompt.
+YapIt has **one local stdio MCP server**, with seven tools and one reusable prompt.
 Use an agent/desktop client that can launch a **local stdio server on your
 machine**. A cloud-only client without local execution cannot use this server
 directly.
@@ -195,6 +195,7 @@ opening an interactive console.
 | MCP tool / prompt | What your agent can do |
 |---|---|
 | `prepare_script_prompt` | Prepare a script-writing prompt and optional local visual context, without a cloud script request |
+| `generate_script` | Generate YapIt Script JSON from `prompt` and optional `seconds` (default 30); requires cloud opt-in |
 | `enroll_voice` | Import an existing recordings/transcript manifest; not operate the microphone UI |
 | `generate_narration` | Generate voice audio and measured timing from reviewed Script JSON |
 | `generate_reel` | Generate narration plus a vertical placeholder edit guide, or prepare a script prompt |
@@ -257,6 +258,7 @@ local Whisper.
 | `yapit extract_audio` | Extract, convert or copy audio |
 | `yapit transcript` | Offline transcription to Script JSON |
 | `yapit prompt` | Script-writing prompt |
+| `yapit generate-script` | Generate Script JSON from a text prompt |
 | `yapit audiogen` | Text/JSON narration and timing |
 | `yapit narrate` | File-only narration |
 | `yapit reel` | Narration and edit guide |

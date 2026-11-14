@@ -33,7 +33,7 @@ than depending on an older environment's generated console wrapper.
 ```
 
 Tests launch both the module and installed console entry point, initialize a real
-stdio client, verify all six tools and the reusable prompt, exercise status and
+stdio client, verify all seven tools and the reusable prompt, exercise status and
 model-free enrollment, render synthetic audio/timing, and reject confined-path
 violations and missing profiles. An isolated subprocess checks lazy package
 imports; a resource check verifies the packaged example.

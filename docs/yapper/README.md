@@ -5,6 +5,25 @@
 Generate local narration and measured timing from supplied text or Script JSON.
 Yapper does not render video, transcribe input or rewrite approved words.
 
+## Generate a script
+
+The shared contract is `generate_script(prompt: str, seconds: float = 30) -> Script`.
+It accepts text only, not images, frames or media paths.
+
+```powershell
+.\yapit.cmd generate-script "A relaxed weekend in Goa" --seconds 30
+```
+
+```python
+from yapit.yapper import generate_script
+
+script = generate_script("A relaxed weekend in Goa")
+```
+
+CLI/MCP return the Script as JSON; Python returns a `Script` object.
+This is explicit cloud writing; see [configuration](dev.readme.md#script-planning).
+The `prompt` command only prepares writing instructions and does not call a model.
+
 ## Generate narration
 
 Enroll a profile first; choose exactly one of `--text` or `--script`:
@@ -84,7 +103,6 @@ unloading; `YAPIT_VOICE_WORKER=0` selects one-shot execution. A recorded but
 unavailable worker fails rather than silently loading another model.
 The worker's device remains fixed until restarted.
 
-`prompt` is model-free script preparation. Explicit cloud script writing is
-separate (`reel --auto-script`); see [cloud setup](dev.readme.md#script-planning).
+`reel --auto-script` also uses the text writer before narration and rendering.
 Audio/intermediates land in `data\generated_audio`; normalized scripts in
 `data\transcripts`; timings/provenance/status in `workspace\outputs`.
