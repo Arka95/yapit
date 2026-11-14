@@ -1,9 +1,14 @@
+import logging
+
 from yapit.common_utils.modelutils import load_model
 
 
-def test_model_factory_supports_local_sdk_without_a_cache_keyword(tmp_path):
+def test_model_factory_supports_local_sdk_without_a_cache_keyword(tmp_path, caplog):
+    caplog.set_level(logging.INFO)
+
     class LocalModel:
         def __init__(self, path, *, device):
+            assert "Loading model weights." in caplog.text
             self.path = path
             self.device = device
 
@@ -11,3 +16,4 @@ def test_model_factory_supports_local_sdk_without_a_cache_keyword(tmp_path):
     model = load_model(LocalModel, path, cache_parameter=None, device="cpu")
     assert model.path == str(path)
     assert model.device == "cpu"
+    assert "load_model completed in" in caplog.text

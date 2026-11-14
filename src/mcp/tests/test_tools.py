@@ -7,7 +7,8 @@ import pytest
 from yapit.models import Beat, Script
 
 
-def test_audio_tool_does_not_forward_video_mix_options(tmp_path, monkeypatch):
+@pytest.mark.parametrize("seconds", [None, 30])
+def test_audio_tool_does_not_forward_video_mix_options(tmp_path, monkeypatch, seconds):
     from yapit.mcp.server import create_server
 
     monkeypatch.setenv("YAPIT_DATA_DIR", str(tmp_path / "data"))
@@ -21,17 +22,18 @@ def test_audio_tool_does_not_forward_video_mix_options(tmp_path, monkeypatch):
     server = create_server(tmp_path / "workspace")
 
     async def exercise():
+        arguments = {"script": {"title": "Test", "beats": [{"text": "A useful thought."}]}}
+        if seconds is not None:
+            arguments["seconds"] = seconds
         await server.call_tool(
             "generate_audio",
-            {
-                "script": {"title": "Test", "beats": [{"text": "A useful thought."}]},
-            },
+            arguments,
         )
 
     anyio.run(exercise)
     assert len(calls) == 1
     assert "music" not in calls[0] and "mix" not in calls[0]
-    assert calls[0]["voice_name"] == "testuser" and calls[0]["seconds"] == 30
+    assert calls[0]["voice_name"] == "testuser" and calls[0]["seconds"] == seconds
 
 
 @pytest.mark.parametrize("seconds", [None, 15])

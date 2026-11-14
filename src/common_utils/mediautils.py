@@ -92,13 +92,13 @@ def extract_audio_stream(
     )
 
 
-def decode_audio(path: Path, *, max_seconds: float = 190) -> np.ndarray:
+def decode_audio(path: Path, *, max_seconds: float | None = 190) -> np.ndarray:
+    limit = ["-t", str(max_seconds + 1)] if max_seconds is not None else []
     result = run_media(
         [
             "-i",
             str(path.resolve()),
-            "-t",
-            str(max_seconds + 1),
+            *limit,
             "-vn",
             "-ac",
             "1",
@@ -110,8 +110,12 @@ def decode_audio(path: Path, *, max_seconds: float = 190) -> np.ndarray:
         ]
     )
     data = np.frombuffer(result.stdout, dtype="<f4").copy()
-    if len(data) == 0 or len(data) / SAMPLE_RATE > max_seconds:
-        raise ValueError(f"Audio is empty or longer than {max_seconds:g} seconds.")
+    if len(data) == 0 or (max_seconds is not None and len(data) / SAMPLE_RATE > max_seconds):
+        raise ValueError(
+            "Audio is empty."
+            if max_seconds is None
+            else f"Audio is empty or longer than {max_seconds:g} seconds."
+        )
     if not np.isfinite(data).all():
         raise ValueError("Audio contains invalid samples.")
     return data

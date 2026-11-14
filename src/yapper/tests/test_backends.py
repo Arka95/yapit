@@ -1,3 +1,4 @@
+import logging
 import sys
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -91,7 +92,8 @@ def test_backend_switch_does_not_inherit_another_models_identifier():
 
 
 @pytest.mark.parametrize("source", [None, "config.yaml"])
-def test_pocket_reuses_conditioning_and_normalizes_native_audio(voice, monkeypatch, source):
+def test_pocket_reuses_conditioning_and_normalizes_native_audio(voice, monkeypatch, source, caplog):
+    caplog.set_level(logging.INFO)
     speaker, directory = voice
     speaker.checkpoint = str(directory.parent / "qwen-checkpoint")
     wave = Mock()
@@ -121,6 +123,8 @@ def test_pocket_reuses_conditioning_and_normalizes_native_audio(voice, monkeypat
     assert model.generate_audio.call_count == 2
     assert resample.call_args.args[1] == 12000
     assert backend.describe()["voice_mode"] == "reference"
+    assert caplog.text.count("Loading Pocket speech model") == 1
+    assert "PocketSpeech.load completed in" in caplog.text
 
 
 def test_worker_reuses_same_model_and_separates_backend_and_model_caches(voice, monkeypatch):
@@ -223,9 +227,10 @@ def test_owned_backend_is_closed_when_synthesis_fails(voice, tmp_path, monkeypat
     backend.close.assert_called_once()
 
 
-def test_qwen_explicit_base_model_overrides_profile_checkpoint(voice, monkeypatch):
+def test_qwen_explicit_base_model_overrides_profile_checkpoint(voice, monkeypatch, caplog):
     from yapit.yapper.speech import QwenSpeech
 
+    caplog.set_level(logging.INFO)
     speaker, directory = voice
     speaker.checkpoint = str(directory.parent / "trained")
     model = SimpleNamespace(
@@ -250,6 +255,8 @@ def test_qwen_explicit_base_model_overrides_profile_checkpoint(voice, monkeypatc
     assert loader.call_args.args[0] == "Qwen/another-Base"
     assert backend.describe()["voice_mode"] == "reference"
     model.create_voice_clone_prompt.assert_called_once()
+    assert "Loading Qwen speech model" in caplog.text
+    assert "QwenSpeech.load completed in" in caplog.text
 
 
 def test_audio_cli_exposes_backend_and_model_without_model_execution(monkeypatch):

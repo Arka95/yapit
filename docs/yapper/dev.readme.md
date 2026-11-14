@@ -133,18 +133,24 @@ them before model startup.
 Each Script beat is one synthesis request. Five-millisecond edge ramps soften
 joins without trimming or changing duration; requested pauses are appended,
 not deduplicated against model-generated silence.
-Audio-only fitting uses +/-5 seconds and 0.90-1.10x gates. Pipeline video passes
-natural-duration tolerance so in-range speech stays 1.0x; out-of-range speech
-requires revision. The encoded MP3 is checked again.
+Audio-only `seconds` defaults to `None`: synthesis, encoded-audio decoding and
+timelines have no total duration cap or target check. Explicit targets use
++/-33% natural-duration validation and stay at 1.0x. Pipeline video still passes
+its closing-hold-aware tolerance. Out-of-range targeted speech requires revision;
+the encoded MP3 is checked again. Video's 240-second/200-cue limits belong to
+Editor rendering, not the shared audio timeline.
 Timeline uses measured lengths/quiet-window sub-cuts and approximate word groups,
 not forced alignment. Waveform intermediates and failure/status records remain.
+Backend load-start logs precede SDK imports; the existing `@timed` completion
+logs include initialization/conditioning time. The shared model factory announces
+weight loading separately. All progress goes to stderr, not CLI/MCP JSON output.
 
 ## Quality limitations and tests
 
 Signal gates do not establish identity, transcript correctness or naturalness.
 Training overfit is not established by uneven pacing alone. Proposed improvements,
-**not implemented**: optional natural audio-only timing, paragraph-level speech
-chunks independent of visual beats, and complete effective-settings provenance.
+**not implemented**: paragraph-level speech chunks independent of visual beats,
+and complete effective-settings provenance.
 Compare one change at a time on held-out text before claiming better speech.
 
 ```powershell

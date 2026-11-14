@@ -38,6 +38,7 @@ def test_yapper_cli_accepts_text_and_script_files(tmp_path, monkeypatch, kind):
     supplied = calls[0][0][0]
     assert supplied == content if kind == "text" else supplied.beats[0].text == content
     assert calls[0][1]["voice_name"] == "test-voice"
+    assert calls[0][1]["seconds"] == 7
     assert calls[0][1]["source_name"] == (None if kind == "text" else "source")
 
 
@@ -97,3 +98,4 @@ def test_narration_defaults_to_testuser_and_preserves_source_filename(tmp_path, 
     assert result.exit_code == 0, result.output
     assert calls[0][1]["voice_name"] == "testuser"
     assert calls[0][1]["source_name"] == "trip"
+    assert calls[0][1]["seconds"] is None

@@ -1,6 +1,6 @@
 # MCP development
 
-Source is `src\mcp`, imported as `yapit.mcp`. See [usage](README.md) and the
+Source is `src\mcp`, imported as `yapit.mcp`. See [usage](../skills/README.md) and the
 [folder-level layout](../dev.readme.md#flat-source-layout).
 
 ## Boundaries and entry points

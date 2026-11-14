@@ -23,6 +23,10 @@ class Brief(Model):
     words_per_minute: Annotated[float, Field(ge=80, le=240)] = 150
 
 
+class AudioBrief(Brief):
+    seconds: Seconds | None = None
+
+
 class Beat(Model):
     text: Text
     visual: Annotated[str, Field(min_length=1, max_length=500)] = "Supporting B-roll"
@@ -103,14 +107,14 @@ class Cue(Model):
 
 
 class Timeline(Model):
-    seconds: Annotated[float, Field(gt=0, le=240)]
+    seconds: Annotated[float, Field(gt=0)]
     width: Annotated[int, Field(ge=64, le=2160)] = 1080
     height: Annotated[int, Field(ge=64, le=3840)] = 1920
     fps: Annotated[int, Field(ge=1, le=60)] = 30
     timing_method: str = (
         "measured beats and pauses; quiet-window sub-cuts; approximate phrase captions"
     )
-    cues: Annotated[list[Cue], Field(min_length=1, max_length=200)]
+    cues: Annotated[list[Cue], Field(min_length=1)]
 
     @model_validator(mode="after")
     def continuous(self) -> Timeline:

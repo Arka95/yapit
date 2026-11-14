@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import traceback
 from contextlib import ExitStack
@@ -12,13 +13,12 @@ from yapit.common_utils.mediautils import (
     SAMPLE_RATE,
     decode_audio,
     encode_mp3,
-    fit_audio,
     write_wav,
 )
 from yapit.common_utils.metrics import timed
-from yapit.constants import DEFAULT_PROFILE
+from yapit.constants import DEFAULT_PROFILE, VIDEO_DURATION_BUFFER
 from yapit.enrollment.styles import select_voice
-from yapit.models import Brief, DeliveryStyle, Script, Timeline, Voice
+from yapit.models import AudioBrief, DeliveryStyle, Script, Timeline, Voice
 from yapit.storage import OutputArtifacts, Workspace
 from yapit.yapper.backends import SpeechBackend
 from yapit.yapper.timeline import build_timeline
@@ -26,7 +26,7 @@ from yapit.yapper.worker import backend_for
 
 
 def _synthesize_chunks(
-    script: Script, speech: SpeechBackend, maximum: float
+    script: Script, speech: SpeechBackend, maximum: float | None
 ) -> tuple[np.ndarray, list[float]]:
     pieces = []
     durations = []
@@ -44,8 +44,11 @@ def _synthesize_chunks(
         pause = np.zeros(round(beat.pause_ms * SAMPLE_RATE / 1000), dtype=np.float32)
         duration = (len(wave) + len(pause)) / SAMPLE_RATE
         total += duration
-        if total > maximum:
-            raise ValueError(f"Narration exceeds {maximum:g} seconds; shorten the supplied script.")
+        if maximum is not None and total > maximum:
+            raise ValueError(
+                f"Narration exceeds the {maximum:g}-second duration limit. "
+                "Rewrite the script or omit the duration target."
+            )
         pieces.extend([wave, pause])
         durations.append(duration)
     return np.concatenate(pieces), durations
@@ -58,7 +61,7 @@ def render_audio(
     voice_dir: Path,
     job: OutputArtifacts,
     *,
-    seconds: float,
+    seconds: float | None = None,
     style: DeliveryStyle = DeliveryStyle.default,
     backend: SpeechBackend | None = None,
     cloud_script: bool = False,
@@ -84,8 +87,14 @@ def render_audio(
     }
     save_json(job.path("provenance.json"), provenance)
     speech = backend or backend_for(voice, voice_dir, backend_name=backend_name, model=model)
-    tolerance = 5 if natural_duration_tolerance is None else natural_duration_tolerance
-    maximum = max(190, seconds + tolerance)
+    tolerance = (
+        None
+        if seconds is None
+        else seconds * VIDEO_DURATION_BUFFER
+        if natural_duration_tolerance is None
+        else natural_duration_tolerance
+    )
+    maximum = seconds + tolerance if seconds is not None else None
     with ExitStack() as resources:
         close = getattr(speech, "close", None)
         if backend is None and callable(close):
@@ -93,6 +102,7 @@ def render_audio(
         load = getattr(speech, "load", None)
         if callable(load):
             load()
+        logging.getLogger(__name__).info("Synthesizing narration.")
         wave, durations = _synthesize_chunks(script, speech, maximum)
         describe = getattr(speech, "describe", None)
         provenance.update(describe() if callable(describe) else {"backend": "custom"})
@@ -101,22 +111,20 @@ def render_audio(
     save_json(job.path("provenance.json"), provenance)
     raw = job.path("raw.wav", job.audio)
     write_wav(raw, wave)
-    fitted, factor = fit_audio(
-        raw,
-        job.path("fitted.wav", job.audio),
-        seconds,
-        natural_duration_tolerance=natural_duration_tolerance,
-    )
+    actual = len(wave) / SAMPLE_RATE
+    if seconds is not None and abs(actual - seconds) > tolerance:
+        raise ValueError(
+            f"Narration is {actual:.2f}s for a {seconds:.2f}s target, outside "
+            f"the +/-{tolerance:.2f}s tolerance. Rewrite the script or omit the duration target."
+        )
     final_wav = job.path("wav", job.audio)
-    write_wav(final_wav, fitted)
-    actual = len(fitted) / SAMPLE_RATE
-    if abs(actual - seconds) > tolerance:
-        raise ValueError(f"Narration missed the +/-{tolerance:g} second tolerance.")
+    write_wav(final_wav, wave)
     final_mp3 = job.path("mp3", job.audio)
+    logging.getLogger(__name__).info("Encoding narration audio.")
     encode_mp3(final_wav, final_mp3)
     encoded = decode_audio(final_mp3, max_seconds=maximum)
     actual = len(encoded) / SAMPLE_RATE
-    if abs(actual - seconds) > tolerance:
+    if seconds is not None and abs(actual - seconds) > tolerance:
         raise ValueError(f"Encoded MP3 missed the +/-{tolerance:g} second tolerance.")
     timeline = build_timeline(script, durations, actual, encoded)
     save_json(job.path("timeline.json"), timeline)
@@ -134,7 +142,7 @@ def render_audio(
         "timeline": str(job.path("timeline.json")),
         "captions": None,
         "seconds": actual,
-        "tempo_factor": factor,
+        "tempo_factor": 1.0,
         "timing_note": timeline.timing_method,
         "delivery_style": style.value,
     }, timeline
@@ -146,7 +154,7 @@ def generate_audio(
     *,
     workspace: Workspace | None = None,
     voice_name: str = DEFAULT_PROFILE,
-    seconds: float = 30,
+    seconds: float | None = None,
     style: DeliveryStyle = DeliveryStyle.default,
     source_name: str | None = None,
     backend: SpeechBackend | None = None,
@@ -159,7 +167,7 @@ def generate_audio(
     script = Script.from_text(script) if isinstance(script, str) else script
     if not isinstance(script, Script):
         raise TypeError("Supply plain text or a validated Script.")
-    brief = Brief(seconds=seconds)
+    brief = AudioBrief(seconds=seconds)
     style = DeliveryStyle(style)
     root = workspace or Workspace(os.environ.get("YAPIT_WORKSPACE", "workspace"))
     voice, voice_dir = select_voice(root.data, voice_name, style)

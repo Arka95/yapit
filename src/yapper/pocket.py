@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gc
+import logging
 import threading
 from pathlib import Path
 
@@ -44,6 +45,9 @@ class PocketSpeech:
     def load(self) -> None:
         if self.model is not None:
             return
+        logging.getLogger(__name__).info(
+            "Loading Pocket speech model and preparing the voice; first use may take a while."
+        )
         try:
             from pocket_tts import TTSModel
         except ImportError as exc:

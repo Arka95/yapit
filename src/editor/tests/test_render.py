@@ -108,3 +108,25 @@ def test_slate_plan_extends_last_visual_but_not_captions(tmp_path, monkeypatch, 
         if line.startswith("duration ")
     ]
     assert durations == pytest.approx([5.766666667])
+
+
+@pytest.mark.parametrize("seconds,count", [(300, 1), (201, 201)])
+def test_video_limits_still_apply_to_uncapped_audio_timelines(tmp_path, seconds, count):
+    timeline = Timeline(
+        seconds=seconds,
+        cues=[
+            Cue(
+                start=index * seconds / count,
+                end=(index + 1) * seconds / count,
+                text="Reviewed words.",
+                visual="Footage",
+                beat=0,
+            )
+            for index in range(count)
+        ],
+    )
+    with pytest.raises(ValueError, match="Video guides support"):
+        render_guide(
+            timeline, tmp_path / "audio.wav", tmp_path / "workspace", video=tmp_path / "guide.mp4"
+        )
+    assert not (tmp_path / "workspace").exists()

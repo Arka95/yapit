@@ -161,8 +161,10 @@ Commands return JSON with output paths. Narration is saved in
 `data\generated_audio`, guide videos in `data\generated_video`, scripts/captions
 in `data\transcripts`, and job metadata/timelines in `workspace\outputs`.
 Listen to the result and replace numbered placeholders with your own footage.
-If natural speech misses the target duration, adjust the script rather than
-expecting a finished reel to fit any length.
+For audio only, omit `--seconds` to keep natural duration with no total duration
+cap or target check. An explicit target uses +/-33% validation without stretching,
+padding or truncation. Reels still default to a 30-second target.
+If natural speech misses an explicit target, adjust the script.
 
 ### 4. Optional music and repeated generation
 
@@ -195,7 +197,7 @@ opening an interactive console.
 | MCP tool | What your agent can do |
 |---|---|
 | `generate_script` | Generate YapIt Script JSON from `prompt` and optional `seconds` (default 30); requires cloud opt-in |
-| `generate_audio` | Generate voice audio from reviewed Script JSON; defaults to `testuser` and 30 seconds |
+| `generate_audio` | Generate voice audio from reviewed Script JSON; defaults to `testuser` and natural duration; optional target uses +/-33% |
 | `extract_script` | Extract reviewable Script JSON and source timings from local audio/video |
 | `enroll_voice` | Open the enrollment app to choose a profile, record and review your voice; no inputs |
 | `generate_reel` | Generate a vertical placeholder edit guide from exactly one `script`, `audio_path` or `prompt` |
@@ -204,7 +206,7 @@ Tell your agent your own profile name explicitly. Files passed to MCP tools
 must be within the configured data/workspace roots. Calls finish synchronously;
 there is no background job queue. Music search,
 worker management and training currently have CLI commands, not MCP tools.
-See [MCP setup](docs/mcp/README.md) for execution limits and configuration.
+See [MCP setup](docs/skills/README.md) for execution limits and configuration.
 
 ## Troubleshooting
 
@@ -231,7 +233,7 @@ See [MCP setup](docs/mcp/README.md) for execution limits and configuration.
 | [Musicgen](docs/musicgen/README.md) | [Development](docs/musicgen/dev.readme.md) | CC0 music acquisition |
 | [Editor](docs/editor/README.md) | [Development](docs/editor/dev.readme.md) | Mixing, captions and edit guides |
 | [Training](docs/training/README.md) | [Development](docs/training/dev.readme.md) | Fine-tuning and checkpoint selection |
-| [MCP](docs/mcp/README.md) | [Development](docs/mcp/dev.readme.md) | Local tools and client setup |
+| [MCP](docs/skills/README.md) | [Development](docs/mcp/dev.readme.md) | Local tools and client setup |
 | [Licensing](docs/licensing.md) | - | Commercial use, model attribution and future skill licensing |
 
 ## Available commands
@@ -244,7 +246,7 @@ local Whisper.
 The canonical workflows are `generate-audio`, `generate-script`, `extract-script`,
 `generate-reel` and `enroll-voice`. MCP tools and the owning modules' Python
 functions use the same names with underscores. Each workflow has one command;
-see [workflow inputs and examples](docs/mcp/README.md#tools-and-execution).
+see [workflow inputs and examples](docs/skills/README.md#mcp-setup-and-workflows).
 
 ### All commands
 
@@ -282,7 +284,7 @@ Music-only fades, ducking and separate 0-100 gains are available.
 | `data\<profile>` | Accepted enrollment recordings/profile metadata and training checkpoints |
 | `data\audio` | Imported/extracted source audio; external transcription archives are under `imports` |
 | `data\transcripts` | Reviewed scripts, ASR sidecars, captions and training JSONL |
-| `data\generated_audio` | Final WAV/MP3 and raw/fitted synthesis intermediates |
+| `data\generated_audio` | Final WAV/MP3 and raw synthesis intermediates |
 | `data\generated_video` | Completed edit-guide MP4s |
 | `data\background_music` | CC0 music named `emotion_videotype_songname_or_id.mp3`, with source/license/plan JSON |
 | `workspace\outputs` | Prompts, measured timelines, provenance/status, logs and temporary rendering files |

@@ -136,15 +136,16 @@ def create_server(root: Path | None = None) -> FastMCP:
     def generate_audio(
         script: Script,
         voice: str = DEFAULT_PROFILE,
-        seconds: float = 30,
+        seconds: float | None = None,
         style: DeliveryStyle = DeliveryStyle.default,
     ) -> dict:
         """Speak an approved script using a local voice profile, without creating video.
 
         script is YapIt Script JSON with title and beats, not a file path or a
-        writing prompt. voice defaults to the enrolled testuser profile; seconds
-        defaults to 30. The target permits +/-5 seconds and bounded tempo fitting,
-        so substantially mismatched scripts fail rather than losing words.
+        writing prompt. voice defaults to the enrolled testuser profile.
+        Omit seconds for uncapped natural duration, without fitting or a duration
+        check. An explicit target (5-180 seconds) permits +/-33%; speech is not
+        stretched, padded or truncated to fit. Mismatched scripts fail.
         Named styles require a recorded reference on that profile.
         Returns MP3/WAV, measured timeline, saved script, and provenance/status paths.
         Supplied words are not rewritten; no script-writing cloud request is made.

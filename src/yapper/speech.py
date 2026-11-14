@@ -77,6 +77,9 @@ class QwenSpeech:
     def load(self) -> None:
         if self.model is not None:
             return
+        logging.getLogger(__name__).info(
+            "Loading Qwen speech model and preparing the voice; first use may take a while."
+        )
         scripts = Path(sys.executable).parent
         sox_binary = scripts / ("sox.exe" if os.name == "nt" else "sox")
         if shutil.which("sox") is None and sox_binary.is_file():
@@ -115,6 +118,7 @@ class QwenSpeech:
                 raise ValueError("This Qwen adapter supports Base and CustomVoice models.")
             prompt = None
             if mode == "base":
+                logging.getLogger(__name__).info("Preparing Qwen voice reference.")
                 reference = (self.voice_dir / self.voice.reference_audio).resolve()
                 if (
                     not reference.is_relative_to(self.voice_dir.resolve())

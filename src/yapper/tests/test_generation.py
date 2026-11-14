@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -8,9 +9,12 @@ import pytest
 from yapit.common_utils.mediautils import SAMPLE_RATE, decode_audio, write_wav
 from yapit.enrollment.styles import enroll_style
 from yapit.models import Beat, DeliveryStyle, Script, Timeline
+from yapit.storage import Workspace
 from yapit.yapper import generate_audio
 
 from .conftest import ToneSpeech, script, tone
+
+TEST_SAMPLE_RATE = 100
 
 
 def test_plain_text_is_spoken_without_script_generation_or_video(enrolled, monkeypatch, tmp_path):
@@ -60,7 +64,6 @@ def test_hard_speech_edges_are_softened_without_mutating_backend_or_padding(enro
         supplied,
         workspace=enrolled,
         voice_name="test-voice",
-        seconds=5,
         backend=SimpleNamespace(synthesize=lambda text: wave),
     )
     raw = decode_audio(Path(result["wav"]).with_suffix(".raw.wav"))
@@ -166,3 +169,80 @@ def test_missing_style_fails_before_synthesis_or_job_creation(enrolled):
         )
     assert not speech.calls
     assert not (enrolled.root / "outputs").exists()
+
+
+@pytest.fixture
+def mocked_narration(tmp_path, monkeypatch):
+    root = Workspace(tmp_path / "workspace")
+    voice = SimpleNamespace(
+        name="test-voice", checkpoint=None, reference_audio="reference.wav", words_per_minute=150
+    )
+    speech = SimpleNamespace(synthesize=Mock())
+    decoder = Mock(side_effect=lambda *args, **kwargs: speech.synthesize.return_value.copy())
+    monkeypatch.setattr("yapit.yapper.generation.SAMPLE_RATE", TEST_SAMPLE_RATE)
+    monkeypatch.setattr("yapit.yapper.timeline.SAMPLE_RATE", TEST_SAMPLE_RATE)
+    monkeypatch.setattr("yapit.yapper.generation.select_voice", lambda *args: (voice, tmp_path))
+    monkeypatch.setattr("yapit.yapper.generation.write_wav", Mock())
+    monkeypatch.setattr("yapit.yapper.generation.encode_mp3", Mock())
+    monkeypatch.setattr("yapit.yapper.generation.decode_audio", decoder)
+    return root, speech, decoder
+
+
+@pytest.mark.parametrize("target,duration", [(None, 300), (30, 20.1), (30, 39.9)])
+def test_audio_preserves_natural_length_and_only_checks_explicit_targets(
+    mocked_narration, target, duration
+):
+    root, speech, decoder = mocked_narration
+    speech.synthesize.return_value = np.full(
+        round(duration * TEST_SAMPLE_RATE), 0.1, dtype=np.float32
+    )
+    supplied = Script(title="Natural", beats=[Beat(text="One reviewed sentence.", pause_ms=0)])
+    result = generate_audio(
+        supplied,
+        workspace=root,
+        backend=speech,
+        **({"seconds": target} if target is not None else {}),
+    )
+    assert result["seconds"] == pytest.approx(duration)
+    assert result["tempo_factor"] == 1
+    timeline = Timeline.model_validate_json(Path(result["timeline"]).read_text())
+    assert timeline.cues[-1].end == pytest.approx(duration)
+    assert json.loads(Path(result["brief"]).read_text())["seconds"] == target
+    assert decoder.call_args.kwargs["max_seconds"] == (
+        None if target is None else pytest.approx(target * 1.33)
+    )
+
+
+@pytest.mark.parametrize("duration", [20, 40])
+def test_explicit_audio_target_rejects_outside_33_percent(mocked_narration, duration):
+    root, speech, decoder = mocked_narration
+    speech.synthesize.return_value = np.full(duration * TEST_SAMPLE_RATE, 0.1, dtype=np.float32)
+    supplied = Script(title="Target", beats=[Beat(text="Reviewed words.", pause_ms=0)])
+    with pytest.raises(ValueError, match="Rewrite"):
+        generate_audio(supplied, workspace=root, backend=speech, seconds=30)
+    status = json.loads(next((root.root / "outputs").glob("*.status.json")).read_text())
+    assert status["status"] == "failed"
+    decoder.assert_not_called()
+
+
+@pytest.mark.parametrize("duration", [20, 40])
+def test_encoded_audio_is_checked_again_only_for_an_explicit_target(mocked_narration, duration):
+    root, speech, decoder = mocked_narration
+    speech.synthesize.return_value = np.full(30 * TEST_SAMPLE_RATE, 0.1, dtype=np.float32)
+    decoder.side_effect = None
+    decoder.return_value = np.full(duration * TEST_SAMPLE_RATE, 0.1, dtype=np.float32)
+    with pytest.raises(ValueError, match="Encoded MP3"):
+        generate_audio(
+            Script(title="Target", beats=[Beat(text="Reviewed words.", pause_ms=0)]),
+            workspace=root,
+            backend=speech,
+            seconds=30,
+        )
+
+
+@pytest.mark.parametrize("target", [0, float("nan")])
+def test_invalid_audio_target_fails_before_synthesis(mocked_narration, target):
+    root, speech, _ = mocked_narration
+    with pytest.raises(ValueError):
+        generate_audio("Reviewed words.", workspace=root, backend=speech, seconds=target)
+    speech.synthesize.assert_not_called()

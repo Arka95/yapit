@@ -15,6 +15,20 @@ on Linux/WSL2. Pocket has upstream training recipes, but no YapIt trainer.
 Sizes exclude SDKs/caches; Qwen includes an additional tokenizer weight file.
 One listening preference is not a controlled quality comparison.
 
+## Implemented
+
+| Capability | Canonical guide |
+|---|---|
+| Qwen default, explicit Pocket selection and trusted plugins | [Yapper usage](yapper/README.md#choose-a-model) |
+| Lazy lifecycle/identity contract, one-model worker and bounded cache | [Yapper development](yapper/dev.readme.md#adapter-contract) |
+| Shared runtime and adapter dependency-compatibility policy | [Model onboarding](yapper/dev.readme.md#model-onboarding) |
+| Qwen full-weight training, weights-only continuation and manual selection | [Training](training/README.md) |
+
+Adapters do not make weights interchangeable. Reference conditioning is not
+fine-tuning; smaller weights do not establish better identity or lower measured
+latency. New backends must fit the shared runtime before being enabled.
+
+
 Sources: [Qwen model card](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base),
 [Pocket models](https://github.com/kyutai-labs/pocket-tts),
 [Pocket training](https://github.com/kyutai-labs/pocket-tts/blob/main/training/README.md).

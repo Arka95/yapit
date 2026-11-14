@@ -30,7 +30,10 @@ def generate(
         Path | None, typer.Option(exists=True, dir_okay=False, help="Text or Script JSON file.")
     ] = None,
     voice: str = DEFAULT_PROFILE,
-    seconds: float = 30,
+    seconds: Annotated[
+        float | None,
+        typer.Option(help="Optional target (+/-33%); omit for natural duration."),
+    ] = None,
     style: DeliveryStyle = DeliveryStyle.default,
     backend: Annotated[
         str | None, typer.Option(help="TTS backend or installed plugin name.")

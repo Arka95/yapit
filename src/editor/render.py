@@ -17,6 +17,9 @@ from yapit.editor.templates import (
 )
 from yapit.models import Model, Timeline
 
+MAX_VIDEO_SECONDS = 240
+MAX_VIDEO_CUES = 200
+
 
 class RenderSettings(Model):
     video_codec: str = "libx264"
@@ -133,6 +136,10 @@ def render_guide(
     style: PlaceholderStyle = DEFAULT_STYLE,
     actual_seconds: float | None = None,
 ) -> float:
+    if timeline.seconds > MAX_VIDEO_SECONDS or len(timeline.cues) > MAX_VIDEO_CUES:
+        raise ValueError(
+            f"Video guides support at most {MAX_VIDEO_SECONDS} seconds and {MAX_VIDEO_CUES} cues."
+        )
     if prefix and not re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9_.-]*", prefix):
         raise ValueError("Video prefix must be a simple ASCII filename.")
     settings = mix or AudioMix()
