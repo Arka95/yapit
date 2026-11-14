@@ -23,7 +23,7 @@ CUDA/float16; Python `transcribe` also accepts explicit device/precision overrid
 
 `extract-script` / MCP `extract_script` use the same recognition workflow and
 also return the actual Script JSON in `scripts[*].content`. Python exposes
-`yapit.rescript.extract_script` and `yapit.api.extract_script`.
+`yapit.rescript.extract_script`.
 
 Local audio/video files are accepted, not URLs. Inputs are limited to 250 MB;
 transcription additionally limits decoded audio to one hour. Videos need an

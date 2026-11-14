@@ -69,8 +69,7 @@ def enroll_style(
         voice = load_voice(store, name)
     except FileNotFoundError as exc:
         raise ValueError(
-            f"Profile {name!r} does not exist. "
-            "Create it with yapit enroll-app or yapit enroll-voice first."
+            f"Profile {name!r} does not exist. Create it with yapit enroll-voice first."
         ) from exc
     if voice.checkpoint:
         raise ValueError("Reference-driven styles require Base voice cloning, not a checkpoint.")

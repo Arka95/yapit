@@ -9,7 +9,7 @@ your own clips. Music is opt-in; voice training is always a separate step.
 
 ## Demo
 
-[**Watch the Puerto Princesa demo (MP4)**](docs/res/generated_demo.puerto_princesa.pocket_2026_10.3.guide.mp4)
+[**Watch a YapIt generated demo (MP4)**](docs/res/generated_demo.puerto_princesa.pocket_2026_10.3.guide.mp4)
 
 A generated narration/edit-guide example, not a finished footage reel.
 The demo uses PocketTTS backend; the default installer below
@@ -87,7 +87,7 @@ Python commands are also supported from an activated YapIt environment:
 ```powershell
 python .\scripts\run-mode.py default doctor  # Honor the saved CPU/GPU runtime.
 python -m yapit.cli doctor                  # Use this interpreter directly.
-python -m yapit.cli enroll-app
+python -m yapit.cli enroll-voice
 python -m yapit.mcp
 ```
 
@@ -113,13 +113,13 @@ identity, not your personal voice. A name change does not anonymize recordings.
 ### 1. Record your voice
 
 ```powershell
-.\yapit.cmd enroll-app
+.\yapit.cmd enroll-voice
 ```
 
 Create a profile such as `myvoice`, choose your microphone, record the displayed
 passages and review each take. Save **at least five distinct recordings**, then
 finish enrollment. This creates a reusable reference profile; it does not train
-model weights. Existing recordings can instead be imported with `enroll-voice`;
+model weights. No recording files or manifest are required;
 see [enrollment](docs/enrollment/README.md).
 
 ```powershell
@@ -197,7 +197,7 @@ opening an interactive console.
 | `generate_script` | Generate YapIt Script JSON from `prompt` and optional `seconds` (default 30); requires cloud opt-in |
 | `generate_audio` | Generate voice audio from reviewed Script JSON; defaults to `testuser` and 30 seconds |
 | `extract_script` | Extract reviewable Script JSON and source timings from local audio/video |
-| `enroll_voice` | Import an existing recordings/transcript manifest; not operate the microphone UI |
+| `enroll_voice` | Open the enrollment app to choose a profile, record and review your voice; no inputs |
 | `generate_reel` | Generate a vertical placeholder edit guide from exactly one `script`, `audio_path` or `prompt` |
 
 Tell your agent your own profile name explicitly. Files passed to MCP tools
@@ -242,8 +242,8 @@ Narration uses selectable TTS backends (Qwen by default); transcription uses
 local Whisper.
 
 The canonical workflows are `generate-audio`, `generate-script`, `extract-script`,
-`generate-reel` and `enroll-voice`. MCP tools and public Python functions in
-`yapit.api` use the same names with underscores. Each workflow has one command;
+`generate-reel` and `enroll-voice`. MCP tools and the owning modules' Python
+functions use the same names with underscores. Each workflow has one command;
 see [workflow inputs and examples](docs/mcp/README.md#tools-and-execution).
 
 ### All commands
@@ -253,7 +253,6 @@ see [workflow inputs and examples](docs/mcp/README.md#tools-and-execution).
 | `yapit set-mode` | Save the runtime choice (`cpu` or `gpu`) for future calls |
 | `yapit doctor` | Dependencies and CUDA status |
 | `yapit profiles` | Saved voice profiles |
-| `yapit enroll-app` | Microphone enrollment UI |
 | `yapit voice-style-prompt` | Expressive recording directions |
 | `yapit enroll-style` | Save a style reference |
 | `yapit extract_audio` | Extract, convert or copy audio |
@@ -261,7 +260,7 @@ see [workflow inputs and examples](docs/mcp/README.md#tools-and-execution).
 | `yapit generate-audio` | Speak supplied text/Script JSON |
 | `yapit extract-script` | Media to reviewable inline Script JSON and saved transcripts |
 | `yapit generate-reel` | Exactly one `--script`, `--audio-path` or `--prompt` to an edit guide |
-| `yapit enroll-voice` | Import verified recordings |
+| `yapit enroll-voice` | Open the microphone enrollment app; no inputs |
 | `yapit music-plan` | Local music brief |
 | `yapit music-search` | CC0 music discovery |
 | `yapit music-download` | Source-verified CC0 download |

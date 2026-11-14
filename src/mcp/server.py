@@ -7,13 +7,12 @@ from pathlib import Path
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
-from yapit import api
+from yapit import enrollment, pipeline, rescript, yapper
 from yapit.common_utils.metrics import configure_logging, timed
 from yapit.constants import DEFAULT_ASR_MODEL, DEFAULT_PROFILE
 from yapit.editor import AudioMix
 from yapit.models import DeliveryStyle, Script
 from yapit.storage import Workspace
-from yapit.yapper import generate_script as write_script
 
 
 @timed
@@ -38,32 +37,26 @@ def create_server(root: Path | None = None) -> FastMCP:
         if not busy.acquire(blocking=False):
             raise ValueError("Yapit is busy; retry after the current job.")
         try:
-            return write_script(prompt, seconds=seconds).model_dump(mode="json")
+            return yapper.generate_script(prompt, seconds=seconds).model_dump(mode="json")
         finally:
             busy.release()
 
     @server.tool()
-    def enroll_voice(name: str, manifest_path: str, consent: bool = True) -> dict:
-        """Create or update a voice profile from recordings with verified transcripts.
+    def enroll_voice() -> dict:
+        """Open the local voice-enrollment app; no inputs or files are required.
 
-        name identifies the profile. manifest_path must point to a JSON file inside
-        YAPIT_DATA_DIR, with samples containing audio paths and exact spoken text.
-        Recordings must also stay inside that data root; relative audio paths are
-        resolved from the manifest. A new profile needs at least five distinct
-        usable clips; existing profiles merge recordings by normalized filename.
-        Returns the profile name and accepted clip count. This imports recordings:
-        it does not open a microphone, transcribe speech, or train model weights.
+        In the app, choose or create a profile, select a microphone, record the
+        displayed passages, listen back and finish enrollment. The app manages
+        recordings and transcripts; you do not supply an MP3 or manifest.
+        Returns a launch receipt and process ID immediately, not a finished
+        profile. Complete enrollment in the window before generating audio.
+        Requires an interactive Windows desktop on the server machine.
+        No speech recognition, cloud calls or model training runs.
         """
         if not busy.acquire(blocking=False):
             raise ValueError("Yapit is busy; retry after the current job.")
         try:
-            return api.enroll_voice(
-                name,
-                workspace.data.inside(manifest_path),
-                consent,
-                workspace=workspace,
-                confined=True,
-            )
+            return enrollment.enroll_voice(workspace=workspace)
         finally:
             busy.release()
 
@@ -87,7 +80,7 @@ def create_server(root: Path | None = None) -> FastMCP:
         if not busy.acquire(blocking=False):
             raise ValueError("Yapit is busy; retry after the current job.")
         try:
-            return api.extract_script(
+            return rescript.extract_script(
                 workspace.inside(media_path),
                 model=model,
                 language=language,
@@ -125,7 +118,7 @@ def create_server(root: Path | None = None) -> FastMCP:
         if not busy.acquire(blocking=False):
             raise ValueError("Yapit is busy; retry after the current job.")
         try:
-            return api.generate_reel(
+            return pipeline.generate_reel(
                 script,
                 audio_path=workspace.inside(audio_path) if audio_path is not None else None,
                 prompt=prompt,
@@ -159,8 +152,8 @@ def create_server(root: Path | None = None) -> FastMCP:
         if not busy.acquire(blocking=False):
             raise ValueError("Yapit is busy; retry after the current job.")
         try:
-            return api.generate_audio(
-                script, voice=voice, seconds=seconds, workspace=workspace, style=style
+            return yapper.generate_audio(
+                script, voice_name=voice, seconds=seconds, workspace=workspace, style=style
             )
         finally:
             busy.release()

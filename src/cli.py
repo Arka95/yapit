@@ -9,14 +9,14 @@ from typing import Annotated
 import typer
 from dotenv import load_dotenv
 
-from yapit import api
+from yapit import pipeline, rescript
 from yapit.common_utils.mediautils import ffmpeg
 from yapit.common_utils.metrics import configure_logging
 from yapit.common_utils.runtime_config import set_runtime_mode
 from yapit.constants import DEFAULT_ASR_MODEL, DEFAULT_PROFILE, DEFAULT_SPEECH_MODEL
 from yapit.editor import AudioMix
-from yapit.enrollment import enroll
 from yapit.enrollment.cli import data_store
+from yapit.enrollment.cli import enroll_voice as enroll_voice_command
 from yapit.enrollment.cli import profiles as profiles_command
 from yapit.enrollment.styles import STYLE_GUIDES, enroll_style
 from yapit.models import DeliveryStyle
@@ -35,6 +35,7 @@ PathOption = Annotated[Path | None, typer.Option()]
 app.command("generate-audio")(generate_audio_command)
 app.command("extract_audio")(extract_audio)
 app.command("profiles")(profiles_command)
+app.command("enroll-voice")(enroll_voice_command)
 app.command("music-plan")(music_plan_command)
 app.command("music-search")(music_search)
 app.command("music-download")(music_download)
@@ -111,34 +112,6 @@ def voice_worker_stop() -> None:
     emit(stop_worker(data_store()))
 
 
-@app.command("enroll-voice")
-def enroll_voice(
-    name: str,
-    manifest: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
-    consent: Annotated[bool, typer.Option(hidden=True)] = True,
-) -> None:
-    """Curate local recordings with manually verified transcripts."""
-    try:
-        voice = enroll(data_store(), name, manifest, consent)
-    except (ValueError, OSError) as exc:
-        raise typer.BadParameter(str(exc)) from exc
-    emit(
-        {
-            "name": voice.name,
-            "clips": len(voice.samples),
-            "words_per_minute": voice.words_per_minute,
-        }
-    )
-
-
-@app.command("enroll-app")
-def enroll_app() -> None:
-    """Open the native Windows microphone enrollment wizard."""
-    from yapit.enrollment.desktop import main
-
-    main()
-
-
 @app.command("voice-style-prompt")
 def voice_style_prompt(style: DeliveryStyle = DeliveryStyle.lively_vlog) -> None:
     """Get a short passage and direction for recording your own expressive reference."""
@@ -196,7 +169,7 @@ def extract_script(
     root = workspace()
     try:
         emit(
-            api.extract_script(
+            rescript.extract_script(
                 media_path, model=model, language=language, offline=offline, data=root.data
             )
         )
@@ -227,7 +200,7 @@ def generate_reel(
         if sum(value is not None for value in (script, audio_path, prompt)) != 1:
             raise ValueError("Choose exactly one of --script, --audio-path or --prompt.")
         emit(
-            api.generate_reel(
+            pipeline.generate_reel(
                 load_script(script) if script is not None else None,
                 audio_path=audio_path,
                 prompt=prompt,

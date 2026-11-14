@@ -6,50 +6,25 @@ import pytest
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
-from tests.conftest import tone
 from yapit.cli import app
-from yapit.common_utils.mediautils import write_wav
 from yapit.models import Beat, Brief, Script
-from yapit.rescript.cli import app as rescript_app
-from yapit.storage import DataStore
-
-
-def test_profiles_is_available_without_a_module_prefix(enrolled):
-    result = CliRunner().invoke(app, ["profiles"])
-    assert result.exit_code == 0, result.output
-    assert json.loads(result.stdout) == ["test-voice"]
+from yapit.storage import DataStore, Workspace
 
 
 def test_enrollment_cli_launches_the_owned_desktop_module(monkeypatch):
     calls = []
-    monkeypatch.setattr("yapit.enrollment.desktop.main", lambda: calls.append(True))
-    result = CliRunner().invoke(app, ["enroll-app"])
+    monkeypatch.setattr(
+        "yapit.enrollment.cli.launcher.enroll_voice",
+        lambda: calls.append(True) or {"status": "launched", "pid": 42},
+    )
+    result = CliRunner().invoke(app, ["enroll-voice"])
     assert result.exit_code == 0, result.output
-    assert calls == [True]
+    assert len(calls) == 1
+    assert json.loads(result.stdout) == {"status": "launched", "pid": 42}
 
 
-@pytest.mark.parametrize(
-    "entry,arguments",
-    [
-        (app, ["transcribe-media"]),
-        (app, ["rescript", "transcribe-media"]),
-        (rescript_app, ["transcribe-media"]),
-    ],
-)
-def test_duplicate_transcription_command_is_removed(entry, arguments, monkeypatch, tmp_path):
-    source = tmp_path / "source.wav"
-    source.touch()
-
-    def unexpected_transcription(*args, **kwargs):
-        pytest.fail("The removed alias must not dispatch recognition.")
-
-    monkeypatch.setattr("yapit.rescript.cli.transcribe", unexpected_transcription)
-    result = CliRunner().invoke(entry, [*arguments, str(source)])
-    assert result.exit_code == 2, result.output
-    assert "No such command" in result.output
-
-
-def test_training_cli_distinguishes_fresh_resume_and_inference_selection(enrolled, monkeypatch):
+def test_training_cli_distinguishes_fresh_resume_and_inference_selection(tmp_path, monkeypatch):
+    root = Workspace(tmp_path / "workspace")
     calls = []
 
     def operation(kind):
@@ -62,7 +37,7 @@ def test_training_cli_distinguishes_fresh_resume_and_inference_selection(enrolle
     monkeypatch.setattr("yapit.cli.train", operation("fresh"))
     monkeypatch.setattr("yapit.cli.resume_checkpoint", operation("resume"))
     monkeypatch.setattr("yapit.cli.select_checkpoint", operation("select"))
-    directory = str(enrolled.root)
+    directory = str(root.root)
     runner = CliRunner()
     training = ["voice-train", "test-voice", "--upstream", directory]
     for arguments in [
@@ -86,27 +61,6 @@ def test_training_cli_distinguishes_fresh_resume_and_inference_selection(enrolle
         assert calls[-1][2]["model"] == smaller
 
 
-@pytest.mark.parametrize(
-    "command",
-    [
-        "audiogen",
-        "narrate",
-        "transcript",
-        "reel",
-        "videogen",
-        "prompt",
-        "voice-enroll",
-        "yapper",
-        "rescript",
-        "voice-use-checkpoint",
-    ],
-)
-def test_duplicate_and_helper_commands_are_removed(command):
-    result = CliRunner().invoke(app, [command])
-    assert result.exit_code == 2, result.output
-    assert "No such command" in result.output
-
-
 def test_cli_prompt_and_input_validation(tmp_path, monkeypatch):
     monkeypatch.setenv("YAPIT_WORKSPACE", str(tmp_path))
     monkeypatch.setattr(
@@ -119,31 +73,6 @@ def test_cli_prompt_and_input_validation(tmp_path, monkeypatch):
         Brief(seconds=float("nan"))
     with pytest.raises(ValidationError):
         Script(title="Bad", beats=[Beat(text="  ")])
-
-
-def test_style_cli_registration_defaults_consent_but_respects_explicit_refusal(
-    enrolled, monkeypatch, tmp_path
-):
-    monkeypatch.setenv("YAPIT_WORKSPACE", str(enrolled.root))
-    source = tmp_path / "lively.wav"
-    write_wav(source, tone(4, 260))
-    runner = CliRunner()
-    arguments = [
-        "enroll-style",
-        "test-voice",
-        "--style",
-        "lively-vlog",
-        "--audio",
-        str(source),
-        "--text",
-        "What a lovely surprise!",
-    ]
-    refused = runner.invoke(app, [*arguments, "--no-consent"])
-    assert refused.exit_code != 0
-    assert "own voice" in refused.output
-    accepted = runner.invoke(app, arguments)
-    assert accepted.exit_code == 0, accepted.output
-    assert json.loads(accepted.stdout)["style"] == "lively-vlog"
 
 
 def test_extract_reports_ffmpeg_timeout_and_cleans_temporary_files(tmp_path, monkeypatch):
@@ -173,7 +102,7 @@ def test_cli_passes_settings_and_emits_json(monkeypatch, tmp_path, flags, offlin
     source.touch()
     calls = []
     monkeypatch.setattr(
-        "yapit.cli.api.extract_script",
+        "yapit.cli.rescript.extract_script",
         lambda media, **kwargs: calls.append((media, kwargs)) or {"status": "needs_review"},
     )
     result = CliRunner().invoke(
@@ -199,7 +128,7 @@ def test_cli_reports_errors(monkeypatch, tmp_path):
     def fail(*args, **kwargs):
         raise ValueError("No speech was detected.")
 
-    monkeypatch.setattr("yapit.cli.api.extract_script", fail)
+    monkeypatch.setattr("yapit.cli.rescript.extract_script", fail)
     result = CliRunner().invoke(app, ["extract-script", str(source)])
     assert result.exit_code == 2
     assert "No speech" in result.output
@@ -209,7 +138,7 @@ def test_script_and_audio_extraction_commands_are_distinct(monkeypatch, tmp_path
     source = tmp_path / "source.wav"
     source.touch()
     monkeypatch.setattr(
-        "yapit.cli.api.extract_script", lambda *args, **kwargs: {"status": "needs_review"}
+        "yapit.cli.rescript.extract_script", lambda *args, **kwargs: {"status": "needs_review"}
     )
     runner = CliRunner()
     result = runner.invoke(app, ["extract-script", str(source)])
@@ -228,8 +157,8 @@ def test_script_and_audio_extraction_commands_are_distinct(monkeypatch, tmp_path
     "command,target,arguments",
     [
         ("generate-audio", "yapit.yapper.cli.generate_audio", ["--script"]),
-        ("extract-script", "yapit.cli.api.extract_script", []),
-        ("generate-reel", "yapit.cli.api.generate_reel", ["--audio-path"]),
+        ("extract-script", "yapit.cli.rescript.extract_script", []),
+        ("generate-reel", "yapit.cli.pipeline.generate_reel", ["--audio-path"]),
     ],
 )
 def test_canonical_commands_dispatch_to_shared_workflows(
@@ -256,7 +185,7 @@ def test_canonical_reel_cli_rejects_multiple_sources_before_generation(monkeypat
     def unexpected(*args, **kwargs):
         pytest.fail("Ambiguous input must not start generation.")
 
-    monkeypatch.setattr("yapit.cli.api.generate_reel", unexpected)
+    monkeypatch.setattr("yapit.cli.pipeline.generate_reel", unexpected)
     result = CliRunner().invoke(
         app, ["generate-reel", "--prompt", "A trip", "--audio-path", "speech.wav"]
     )
@@ -264,18 +193,11 @@ def test_canonical_reel_cli_rejects_multiple_sources_before_generation(monkeypat
     assert "exactly one" in result.output
 
 
-def test_canonical_enrollment_command_preserves_import_behavior(monkeypatch, tmp_path):
-    from types import SimpleNamespace
+def test_enrollment_cli_reports_app_launch_failure(monkeypatch):
+    def fail():
+        raise RuntimeError("The enrollment app requires an interactive Windows desktop.")
 
-    manifest = tmp_path / "samples.json"
-    manifest.write_text('{"samples":[]}', encoding="utf-8")
-    calls = []
-
-    def operation(data, name, path, consent):
-        calls.append((name, path, consent))
-        return SimpleNamespace(name=name, samples=[object()] * 5, words_per_minute=130)
-
-    monkeypatch.setattr("yapit.cli.enroll", operation)
-    result = CliRunner().invoke(app, ["enroll-voice", "myvoice", "--manifest", str(manifest)])
-    assert result.exit_code == 0, result.output
-    assert calls == [("myvoice", manifest, True)]
+    monkeypatch.setattr("yapit.enrollment.cli.launcher.enroll_voice", fail)
+    result = CliRunner().invoke(app, ["enroll-voice"])
+    assert result.exit_code == 1
+    assert "interactive Windows desktop" in result.output

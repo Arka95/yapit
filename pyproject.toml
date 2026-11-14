@@ -68,7 +68,7 @@ markers = [
   "llm: model inference or model-dependent tests (explicit opt-in)",
 ]
 testpaths = [
-  "agenttests",
+  "src/tests",
   "tests",
   "src/enrollment/tests",
   "src/rescript/tests",

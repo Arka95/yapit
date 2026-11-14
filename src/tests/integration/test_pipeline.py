@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from tests.conftest import tone
 from yapit.models import Beat, Brief, Script
 from yapit.pipeline import Pipeline
+from yapit.tests.helpers import tone
 
 
 class ToneSpeech:

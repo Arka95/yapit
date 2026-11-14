@@ -45,7 +45,7 @@ there is no cross-file transaction. Existing audio and metadata are never reused
 or overwritten automatically.
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q src\musicgen\tests src\editor\tests tests\test_storage.py
+.\.venv\Scripts\python.exe -m pytest -q src\musicgen\tests src\editor\tests src\tests\test_storage.py
 .\.venv\Scripts\python.exe -m ruff check src\musicgen src\editor
 ```
 

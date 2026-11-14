@@ -10,7 +10,7 @@ it records/curates audio but does not transcribe speech or train weights.
 From the clone root, after installation:
 
 ```powershell
-.\yapit.cmd enroll-app
+.\yapit.cmd enroll-voice
 ```
 
 Create/select a profile, choose a microphone and read the displayed passages.
@@ -24,22 +24,24 @@ The microphone remains ready between takes; audio is saved only during
 releases the microphone. Revisiting a passage lets you replace its prepared take.
 Profile names are lowercase/case-insensitive.
 
-## Import existing recordings
+## From an agent or Python
+
+```python
+from yapit.enrollment import enroll_voice
+
+enroll_voice()
+```
+
+MCP `enroll_voice()` opens the same app with no arguments. You do not provide
+an MP3, profile name, transcript or manifest; choose the profile and record
+inside the window. It launches separately and returns a process ID, not a
+completed profile. An interactive Windows desktop is required.
+
+After finishing, check the saved profiles:
 
 ```powershell
-.\yapit.cmd enroll-voice myvoice --manifest .\my-samples.json
 .\yapit.cmd profiles
 ```
-
-A manifest contains verified words for each clip:
-
-```json
-{"samples": [{"audio": "take.wav", "text": "The exact words in this recording."}]}
-```
-
-Supply at least five distinct usable recordings. Paths may be absolute or
-relative to the manifest. Imports merge by normalized filename: new filenames
-add clips; matching filenames replace audio/transcript. Sources remain unchanged.
 
 ## Files and limitations
 

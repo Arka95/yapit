@@ -20,15 +20,17 @@ Module user/developer guides own their workflows and implementation details.
 | `src\training` | Qwen fine-tuning and checkpoint validation | [Training](training/dev.readme.md) |
 | `src\mcp` | Stdio protocol adapters and client example | [MCP](mcp/dev.readme.md) |
 
-`api.py` exposes `generate_audio`, `generate_script`, `extract_script`,
-`generate_reel` and `enroll_voice` as canonical customer Python functions.
-CLI names use hyphens; MCP uses the same underscore names. Each workflow has
-one public command, without compatibility aliases or helper MCP tools.
+CLI and MCP call the owning modules directly: Yapper for scripts/audio, Rescript
+for extraction, Pipeline for reels and Enrollment for the app. CLI names use
+hyphens; MCP/Python use the same underscore names. There is no separate API
+facade, compatibility alias or helper MCP tool.
 
 `scripts` owns setup/dispatch/build helpers; root `yapit.cmd` is only a public
-shim. Module tests live under their source module; root `tests` covers shared
-storage, launchers and application interfaces. `agenttests` holds opt-in
-packaging/documentation/import-maintenance checks.
+shim. Unit tests live beside their owning source; `src\tests` covers shared
+storage, CLI and orchestration. Root `tests` contains external CLI/MCP integration
+tests and fixtures only: commands/protocols in, public outputs/files out, with
+no application imports, monkeypatches or source-path access. Local `agenttests`
+is Git-ignored and untracked; it holds only agent-maintenance checks, not product tests.
 
 ## Reel lifecycle
 
@@ -123,7 +125,7 @@ In an activated environment with YapIt installed:
 ```powershell
 python .\scripts\run-mode.py default doctor
 python -m yapit.cli doctor
-python -m yapit.cli enroll-app
+python -m yapit.cli enroll-voice
 python -m yapit.mcp
 ```
 
@@ -201,24 +203,31 @@ Hatchling/editables build requirements, then use
 Default validation is **rapid**, targeted units with external effects mocked:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests\test_modes.py -q
+.\.venv\Scripts\python.exe -m pytest src\tests\test_storage.py -q
 .\.venv\Scripts\python.exe -m ruff check src tests scripts
 .\.venv\Scripts\python.exe -m ruff format --check src tests scripts
 ```
 
 Use the smallest relevant module/test selection, not broad media workflows.
-Integration tests live in `tests\integration`; legacy `enrolled` fixtures are
-also excluded by default. Explicit `--run-integration` / `--run-llm` require
-`--development-mode=full` and authorization. Agent-maintenance checks are
-separate under `agenttests`, also opt-in outside rapid mode.
+External integration tests live in `tests\integration` and run the installed CLI
+or talk MCP, without importing the product. In-source component integrations
+stay under their owning module's `tests\integration`. These directories are
+excluded before import in rapid mode; legacy `enrolled` fixtures are also skipped.
+Explicit `--run-integration` / `--run-llm` require `--development-mode=full` and
+authorization. Local agent-maintenance checks are excluded from default discovery
+and never committed. Obsolete packaging checks were removed.
 Do not run inference, GPU probes, downloads or rendering for routine validation.
 
-`@timed` and pytest write best-effort, current-run records under ignored
+`@timed` and source-unit pytest runs write best-effort, current-run records under ignored
 `.repo-stats`; children preserve their parent's run. Durations use at most two
 decimal places. `YAPIT_METRICS=0` disables records;
 `YAPIT_REPO_STATS_DIR` and `YAPIT_LOG_LEVEL` configure location/logging.
 Logs go to stderr; CLI/MCP stdout remains structured data. Record safe outcomes,
 not narration, tokens or exception messages.
+
+The root integration harness uses only test/protocol/standard-library tooling.
+Application-backed diagnostic hooks and fixtures are scoped to `src\conftest.py`,
+so running external tests does not load application internals into their test process.
 
 Unit success does not establish voice quality. Any separately authorized quality
 comparison should use identical held-out scripts and review identity, wording,

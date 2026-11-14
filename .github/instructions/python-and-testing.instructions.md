@@ -40,6 +40,10 @@ applyTo: "**"
 - Keep ordinary module `tests` directories unit-only. Put integration tests in
   a dedicated `tests\integration` subfolder, with expensive fixtures there too.
   Model-dependent tests belong there and must also carry the `llm` marker.
+- Repository-root `tests` is exclusively external integration: invoke commands
+  or use public protocols and inspect outputs/files. Do not import or monkeypatch
+  YapIt modules, load source files, or inject source paths there, including fixtures.
+  Shared application units belong in `src\tests`; module units stay with their owner.
 - Default change validation must be fast unit tests: mock external processes,
   media encoding/decoding, network calls, microphones, GUI loops and model execution.
   Do not add sleeps, polling, full renders or multi-second external workflows
@@ -69,6 +73,9 @@ applyTo: "**"
 - Put packaging/build smoke checks, README/catalog synchronization, cold-import
   audits, source/file-layout assertions and checks created only to validate
   agent edits in the root `agenttests` folder, not the unit suite.
+- `agenttests` is local-only, Git-ignored and untracked. Do not add it to default
+  test discovery or stage/commit its files. Remove obsolete/redundant checks;
+  wheel/packaging verification is not a product test.
 - These are automatically marked `agent` and skipped in rapid mode. Run a
   deliberately selected set only with explicit user authorization outside rapid
   development: `pytest agenttests --development-mode=full`.

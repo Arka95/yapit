@@ -34,7 +34,7 @@ GPU dispatch remains strict; use CPU when CUDA is unavailable.
 | `generate_script` | Text prompt to Script JSON; `seconds` defaults to 30 |
 | `generate_audio` | Speak approved Script JSON; defaults to 30 seconds and `testuser` |
 | `extract_script` | Local media to reviewable Script JSON and source timings |
-| `enroll_voice` | Create/update a profile from verified recordings |
+| `enroll_voice` | Open the enrollment app; choose a profile and record there |
 | `generate_reel` | Exactly one script, existing audio, or text prompt to an edit guide |
 
 Tool execution has the same model requirements as its underlying workflow:
@@ -43,6 +43,13 @@ and audio-to-reel uses local speech recognition without generating new voice aud
 `generate_script(prompt, seconds=30)` accepts text only, with no image/frame/media
 parameters. Cloud writing requires `YAPIT_ALLOW_CLOUD=true`, `OPENAI_API_KEY`
 and the cloud extra.
+
+`enroll_voice()` takes no arguments. It opens the local enrollment window, where
+you create/select a profile, choose a microphone, record and review passages, and
+finish enrollment. No MP3, transcript or manifest is supplied to the tool.
+It returns `status: launched` and a process ID immediately; that is not proof
+that enrollment is complete. An interactive Windows desktop is required on the
+MCP server machine. The app runs separately without using MCP's input/output streams.
 
 `generate_reel` accepts exactly one of `script`, `audio_path` or `prompt`.
 Script input preserves the supplied words; prompt input runs writing, narration
@@ -60,13 +67,13 @@ is performed; `offline=false` permits model downloads.
 
 The canonical CLI/Python names match the tools:
 
-| CLI | MCP / `from yapit import api` |
-|---|---|
-| `generate-audio` | `generate_audio` |
-| `generate-script` | `generate_script` |
-| `extract-script` | `extract_script` |
-| `generate-reel` | `generate_reel` |
-| `enroll-voice` | `enroll_voice` |
+| CLI | MCP | Python function |
+|---|---|---|
+| `generate-audio` | `generate_audio` | `yapit.yapper.generate_audio` |
+| `generate-script` | `generate_script` | `yapit.yapper.generate_script` |
+| `extract-script` | `extract_script` | `yapit.rescript.extract_script` |
+| `generate-reel` | `generate_reel` | `yapit.pipeline.generate_reel` |
+| `enroll-voice` | `enroll_voice` | `yapit.enrollment.enroll_voice` |
 
 For example:
 
@@ -78,11 +85,12 @@ For example:
 
 ```python
 from pathlib import Path
-from yapit import api
+from yapit.pipeline import generate_reel
+from yapit.rescript import extract_script
 
-result = api.extract_script(Path(r"data\audio\speech.wav"))
+result = extract_script(Path(r"data\audio\speech.wav"))
 # Review result["scripts"][0]["content"] against the recording before narration.
-reel = api.generate_reel(audio_path=Path(r"data\audio\speech.wav"))
+reel = generate_reel(audio_path=Path(r"data\audio\speech.wav"))
 ```
 
 Only these five tools are exposed; there are no helper tools, duplicate aliases

@@ -88,7 +88,7 @@ def test_style_enrollment_requires_existing_profile_before_processing_audio(
     )
     assert result.exit_code == 2, result.output
     assert "does not exist" in result.output
-    assert "enroll-app" in result.output
+    assert "enroll-voice" in result.output
     assert not enrolled.voice_path("missing").exists()
     assert not (folder / "audio").exists()
     assert folder.exists() == existing_directory
