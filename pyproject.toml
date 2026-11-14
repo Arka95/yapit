@@ -9,6 +9,7 @@ description = "Local personal-voice narration and vertical reel planning"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
   "pydantic>=2.10,<3",
   "numpy>=1.26,<3",

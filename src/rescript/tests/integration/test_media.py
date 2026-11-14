@@ -112,7 +112,7 @@ def test_extract_copies_supported_audio_unchanged(tmp_path, monkeypatch, suffix)
     output = Path(result["audio"])
     assert result["action"] == "copied"
     assert output.parent == tmp_path / "data" / "audio"
-    assert output.name == f"arka.source{suffix}"
+    assert output.name == f"testuser.source{suffix}"
     assert output.read_bytes() == source.read_bytes()
     with pytest.raises(ValueError, match="already exists"):
         extract_audio(source)
@@ -194,7 +194,7 @@ def test_extract_empty_audio_is_error(tmp_path):
 
 def test_default_transcript_store_and_canonical_audio_reuse(tmp_path):
     data = DataStore()
-    source = data.audio / "arka.input.wav"
+    source = data.audio / "testuser.input.wav"
     sf.write(source, np.zeros(16000 * 5, dtype=np.float32), 16000)
     result = transcribe(source, backend=SimpleNamespace(recognize=lambda _: segments_at(5)))
     assert Path(result["directory"]).is_relative_to(data.transcripts)

@@ -15,10 +15,10 @@ def test_signal_checks_reject_silence_and_clipping(data):
 
 
 def test_unified_data_name_handles_case_prefix_and_path_like_input():
-    assert data_filename("ARKA.My Travel", "ARKA", ".WAV") == "arka.my_travel.wav"
-    assert data_filename("..\\TRIP", "ARKA", ".SCRIPT.JSON") == "arka.trip.script.json"
+    assert data_filename("TESTUSER.My Travel", "TESTUSER", ".WAV") == "testuser.my_travel.wav"
+    assert data_filename("..\\TRIP", "TESTUSER", ".SCRIPT.JSON") == "testuser.trip.script.json"
     with pytest.raises(ValueError, match="extension"):
-        data_filename("trip", "arka", ".wav\\escape")
+        data_filename("trip", "testuser", ".wav\\escape")
 
 
 def test_session_records_first_empty_slot_or_explicit_selection():

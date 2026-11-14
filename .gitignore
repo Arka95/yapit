@@ -1,8 +1,5 @@
 .venv/
-.venv-cpu/
-.venv-gpu/
-.venv-cosyvoice/
-.venv-cosyvoice-bootstrap/
+.venv-*/
 .runtime-wheel-cache/
 __pycache__/
 *.py[cod]
@@ -22,6 +19,8 @@ outputs/
 *.wav
 *.mp3
 *.mp4
+# Public README demo; other generated videos remain ignored.
+!/docs/res/generated_demo.puerto_princesa.pocket_2026_10.3.guide.mp4
 *.safetensors
 *.pt
 *.pth
@@ -31,9 +30,9 @@ outputs/
 
 # Keep this explicitly selected regression fixture; other media stays ignored.
 !tests/data/
-!tests/data/arka.ladakhi_marmots.wav
+!tests/data/testuser.ladakhi_marmots.wav
 
-# Keep Arka's data eligible for version control, except checkpoints.
-!/data/arka/
-!/data/arka/**
-/data/arka/checkpoints/
+# Keep testuser's data eligible for version control, except checkpoints.
+!/data/testuser/
+!/data/testuser/**
+/data/testuser/checkpoints/

@@ -4,10 +4,10 @@ applyTo: "**"
 
 # Model decisions and research
 
-- Maintain `docs\analysis.md` as a concise model decision/configuration guide for
-  English, one enrolled profile, and engaging travel/product narration. Include
-  current model choices, important parameters, size/weight optimization and
-  clear implemented/measured versus proposed/unverified labels.
+- Maintain `docs\analysis.md` as a small table of two or three suggested models
+  used in this repository: parameter count, weight size, whether training is
+  supported in YapIt, and brief salient features. Distinguish disk size from
+  runtime memory and upstream training support from repository integration.
 - After model research or a selection decision, append dated findings and
   decisions, then refine the guide into the current position without repetition.
   Separate actual settings from suggested experiments; never claim a quality or
@@ -22,6 +22,7 @@ applyTo: "**"
   Documentation work does not authorize inference, downloads, weight conversion,
   training, checkpoint replacement or dependency installation.
 - Onboard TTS SDK families through the existing managed backend registry/plugin
-  contract, reusing the generic isolated-runtime bridge when dependencies conflict.
+  contract in the selected CPU/GPU environment. Defer incompatible SDKs to
+  `docs\todo`; do not create model-specific interpreters/runtimes.
   Do not add model-specific branches to Pipeline, Editor or core CLI workflows.
   Model IDs select compatible variants; new architectures need trusted adapters.

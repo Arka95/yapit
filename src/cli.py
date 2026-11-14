@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 from yapit.common_utils.mediautils import ffmpeg
 from yapit.common_utils.metrics import configure_logging
+from yapit.common_utils.runtime_config import set_runtime_mode
 from yapit.constants import DEFAULT_PROFILE, DEFAULT_SPEECH_MODEL
 from yapit.editor import AudioMix, generate_video
 from yapit.enrollment import enroll
@@ -55,6 +56,17 @@ def workspace() -> Workspace:
 
 def emit(value: dict) -> None:
     typer.echo(json.dumps(value, indent=2, ensure_ascii=False))
+
+
+@app.command("set-mode")
+def set_mode(
+    mode: Annotated[str, typer.Argument(help="cpu or gpu; saved in the local .env.")],
+) -> None:
+    """Choose the runtime for future yapit.cmd calls without installing or loading models."""
+    try:
+        emit(set_runtime_mode(Path.cwd(), mode))
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
 
 @app.command()

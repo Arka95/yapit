@@ -21,7 +21,8 @@ The `mcp` extra stays optional for ordinary CLI/audio users.
 
 `examples\mcp.config.json` belongs to this module and is included in the wheel.
 It is also accessible through `importlib.resources.files("yapit.mcp")`.
-The mode launcher is shared application infrastructure, not an MCP-only file.
+The root `yapit.cmd mcp` launcher uses the saved `YAPIT_MODE`. Its implementation
+is shared application infrastructure, not an MCP-only file.
 Its `mcp` branch invokes `python -m yapit.mcp` in the selected runtime rather
 than depending on an older environment's generated console wrapper.
 

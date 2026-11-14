@@ -6,6 +6,7 @@ from typer.testing import CliRunner
 from yapit.cli import app
 from yapit.common_utils.fileutils import save_json
 from yapit.models import Beat, Script
+from yapit.storage import Workspace
 from yapit.yapper.cli import app as yapper_app
 
 
@@ -71,16 +72,17 @@ def test_narration_forwards_selected_delivery_style(enrolled, monkeypatch):
     assert calls[0]["style"].value == "lively-vlog"
 
 
-def test_narration_defaults_to_arka_and_preserves_source_filename(enrolled, monkeypatch):
-    monkeypatch.setattr("yapit.cli.workspace", lambda: enrolled)
+def test_narration_defaults_to_testuser_and_preserves_source_filename(tmp_path, monkeypatch):
+    workspace = Workspace(tmp_path / "workspace")
+    monkeypatch.setattr("yapit.cli.workspace", lambda: workspace)
     calls = []
     monkeypatch.setattr(
         "yapit.cli.generate_audio",
         lambda *args, **kwargs: calls.append((args, kwargs)) or {"status": "complete"},
     )
-    path = enrolled.data.transcripts / "trip.json"
+    path = workspace.data.transcripts / "trip.json"
     save_json(path, Script(title="A different title", beats=[Beat(text="A short test.")]))
     result = CliRunner().invoke(app, ["narrate", "--script", str(path)])
     assert result.exit_code == 0, result.output
-    assert calls[0][1]["voice_name"] == "arka"
+    assert calls[0][1]["voice_name"] == "testuser"
     assert calls[0][1]["source_name"] == "trip"

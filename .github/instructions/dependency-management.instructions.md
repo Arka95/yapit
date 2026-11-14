@@ -14,8 +14,9 @@ applyTo: "**"
   CPU/CUDA runtime, including required dependencies.
 - Never bypass TLS checks, change VPN policy, use unapproved mirrors or save
   credentials in tracked files. Report blocked downloads instead.
-- Keep CosyVoice in its separate Python 3.10 environment; do not change the
-  working Qwen `.venv-cpu` or `.venv-gpu` to resolve its dependencies.
+- Backends share the selected CPU/GPU environment; do not create an environment
+  per backend/model. Preserve working dependency stacks and defer incompatible
+  adapters to `docs\todo` until compatible versions are verified.
 - For agent-selected models, verify the latest appropriate stable release from
   official sources and require a 2026-or-later model release. Prefer dated model
   identifiers; a recent repository edit is not a model release. Do not download,

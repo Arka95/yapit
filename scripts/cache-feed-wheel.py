@@ -78,6 +78,6 @@ def cache_wheel(filename: str, folder: Path) -> Path:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("filename")
-    parser.add_argument("--folder", type=Path, default=Path(".runtime-wheel-cache") / "cosyvoice")
+    parser.add_argument("--folder", type=Path, default=Path(".runtime-wheel-cache"))
     args = parser.parse_args()
     print(cache_wheel(args.filename, args.folder))

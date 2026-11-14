@@ -7,34 +7,41 @@ training/generation implementation.
 
 ## Install and launch
 
-From the repository root:
+After [local installation](../../README.md#install-locally-on-windows), from
+the repository root:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -e ".[mcp]"
-.\.venv\Scripts\yapit-mcp
-# Equivalent module entry point:
-.\.venv\Scripts\python.exe -m yapit.mcp
+.\yapit.cmd mcp
+# Or, from an activated YapIt environment:
+python -m yapit.mcp
 ```
 
 These commands start a server waiting for an MCP client, not an interactive
-terminal prompt. After updating an editable checkout, reinstall into each runtime
-to refresh the `yapit-mcp` console entry point. The old `python -m yapit.server`
-path has been replaced.
+terminal prompt. `.\yapit.cmd set-mode cpu` or `gpu` sets the runtime once;
+no mode argument is needed on MCP calls. Restart an existing client/server to
+apply a changed mode. Direct Python invocation uses that interpreter rather than
+the saved launcher runtime.
 
 Adapt `src\mcp\examples\mcp.config.json` in your client settings. Replace its
-absolute Windows executable/workspace/data paths and choose `cpu` or `gpu`
-explicitly. The example uses the shared runtime launcher in `scripts`.
+absolute Windows executable/workspace/data paths. The example uses `yapit.cmd mcp`
+and the project's saved `YAPIT_MODE`; process environment overrides still win.
 GPU dispatch remains strict; use CPU when CUDA is unavailable.
 
 ## Tools and execution
 
-The six tools are `prepare_script_prompt`, `enroll_voice`, `generate_narration`,
-`generate_reel`, `render_timeline` and `get_job_status`. The reusable prompt is
-`reel_script`. See the [main inventory](../../README.md#mcp-and-helper-commands)
-for their purposes. These names are MCP tools, not additional CLI commands.
+| Tool | Purpose |
+|---|---|
+| `prepare_script_prompt` | Prepare a script-writing brief |
+| `enroll_voice` | Create/update a profile from verified recordings |
+| `generate_narration` | Narrate an approved script |
+| `generate_reel` | Narration plus vertical edit guide |
+| `render_timeline` | Render existing audio and measured timing |
+| `get_job_status` | Read a job's saved result/status |
+
+The reusable prompt is `reel_script`. These are MCP tools, not extra CLI commands.
 
 Tool execution has the same model requirements as its underlying workflow:
-prompt preparation/enrollment are model-free, narration uses local Qwen,
+prompt preparation/enrollment are model-free, narration uses the selected local backend,
 and rendering consumes existing audio/timing without loading a speech model.
 Cloud script writing requires explicit `auto_script`, permission and credentials.
 Rescript transcription and fine-tuning are not registered MCP tools.

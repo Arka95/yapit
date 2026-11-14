@@ -47,7 +47,7 @@ def test_package_import_and_packaged_config_do_not_initialize_server_or_model_sd
     )
     assert result.returncode == 0, result.stdout + result.stderr
     config = json.loads(files("yapit.mcp").joinpath("examples", "mcp.config.json").read_text())
-    assert config["mcpServers"]["yapit"]["args"][2].endswith(r"\scripts\yapit-mode.cmd")
+    assert config["mcpServers"]["yapit"]["args"][2].endswith(r"\yapit.cmd")
 
 
 def test_module_import_does_not_initialize_training_sdks_or_models(tmp_path):

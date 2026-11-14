@@ -139,15 +139,15 @@ def test_recorded_sample_replacement_reuses_filename_and_updates_journal(enrolle
 
 
 def test_profiles_are_read_only_from_data(tmp_path, monkeypatch):
-    old = tmp_path / "workspace" / "voices" / "arka"
+    old = tmp_path / "workspace" / "voices" / "testuser"
     old.mkdir(parents=True)
     save_json(old / "profile.json", {"unused": "not a current profile"})
     monkeypatch.setenv("YAPIT_WORKSPACE", str(tmp_path / "workspace"))
     store = DataStore(tmp_path / "data")
     assert profile_names(store) == []
     with pytest.raises(FileNotFoundError):
-        load_voice(store, "arka")
-    assert store.voice_path("arka") == tmp_path / "data" / "arka" / "arka.profile.json"
+        load_voice(store, "testuser")
+    assert store.voice_path("testuser") == tmp_path / "data" / "testuser" / "testuser.profile.json"
 
 
 def test_static_scripts_are_shared_and_sorted_numerically(tmp_path):

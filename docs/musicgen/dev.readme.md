@@ -2,7 +2,7 @@
 
 Source is `src\musicgen`, imported as `yapit.musicgen`. This is a CPU/network
 module with no additional dependencies, speech/model initialization or AI runtime.
-See [usage](README.md), [design](design.md) and
+See [usage](README.md), [project](../../README.md) and
 [source ownership](../dev.readme.md#flat-source-layout).
 
 | File | Responsibility |

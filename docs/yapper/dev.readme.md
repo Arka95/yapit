@@ -1,234 +1,111 @@
 # Yapper development
 
-Source is `src\yapper`; public imports are `yapit.yapper`. Documentation remains
-under `docs`, not beside Python sources. See [usage](README.md) and the
-[folder-level project layout](../dev.readme.md#flat-source-layout).
+[Back to YapIt](../../README.md) | [Usage](README.md) |
+[Shared test policy](../dev.readme.md#testing-and-diagnostics)
 
-## Ownership
+## Ownership and APIs
 
-| File | Responsibility |
+| Component | Responsibility |
 |---|---|
-| `script_planner.py`, `script_prompt.txt` | Text/JSON loading, deterministic prompt composition and explicitly opted-in cloud writing |
-| `backends.py` | Backend protocols, lazy adapter selection, plugin registration and shared PCM validation |
-| `speech.py` | Qwen-specific loading, reference/checkpoint handling and acceleration |
-| `pocket.py` | Pocket TTS loading, reusable reference/voice state and CPU synthesis |
-| `cosyvoice.py`, `cosyvoice_runtime.py` | CosyVoice family adapter and isolated SDK reference-cloning session |
-| `isolated.py`, `isolated_runtime.py` | Reusable bounded JSON transport/server for incompatible Python SDK runtimes |
-| `inference.py` | CUDA-graph replay of the fixed-length codebook predictor, with SDK fallback |
-| `worker.py` | Authenticated loopback worker, one resident model, bounded private speech cache and load/request telemetry |
-| `generation.py` | Narration workflow, reusable synthesis/encoding renderer and failure/status handling |
-| `timeline.py` | Measured beat/pause scaling, quiet-window cuts and approximate phrase grouping |
-| `cli.py`, `__main__.py`, `__init__.py` | CLI and public audio API |
-| `tests` | Audio, planning, backend and narration-adapter tests using synthetic PCM/fake SDKs |
+| `script_planner.py`, packaged `script_prompt.txt` | Script parsing, deterministic prompts, explicit cloud writing |
+| `backends.py`, adapter modules | Lazy factories, lifecycle/identity contract and validated PCM |
+| `worker.py`, `inference.py` | One-model worker/cache and Qwen codebook CUDA graphs |
+| `generation.py`, `timeline.py` | Synthesis/publication and measured cuts/approximate captions |
 
-The old root-source `scripts.py`, `speech.py` and `timeline.py` are removed;
-there are no legacy re-export modules. `script_prompt.txt` is loaded with
-`importlib.resources.files("yapit.yapper")`, including in installed wheels.
+`generate_audio(Script | str, *, workspace, voice_name, seconds, style, ...)`
+is the audio-only API. It supports injected `SpeechBackend` or managed
+`backend_name`/`model`, not both. `render_audio` takes validated Script/Voice
+and reserved outputs, returning `(result, Timeline)`; Pipeline uses it to share
+one reel job. CLI narration and MCP delegate here, not to Editor.
+The optional module CLI is `python -m yapit.yapper generate`.
 
-## APIs and integration
+Contracts/storage/profile selection remain in their shared owners.
+Use `common_utils` for file/media/model primitives, not duplicate implementations.
 
-```python
-from yapit.yapper import generate_audio
-from yapit.yapper.script_planner import build_prompt, load_script
+## Adapter contract
 
-result = generate_audio(
-    "Take the slower route. Leave time to enjoy the view.",
-    voice_name="arka",
-    seconds=5,
-)
-```
+Injected backends need `synthesize(text) -> np.ndarray`. Managed `ModelBackend`
+adapters implement `load`, `close`, `synthesize`, `cache_identity` and `describe`.
+Constructors stay lightweight; SDK imports/loading occur on demand.
+Return finite, non-silent mono float32 24 kHz PCM and enforce bounded chunks.
+Callers own injected adapters; one-shot rendering closes adapters it creates.
 
-`generate_audio` accepts `Script | str`, optional `Workspace`, voice/style,
-target seconds, source name, an injected `SpeechBackend`, or `backend_name`/`model`.
-It normalizes plain
-text, validates the target, selects a profile and reserves outputs before calling
-the renderer. It never calls the script-writing provider or Editor.
-
-`generation.render_audio` takes a validated Script, selected Voice/reference
-directory and pre-reserved `OutputArtifacts`, returning `(result, Timeline)`.
-Root `Pipeline.reel` uses this lower-level API so audio and video share one job.
-Root `audiogen` registers the module CLI's `generate` function directly, without
-duplicating generation logic. CLI `narrate` and MCP narration use `generate_audio` directly.
-Prompt/reel orchestration calls `script_planner` explicitly.
-The old `yapit yapper generate` group is a hidden compatibility alias.
-`python -m yapit.yapper generate` remains an optional standalone developer entry point.
-
-Shared contracts remain in `models.py`, profile/style selection in
-`enrollment\profiles.py` / `enrollment\styles.py`, and application folders/naming
-in `storage.py`. Yapper reuses
-`common_utils` for atomic JSON, native model loading, resampling, FFmpeg fitting,
-WAV/MP3 encoding and decode validation. Do not duplicate these utilities here.
-
-## TTS adapters
-
-The renderer accepts a minimal `synthesize(text) -> np.ndarray` backend for
-injection. Managed adapters implement `ModelBackend`: `load`, `close`,
-`synthesize`, `cache_identity` and `describe`. Constructors stay lightweight;
-SDK imports/model loading happen in `load`. Return validated mono float32
-24 kHz PCM, converting the SDK's native rate inside the adapter.
-
-`cache_identity` returns JSON-serializable model/version/conditioning information
-and relevant asset stamps; exclude writing metadata. `describe` supplies model,
-voice mode, device, dtype and inference-backend metadata without exposing SDK
-internals to the worker. The worker also includes the selected adapter/model in
-its cache key, closes replaced/failed models and retains one active model.
-One-shot rendering closes adapters it creates; callers own injected adapters.
-
-Register a trusted local adapter:
-
-```python
-from yapit.yapper import register_backend
-from my_tts_adapter import MySpeech
-
-register_backend("my-model", MySpeech)
-```
-
-Factories accept `(voice, voice_dir, *, model=None)`. In-memory registration is
-process-local; install a package entry point to make it available in separate
-CLI/worker processes:
+Factories accept `(voice, voice_dir, *, model=None)`. Register locally with
+`register_backend("name", factory)`, or install a trusted plugin:
 
 ```toml
 [project.entry-points."yapit.tts"]
 my-model = "my_tts_adapter:MySpeech"
 ```
 
-Then select `--backend my-model --model MODEL_ID`. Plugins are trusted installed
-Python code, not arbitrary imports supplied in HTTP requests. Unsupported
-architectures need adapters; changing a Hugging Face ID alone cannot change SDKs.
-Qwen's training/checkpoint validation stays in its training module.
-
-Pocket optionally accepts `pocket_voice_state` in profile metadata, pointing to
-an exported state inside the profile folder. Otherwise it uses `reference_audio`.
-Its model/reference are retained between worker calls; custom configs should live
-under the configured model/data root. Use immutable revisions for custom YAML
-weights: cache identity stamps the config/reference, not every referenced weight.
-Restart after changing those weights. The SDK interface/model-selection routes
-are unit-tested with mocks. A separately authorized Pocket `english_2026-10`
-Arka-reference CPU run produced the Puerto Princesa guide on November 8, 2026;
-encoded-video/signal checks passed and Arka preferred this clip over prior Qwen
-output; this is not a controlled quality benchmark.
-Cloning weights require publisher access approval and a local Hugging Face login.
+`cache_identity` covers backend/model/version/conditioning and relevant asset
+stamps; writing metadata is excluded. `describe` reports actual runtime metadata.
+If language, seed, sampling or instruction controls are added, include effective
+request settings in waveform-cache identity without needlessly reloading weights.
+Qwen-specific training/checkpoint checks stay in Training.
 
 ## Model onboarding
 
-1. Verify the official model, code revision, license, reference requirements and
-   native sample rate. Distinguish model release dates from repository updates.
-2. Implement one SDK-family factory with the existing `ModelBackend` contract.
-   Keep model variants in selection/configuration rather than changing Pipeline,
-   Editor or the CLI. Register it locally or through `yapit.tts`.
-3. Use the current interpreter only when dependencies are compatible. Otherwise
-   use `RuntimeProcess` and an SDK session exposing `load(request)` /
-   `synthesize(request)` through `isolated_runtime.serve`. The bridge carries
-   bounded JSON on private pipes; audio stays in an adapter-owned temporary
-   directory, not JSON/base64 or external services.
-4. Include model/reference/configuration, SDK code and runtime identity in
-   `cache_identity`; supply actual runtime metadata through `describe`.
-   Constructors do not load models or start processes.
-5. Cover selection, conditioning reuse, native-rate conversion, failure/path
-   handling and cleanup with mocked units. Provision and run real samples only
-   when authorized, then record results and limitations in `analysis.md` and the
-   append-only research archive.
+Verify model/revision/license/sample rate and reference requirements before adding
+an adapter. Keep variants in configuration and implement new architectures through
+the shared contract, without model-specific Pipeline/Editor branches.
+Adapters use the selected CPU/GPU environment, not a model-specific interpreter.
+Resolve SDK compatibility before enabling a backend; defer incompatible SDKs
+instead of replacing the working stack or creating an environment per model.
+Cover selection, reference reuse, conversion, failure/path handling and cleanup
+with mocks; real provisioning/quality comparisons require authorization.
 
-### CosyVoice runtime
+Pocket optionally uses profile `pocket_voice_state`; otherwise the reference
+recording. Clone-weight access may require publisher approval and local sign-in.
+Custom YAML cache identity does not stamp every referenced weight: use immutable
+assets and restart after changing them.
 
-CosyVoice is installed independently because its Python 3.10/Torch 2.3.1 SDK
-stack conflicts with the app's Qwen/Pocket runtime. From the project root:
+Model comparisons/history belong in [analysis](../analysis.md) and
+[research](../learn_and_research.md), not duplicated setup reports.
 
-```powershell
-# Use the existing isolated interpreter; this does not install into .venv-cpu.
-$env:PIP_CONSTRAINT = "$PWD\scripts\cosyvoice-runtime.requirements.txt"
-.\.venv-cpu\Scripts\python.exe -m pip --python .\.venv-cosyvoice\Scripts\python.exe install -r scripts\cosyvoice-runtime.requirements.txt
-Remove-Item Env:\PIP_CONSTRAINT
-```
+## Script planning
 
-The build constraint retains `pkg_resources` for the older Whisper dependency.
-The inference manifest omits optional GUI/server/training/TensorRT/vLLM tools
-and Wetext normalization, which can download extra assets during initialization.
-Approved narration is supplied with `text_frontend=False`; no text-normalization
-package is needed.
-The source checkout defaults to `models\cosyvoice_source`, including its
-Matcha-TTS submodule; the interpreter defaults to
-`.venv-cosyvoice\Scripts\python.exe`. Override with trusted local
-`YAPIT_COSYVOICE_SOURCE` / `YAPIT_COSYVOICE_PYTHON` paths when necessary.
+`load_script`, `build_prompt` and `generate_script` own text/JSON parsing,
+word budgets and the packaged prompt. Supplied scripts never call the writer.
+Explicit `reel --auto-script` needs `.[cloud]`, `YAPIT_ALLOW_CLOUD=true` and
+`OPENAI_API_KEY`; optional `YAPIT_SCRIPT_MODEL` selects the writer.
+Only the brief/sampled visual frames are sent, not voice recordings.
+There is one bounded estimated-duration revision, not unbounded retries.
 
-Provision the exact model revision into `models\cosyvoice2-0.5b`; the adapter
-does not download weights at startup. Required assets are the model YAML,
-LLM/flow/HiFT weights, CAMPPlus/speech-tokenizer ONNX files and
-`CosyVoice-BlankEN` assets. Cached CosyVoice3 uses `models\cosyvoice3-2512`.
-These SDK YAMLs execute trusted Python constructors: do not accept untrusted
-model directories. Explicit `YAPIT_DEVICE=cuda:N` fails if CUDA is unavailable;
-CPU/auto are supported. TensorRT/vLLM are disabled, speed remains 1.0, and
-reference conditioning is cached in memory without rewriting model speaker files.
+## Worker and timing
 
-The isolated child runs only for its owning adapter's lifetime. Close/timeout/
-failure terminates and reaps it and removes its private temporary audio.
-An explicitly started `voice-worker` can retain it, but integration does not
-start such a worker or change the global default backend.
+The worker uses authenticated loopback HTTP, owner-only state, confined voice
+assets and one non-queued generation lock. It rejects foreign hosts/origins
+and disables proxy/redirect routing. Retain one model; close replaced/failed
+adapters. It is not a hosted API, durable queue or machine-wide GPU lock.
+Worker runtime/device wins over frontend device settings.
 
-Authorized CosyVoice2 validation on November 8, 2026 generated
-`data\generated_audio\arka.cosyvoice2.validation.2.mp3`: 8.52 seconds of
-Arka-reference narration, natural speed, CPU FP32, 138.58 seconds end-to-end.
-WAV/MP3 signal checks passed and the child exited. Owner listening review is
-still required; CUDA and real CosyVoice3 synthesis have not been validated.
+Cache stamps include checkpoint/config/reference changes and SDK version.
+Cache bypass retains residency. Status separates load/request timings; a cache
+hit is not an inference benchmark. Qwen codebook CUDA graphs default on for
+supported CUDA configurations, with SDK fallback; `YAPIT_CUDA_GRAPHS=0` disables
+them before model startup.
 
-## Preserved policies and limitations
+Each Script beat is one synthesis request. Five-millisecond edge ramps soften
+joins without trimming or changing duration; requested pauses are appended,
+not deduplicated against model-generated silence.
+Audio-only fitting uses +/-5 seconds and 0.90-1.10x gates. Pipeline video passes
+natural-duration tolerance so in-range speech stays 1.0x; out-of-range speech
+requires revision. The encoded MP3 is checked again.
+Timeline uses measured lengths/quiet-window sub-cuts and approximate word groups,
+not forced alignment. Waveform intermediates and failure/status records remain.
 
-When a worker state exists, `generation.render_audio` uses its local client.
-The worker binds only 127.0.0.1 on an ephemeral port, requires a per-run bearer
-token, rejects browser origins/foreign Host headers, disables proxy/redirect
-routing and confines voice assets to the data root. Its state is owner-only
-(Windows ACL or POSIX mode 0600); no token is printed.
+## Quality limitations and tests
 
-One model is retained, with a non-queued single-generation lock. Switching
-weights/speaker/reference reloads that model; writing metadata does not.
-Checkpoint/config/reference timestamps and SDK version invalidate cached FLOAT
-WAVs. Cache bypass retains the model. Startup is offline; device/dtype and
-separate load/request timings are reported by `voice-worker-status`.
-The worker's runtime controls the device even for CPU-only frontend clients;
-`YAPIT_VOICE_WORKER=0` restores the frontend's one-shot device selection.
-This is not a machine-wide GPU lock, hosted API or durable job queue.
-
-CUDA narration uses codebook CUDA graphs by default. The first uncached request
-captures the loop; later requests replay it without per-token Python dispatch.
-Weights, precision and SDK sampling processors are unchanged. CPU, unsupported
-batches/configurations and failed captures retain SDK generation.
-Set `YAPIT_CUDA_GRAPHS=0` before starting the worker (or one-shot generation)
-to disable this optimization. Worker health reports
-`inference_backend` after synthesis; speech-cache hits are not inference benchmarks.
-
-One Qwen backend and clone prompt are reused across a render. SDK imports/model
-loading stay lazy; supplied-text parsing and prompt preparation need no model.
-Automatic device selection logs CPU fallback at model load, not per beat;
-the warning uses logging/stderr without contaminating CLI/MCP JSON stdout.
-TTS returns validated mono 24 kHz PCM. A copy receives 5 ms onset/offset ramps,
-leaving backend buffers and measured lengths unchanged. Each beat receives only
-its requested silence; existing model-generated pauses are not deduplicated.
-Audio-only aggregate narration over 190 seconds is rejected without truncation.
-Reels also support the upper edge of the +/-33% range for a 180-second target
-(239.4 seconds); Timeline permits up to 240 seconds.
-
-`Pipeline.reel` passes `natural_duration_tolerance=brief.seconds * 0.33` to
-`render_audio`/`fit_audio` for video jobs. In-range speech is retained at 1.0x;
-out-of-range speech requires a script revision, not padding or stretching.
-Prompt and optional cloud-planning acceptance use the same range.
-Standalone `generate_audio` and narration-only Pipeline jobs retain the existing
-+/-5-second and 0.90-1.10x fitting gates. Raw/fitted retention, filename
-reservation, provenance and failure logs remain unchanged.
-There is no per-word alignment, human-script emphasis analyser, automatic
-weight training or production CosyVoice provider.
-
-## Validation
-
-From the repository root:
+Signal gates do not establish identity, transcript correctness or naturalness.
+Training overfit is not established by uneven pacing alone. Proposed improvements,
+**not implemented**: optional natural audio-only timing, paragraph-level speech
+chunks independent of visual beats, and complete effective-settings provenance.
+Compare one change at a time on held-out text before claiming better speech.
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q src\yapper\tests
-.\.venv\Scripts\ruff.exe check src tests scripts
-.\.venv\Scripts\ruff.exe format --check src tests scripts
+.\.venv\Scripts\python.exe -m pytest src\yapper\tests -q
 ```
 
-Tests own a package-scoped `conftest` so enrollment/root fixtures do not shadow
-Yapper's synthetic speech helpers. They cover exact supplied words/default
-pauses, duration failure, styles, non-overwriting outputs, fake Qwen SDK calls,
-text/TXT/JSON CLI inputs, cloud opt-in and bounded planning revision.
-Root CLI/MCP/reel tests remain cross-module integration tests.
+Rapid units use synthetic PCM/fake SDKs. Media/worker subprocess workflows and
+legacy enrolled fixtures are integration work, not evidence of real voice quality.

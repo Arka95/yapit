@@ -1,68 +1,89 @@
 {
+  "name": "testuser",
+  "consent": true,
+  "reference_audio": "testuser.audio_sample_1.wav",
+  "reference_text": "Here's what I wish I'd known before planning this trip. You don't need to see everything; choose a few places you really care about, and leave room to explore.",
   "samples": [
     {
-      "audio": "C:\\projects\\yapit\\data\\arka\\audio\\arka.audio_sample_1.wav",
+      "audio": "testuser.audio_sample_1.wav",
       "text": "Here's what I wish I'd known before planning this trip. You don't need to see everything; choose a few places you really care about, and leave room to explore."
     },
     {
-      "audio": "C:\\projects\\yapit\\data\\arka\\audio\\arka.audio_sample_2.wav",
+      "audio": "testuser.audio_sample_2.wav",
       "text": "After leaving the station, cross the narrow bridge and turn right by the bakery. The guesthouse is just beyond the square, beside a blue door and a small garden."
     },
     {
-      "audio": "C:\\projects\\yapit\\data\\arka\\audio\\arka.audio_sample_3.wav",
+      "audio": "testuser.audio_sample_3.wav",
       "text": "I'd keep the first day light: check in, take a short walk, and find dinner nearby. Save the longer hike for day two, then spend the final morning exploring the town."
     },
     {
-      "audio": "C:\\projects\\yapit\\data\\arka\\audio\\arka.audio_sample_4.wav",
+      "audio": "testuser.audio_sample_4.wav",
       "text": "Our train leaves at seven forty-five, so we'll reach the platform by seven fifteen. The room costs two thousand three hundred rupees, with breakfast included and parking charged separately."
     },
     {
-      "audio": "C:\\projects\\yapit\\data\\arka\\audio\\arka.audio_sample_5.wav",
+      "audio": "testuser.audio_sample_5.wav",
       "text": "Would I get up before sunrise for this view again? Absolutely! The valley was covered in soft clouds, and the first golden light made the whole landscape feel completely different."
     },
     {
-      "audio": "C:\\projects\\yapit\\data\\arka\\audio\\arka.audio_sample_6.wav",
+      "audio": "testuser.audio_sample_6.wav",
       "text": "We started in Bengaluru, flew to Kochi, and drove towards Munnar. Later, we travelled through Leh and Ladakh. The mountain roads were beautiful, but we'd leave early and keep the first evening free."
     },
     {
-      "audio": "C:\\projects\\yapit\\data\\arka\\audio\\arka.audio_sample_7.wav",
+      "audio": "testuser.audio_sample_7.wav",
       "text": "From Venice's quiet canals to Cappadocia's rocky valleys, every stop had a different rhythm. We planned a little, walked a lot, and often found our favourite spots away from the crowds."
     },
     {
-      "audio": "C:\\projects\\yapit\\data\\arka\\audio\\arka.audio_sample_8.wav",
+      "audio": "testuser.audio_sample_8.wav",
       "text": "The trail is about six and a half kilometres long, with a steep climb near the end. Wear shoes with a good grip, carry water, and check the weather before setting out."
     },
     {
-      "audio": "C:\\projects\\yapit\\data\\arka\\audio\\arka.audio_sample_9.wav",
+      "audio": "testuser.audio_sample_9.wav",
       "text": "If rain arrives, don't force the original plan. Choose a nearby museum, enjoy a slow lunch, and move the longer walk to tomorrow. A flexible itinerary makes the whole trip easier."
     },
     {
-      "audio": "C:\\projects\\yapit\\data\\arka\\audio\\arka.audio_sample_10.wav",
+      "audio": "testuser.audio_sample_10.wav",
       "text": "Listen to the breeze moving through the trees, the gentle splash of water, and footsteps on the old stone path. For a moment, there's nothing to do but enjoy being here."
     },
     {
-      "audio": "C:\\projects\\yapit\\data\\arka\\audio\\arka.audio_sample_11.wav",
+      "audio": "testuser.audio_sample_11.wav",
       "text": "Three friends shared fresh bread, warm soup, and a surprisingly strong cup of coffee. The crust was crisp, the room felt cosy, and we stayed much longer than we'd expected."
     },
     {
-      "audio": "C:\\projects\\yapit\\data\\arka\\audio\\arka.audio_sample_12.wav",
+      "audio": "testuser.audio_sample_12.wav",
       "text": "The guided tour was convenient, but exploring on foot gave us more freedom. If your time is limited, book a guide; if you have a spare afternoon, wander and see what you find."
     },
     {
-      "audio": "C:\\projects\\yapit\\data\\arka\\audio\\arka.audio_sample_13.wav",
+      "audio": "testuser.audio_sample_13.wav",
       "text": "Look at those little faces peeking out from their burrows! They're curious, but let's keep a respectful distance. Watch quietly, avoid feeding them, and give them plenty of space to move."
     },
     {
-      "audio": "C:\\projects\\yapit\\data\\arka\\audio\\arka.audio_sample_14.wav",
+      "audio": "testuser.audio_sample_14.wav",
       "text": "This microphone sounds clear and fits easily in my backpack. The battery lasts well, though the cable is short. I'd recommend it for simple travel videos, not for every kind of recording."
     },
     {
-      "audio": "C:\\projects\\yapit\\data\\arka\\audio\\arka.audio_sample_15.wav",
+      "audio": "testuser.audio_sample_15.wav",
       "text": "Should we book the early boat or take the evening ferry? I'd choose the morning if the forecast is clear. Before paying, check the departure point, cancellation terms, and luggage allowance."
     },
     {
-      "audio": "C:\\projects\\yapit\\data\\arka\\audio\\arka.audio_sample_16.wav",
+      "audio": "testuser.audio_sample_16.wav",
       "text": "If you're choosing between doing more and enjoying it more, I'd slow down. Leave space for an unexpected conversation, a good meal, or a quiet evening you'll remember long after the trip."
     }
-  ]
+  ],
+  "words_per_minute": 131.46828382984376,
+  "checkpoint": "C:\\projects\\yapit\\data\\testuser\\checkpoints\\testuser.training\\checkpoint-epoch-2",
+  "speaker": "testuser",
+  "styles": {},
+  "writing_style": "energetic and informal",
+  "frequent_words": [
+    "insane",
+    "mind-blowing",
+    "I cannot believe it",
+    "oh yeah",
+    "this is extraordinary",
+    "so cool",
+    "hell yeah",
+    "absolutely sucks",
+    "totally avoid"
+  ],
+  "preferred_greeting": "yo guys"
 }

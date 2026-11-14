@@ -13,7 +13,7 @@ import pytest
     [
         ("setup-mode.cmd", ["--help"], "setup-mode.py", ["--help"]),
         ("yapit-mode.cmd", ["cpu", "--help"], "run-mode.py", ["cpu", "--help"]),
-        ("Start Enrollment.cmd", [], "run-mode.py", ["cpu", "enroll-app"]),
+        ("Start Enrollment.cmd", [], "run-mode.py", ["default", "enroll-app"]),
         ("Start Enrollment.cmd", ["gpu"], "run-mode.py", ["gpu", "enroll-app"]),
     ],
 )

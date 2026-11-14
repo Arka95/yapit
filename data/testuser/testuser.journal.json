@@ -1,85 +1,85 @@
 {
-  "profile": "arka",
+  "profile": "testuser",
   "sample_count": 16,
   "minimum_samples": 5,
   "samples": [
     {
-      "audio": "audio\\arka.audio_sample_1.wav",
+      "audio": "audio\\testuser.audio_sample_1.wav",
       "text": "Here's what I wish I'd known before planning this trip. You don't need to see everything; choose a few places you really care about, and leave room to explore.",
       "sha256": "1242f702261c56b2c45f50d722071bc7b35c2d19b40872187b214ba7789bf3fd"
     },
     {
-      "audio": "audio\\arka.audio_sample_2.wav",
+      "audio": "audio\\testuser.audio_sample_2.wav",
       "text": "After leaving the station, cross the narrow bridge and turn right by the bakery. The guesthouse is just beyond the square, beside a blue door and a small garden.",
       "sha256": "4db5a0fca336525424c92fdd50921bb8c7701e69ebfcee79037940a649403946"
     },
     {
-      "audio": "audio\\arka.audio_sample_3.wav",
+      "audio": "audio\\testuser.audio_sample_3.wav",
       "text": "I'd keep the first day light: check in, take a short walk, and find dinner nearby. Save the longer hike for day two, then spend the final morning exploring the town.",
       "sha256": "bd59341648a947e075d198047cf60e02828e124c8399c84f31477fbd0a0a9645"
     },
     {
-      "audio": "audio\\arka.audio_sample_4.wav",
+      "audio": "audio\\testuser.audio_sample_4.wav",
       "text": "Our train leaves at seven forty-five, so we'll reach the platform by seven fifteen. The room costs two thousand three hundred rupees, with breakfast included and parking charged separately.",
       "sha256": "760ae8f593c6098795e5652a0d75bfbf6dd4076215ad2583a77edf294dcd5c70"
     },
     {
-      "audio": "audio\\arka.audio_sample_5.wav",
+      "audio": "audio\\testuser.audio_sample_5.wav",
       "text": "Would I get up before sunrise for this view again? Absolutely! The valley was covered in soft clouds, and the first golden light made the whole landscape feel completely different.",
       "sha256": "cc1cf79242298c8d74d3efb20da140d004da17ffc43ab816504c7e303156fd13"
     },
     {
-      "audio": "audio\\arka.audio_sample_6.wav",
+      "audio": "audio\\testuser.audio_sample_6.wav",
       "text": "We started in Bengaluru, flew to Kochi, and drove towards Munnar. Later, we travelled through Leh and Ladakh. The mountain roads were beautiful, but we'd leave early and keep the first evening free.",
       "sha256": "72b113072441d40f6c80e99b16dee9b08b49d1fd01b640ea3c7a986a9d092a40"
     },
     {
-      "audio": "audio\\arka.audio_sample_7.wav",
+      "audio": "audio\\testuser.audio_sample_7.wav",
       "text": "From Venice's quiet canals to Cappadocia's rocky valleys, every stop had a different rhythm. We planned a little, walked a lot, and often found our favourite spots away from the crowds.",
       "sha256": "f1c5e47e2220660f42e3d1fb7105c6fd420860ba44ac4f7c395457f2ccccfdb1"
     },
     {
-      "audio": "audio\\arka.audio_sample_8.wav",
+      "audio": "audio\\testuser.audio_sample_8.wav",
       "text": "The trail is about six and a half kilometres long, with a steep climb near the end. Wear shoes with a good grip, carry water, and check the weather before setting out.",
       "sha256": "562bcae8f77d1b3518a45567f40eb58ca9eea18e931f64c3d60446e11933a24b"
     },
     {
-      "audio": "audio\\arka.audio_sample_9.wav",
+      "audio": "audio\\testuser.audio_sample_9.wav",
       "text": "If rain arrives, don't force the original plan. Choose a nearby museum, enjoy a slow lunch, and move the longer walk to tomorrow. A flexible itinerary makes the whole trip easier.",
       "sha256": "117da25bb076d6865f7487f01c115db0668cd717ab5b6dbc494ebec510c39b9e"
     },
     {
-      "audio": "audio\\arka.audio_sample_10.wav",
+      "audio": "audio\\testuser.audio_sample_10.wav",
       "text": "Listen to the breeze moving through the trees, the gentle splash of water, and footsteps on the old stone path. For a moment, there's nothing to do but enjoy being here.",
       "sha256": "b0e984cc1e6555283eca34d4bde6a061b5c41e7087c9a6aacc939a5305775f12"
     },
     {
-      "audio": "audio\\arka.audio_sample_11.wav",
+      "audio": "audio\\testuser.audio_sample_11.wav",
       "text": "Three friends shared fresh bread, warm soup, and a surprisingly strong cup of coffee. The crust was crisp, the room felt cosy, and we stayed much longer than we'd expected.",
       "sha256": "c46585bb992bc55e96e9b215ae2ca9024f19c22fa69e7442c305b4c64a3953de"
     },
     {
-      "audio": "audio\\arka.audio_sample_12.wav",
+      "audio": "audio\\testuser.audio_sample_12.wav",
       "text": "The guided tour was convenient, but exploring on foot gave us more freedom. If your time is limited, book a guide; if you have a spare afternoon, wander and see what you find.",
       "sha256": "cd51419b13df2a67e0636dee846cd1f63216fa4708d38751052832141fe5fa0c"
     },
     {
-      "audio": "audio\\arka.audio_sample_13.wav",
+      "audio": "audio\\testuser.audio_sample_13.wav",
       "text": "Look at those little faces peeking out from their burrows! They're curious, but let's keep a respectful distance. Watch quietly, avoid feeding them, and give them plenty of space to move.",
       "sha256": "4ef223ef17c8674a1dfc83a7bc4325d0c1e6200b3a5c0fd04fb475dd807ba790"
     },
     {
-      "audio": "audio\\arka.audio_sample_14.wav",
+      "audio": "audio\\testuser.audio_sample_14.wav",
       "text": "This microphone sounds clear and fits easily in my backpack. The battery lasts well, though the cable is short. I'd recommend it for simple travel videos, not for every kind of recording.",
       "sha256": "52c5e0acf20b5c52b5aa94d6ae27b76bc7723497f93f18eb8e92a33e1379cd99"
     },
     {
-      "audio": "audio\\arka.audio_sample_15.wav",
+      "audio": "audio\\testuser.audio_sample_15.wav",
       "text": "Should we book the early boat or take the evening ferry? I'd choose the morning if the forecast is clear. Before paying, check the departure point, cancellation terms, and luggage allowance.",
       "sha256": "653e88bd57abdd3fdb28cba78663e56b2cb489d46724bf0fc5d046b8e44a8504"
     },
     {
-      "audio": "audio\\arka.audio_sample_16.wav",
+      "audio": "audio\\testuser.audio_sample_16.wav",
       "text": "If you're choosing between doing more and enjoying it more, I'd slow down. Leave space for an unexpected conversation, a good meal, or a quiet evening you'll remember long after the trip.",
       "sha256": "5e05d1e603470f18808105d48975f057bd36d8966310a3987065901e47f9b56d"
     }

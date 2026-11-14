@@ -115,7 +115,7 @@ def test_gpu_optimization_is_default_and_can_be_disabled(tmp_path, monkeypatch, 
     optimized = SimpleNamespace(active=True, generate=Mock())
     factory = Mock(return_value=optimized)
     monkeypatch.setattr("yapit.yapper.inference.CudaCodePredictor", factory)
-    voice = SimpleNamespace(checkpoint="local-checkpoint", name="arka", speaker="arka")
+    voice = SimpleNamespace(checkpoint="local-checkpoint", name="testuser", speaker="testuser")
     backend = QwenSpeech(voice, tmp_path)
 
     assert np.isfinite(backend.synthesize("A short sentence.")).all()

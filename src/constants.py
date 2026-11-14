@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-DEFAULT_PROFILE = "arka"
+DEFAULT_PROFILE = "testuser"
 DATA_FILENAME_TEMPLATE = "{profile}.{name}{suffix}"
 AUDIO_SAMPLE_NAME_TEMPLATE = "audio_sample_{number}"
 GENERATED_VIDEO_DIRECTORY = "generated_video"

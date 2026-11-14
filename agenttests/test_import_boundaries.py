@@ -63,8 +63,8 @@ socket.create_connection = lambda *args, **kwargs: (_ for _ in ()).throw(
 )
 from yapit.enrollment import EnrollmentSession
 from yapit.storage import DataStore
-session = EnrollmentSession(DataStore(sys.argv[1]), 'ARKA')
-assert session.alias == 'arka'
+session = EnrollmentSession(DataStore(sys.argv[1]), 'TESTUSER')
+assert session.alias == 'testuser'
 assert not session.ready
 import numpy as np
 from yapit.common_utils.mediautils import SAMPLE_RATE, write_wav
@@ -81,10 +81,10 @@ assert result.exit_code == 0, result.output
 from yapit.cli import app as main_app
 from pathlib import Path
 result = CliRunner().invoke(main_app, [
-    'voice-enroll', 'arka', '--manifest', str(session.folder / 'arka.samples.json')
+    'voice-enroll', 'testuser', '--manifest', str(session.folder / 'testuser.samples.json')
 ])
 assert result.exit_code == 0, result.output
-assert not (Path(sys.argv[2]) / 'enrollment' / 'arka').exists()
+assert not (Path(sys.argv[2]) / 'enrollment' / 'testuser').exists()
 assert not list(session.store.root.rglob('*.log'))
 assert not list(session.store.root.rglob('*.raw.*'))
 """
