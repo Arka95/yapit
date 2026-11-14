@@ -7,7 +7,9 @@ Source is `src\mcp`, imported as `yapit.mcp`. See [usage](README.md) and the
 
 `server.py` owns FastMCP registration, stdio startup, protocol input validation,
 path confinement and per-server busy handling. It delegates enrollment to
-Enrollment, audio to Yapper, reels to the shared Pipeline and rendering to Editor.
+Enrollment, audio to Yapper, extraction to Rescript, reels to the shared Pipeline
+and rendering to Editor. `yapit.api` exposes the five canonical customer workflows;
+CLI names use hyphens where Python/MCP use underscores.
 Shared contracts/configuration/storage remain outside MCP; do not duplicate them.
 
 `python -m yapit.mcp` and `yapit-mcp` start the same server. The console entry point
@@ -32,12 +34,22 @@ than depending on an older environment's generated console wrapper.
 .\.venv\Scripts\python.exe -m pytest src\mcp\tests -q
 ```
 
-Tests launch both the module and installed console entry point, initialize a real
-stdio client, verify all seven tools and the reusable prompt, exercise status and
-model-free enrollment, render synthetic audio/timing, and reject confined-path
-violations and missing profiles. An isolated subprocess checks lazy package
-imports; a resource check verifies the packaged example.
+Rapid units mock generation, ASR and rendering, and verify exactly the five
+requested tools, no prompts, source dispatch, defaults and path confinement.
+Shared Pipeline tests verify audio input uses source timestamps without voice
+loading or resynthesis. Extraction includes actual Script JSON in its response.
+
+Opt-in integration tests launch both entry points, initialize a stdio client,
+verify all five tools, exercise enrollment and reject confined-path violations
+and missing profiles. They are not part of routine rapid validation.
 
 Workspace/data/models are isolated under temporary roots. No microphone,
 model download, speech inference, training or GPU workload is run.
 Root interface tests now contain only CLI/shared-application coverage.
+
+`generate_reel` rejects zero/multiple sources. Script/prompt input reuses the
+existing narrated pipeline. Audio input calls offline Rescript with a 180-second
+limit before recognition, builds contiguous cues from ASR segment starts through
+the full decoded duration, and delegates to Editor with the original input path.
+No TTS, voice selection, text rewriting or tempo fitting runs on this branch.
+Leading/trailing silence remains; the closing hold is a video-only addition.

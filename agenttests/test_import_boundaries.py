@@ -81,7 +81,7 @@ assert result.exit_code == 0, result.output
 from yapit.cli import app as main_app
 from pathlib import Path
 result = CliRunner().invoke(main_app, [
-    'voice-enroll', 'testuser', '--manifest', str(session.folder / 'testuser.samples.json')
+    'enroll-voice', 'testuser', '--manifest', str(session.folder / 'testuser.samples.json')
 ])
 assert result.exit_code == 0, result.output
 assert not (Path(sys.argv[2]) / 'enrollment' / 'testuser').exists()

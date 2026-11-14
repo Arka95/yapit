@@ -27,7 +27,7 @@ Profile names are lowercase/case-insensitive.
 ## Import existing recordings
 
 ```powershell
-.\yapit.cmd voice-enroll myvoice --manifest .\my-samples.json
+.\yapit.cmd enroll-voice myvoice --manifest .\my-samples.json
 .\yapit.cmd profiles
 ```
 

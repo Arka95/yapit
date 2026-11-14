@@ -8,13 +8,15 @@ MP4 and SRT captions. Editor does not synthesize speech or generate footage.
 ## Render and mix
 
 ```powershell
-.\yapit.cmd videogen --timeline workspace\outputs\testuser.trip.timeline.json --audio data\generated_audio\testuser.trip.mp3
-.\yapit.cmd videogen --timeline workspace\outputs\testuser.trip.timeline.json --audio data\generated_audio\testuser.trip.mp3 --music data\background_music\TRACK.mp3 --music-volume 18
+.\yapit.cmd generate-reel --audio-path data\generated_audio\testuser.trip.mp3
+.\yapit.cmd generate-reel --audio-path data\generated_audio\testuser.trip.mp3 --music data\background_music\TRACK.mp3 --music-volume 18
 ```
 
-Use returned paths for your own job. `videogen` reuses audio; `reel` first
-generates narration and exposes the same mix controls. Music is absent unless
-selected explicitly; rendering never searches/downloads tracks.
+Use returned paths for your own job. Audio input reuses the recording and runs
+local speech recognition for timing/captions; script/prompt input first generates
+narration. Both expose the same mix controls. Music is absent unless selected
+explicitly; rendering never searches/downloads tracks. Python
+`yapit.editor.generate_video` still accepts an existing Timeline directly.
 
 | Option | Behavior |
 |---|---|
@@ -22,11 +24,11 @@ selected explicitly; rendering never searches/downloads tracks.
 | `--music-fade-in`, `--music-fade-out` | Music-only fades, never narration |
 | `--no-loop-music` | Silence after a short track ends |
 | `--no-duck-music` | Disable speech-driven music reduction |
-| `--music-plan` | Edited beat-level music plan |
 | `--end-buffer` | Closing hold: default 0.75 seconds, minimum 0.5 |
 
-Reels accept natural duration within +/-33%, including the frame-rounded
-closing hold. Narration Timeline/SRT remain speech-only.
+Script/prompt reels accept natural duration within +/-33%, including the
+frame-rounded closing hold. Audio-input reels preserve the source duration
+and add the closing hold. Narration Timeline/SRT remain speech-only.
 Videos go to `data\generated_video`, captions to `data\transcripts`, and
 temporary slates/playlists to `workspace\outputs`. Sources/existing outputs
 are not overwritten. Encoding is CPU Pillow/FFmpeg H.264/AAC.
@@ -48,5 +50,5 @@ Colours describe suggested clip duration, not footage meaning:
 Only consecutive cues in one band alternate shades; a band change resets.
 Clip/timing labels are centered; excerpts wrap below them, with full text in SRT.
 Replace placeholders with your clips; cut suggestions/captions are approximate.
-MCP `render_timeline` accepts existing audio/timing inside configured roots,
-currently restricted to 1080x1920 at 30 fps.
+MCP `generate_reel(audio_path=...)` accepts existing audio inside configured
+roots and creates a 1080x1920 guide at 30 fps.

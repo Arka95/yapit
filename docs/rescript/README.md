@@ -12,14 +12,18 @@ The standard setup includes recognition dependencies:
 
 ```powershell
 .\yapit.cmd extract_audio .\trip.mp4
-.\yapit.cmd transcript .\speech.wav
+.\yapit.cmd extract-script .\speech.wav
 # Permit model downloads when the recognition cache is empty:
-.\yapit.cmd transcript .\speech.wav --no-offline
+.\yapit.cmd extract-script .\speech.wav --no-offline
 ```
 
 Transcription defaults to **offline** cached/local models. `--model` accepts a
 model name or converted local directory. Your saved runtime selects CPU/int8 or
-CUDA/float16; explicit `--device`/`--compute-type` override it.
+CUDA/float16; Python `transcribe` also accepts explicit device/precision overrides.
+
+`extract-script` / MCP `extract_script` use the same recognition workflow and
+also return the actual Script JSON in `scripts[*].content`. Python exposes
+`yapit.rescript.extract_script` and `yapit.api.extract_script`.
 
 Local audio/video files are accepted, not URLs. Inputs are limited to 250 MB;
 transcription additionally limits decoded audio to one hour. Videos need an
@@ -43,7 +47,7 @@ The result is `needs_review`, not approved narration. Correct words, names and
 numbers against the source before generating:
 
 ```powershell
-.\yapit.cmd narrate myvoice --script .\data\transcripts\testuser.speech.script.json --seconds 45
+.\yapit.cmd generate-audio --voice myvoice --script .\data\transcripts\testuser.speech.script.json --seconds 45
 ```
 
 Use the actual returned script path and suggested duration; 45 is only an example.
@@ -56,6 +60,6 @@ and parts end without an extra pause. Recognition has no speaker labels or video
 image understanding and can hallucinate/miss words. Changing recognition
 language does not add multilingual synthesis.
 
-`--output-dir` must stay inside the audio store; transcript `--output` must be
-the transcript root, not a child folder. Root configuration is described in the
+Audio extraction's `--output-dir` must stay inside the audio store. Scripts are
+always written to the transcript root, not a child folder. Configuration is in the
 [shared storage guide](../dev.readme.md#storage-and-configuration).

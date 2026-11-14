@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import os
 import traceback
 from pathlib import Path
 
@@ -7,16 +9,76 @@ from yapit.common_utils.fileutils import save_json
 from yapit.common_utils.mediautils import media_frames
 from yapit.common_utils.metrics import timed
 from yapit.constants import DEFAULT_PROFILE, VIDEO_DURATION_BUFFER
-from yapit.editor import AudioMix, render_guide
+from yapit.editor import AudioMix, generate_video, render_guide
 from yapit.editor.mixing import video_seconds
 from yapit.enrollment.styles import select_voice
 from yapit.models import Brief, DeliveryStyle, Script
 from yapit.musicgen.models import MusicPlan
 from yapit.musicgen.planner import plan_music
+from yapit.rescript.transcription import Segment, timeline_from_segments, transcribe
 from yapit.storage import Workspace
 from yapit.yapper import SpeechBackend
 from yapit.yapper.generation import render_audio
 from yapit.yapper.script_planner import _write_script, build_prompt
+
+
+@timed
+def generate_reel(
+    script: Script | None = None,
+    *,
+    audio_path: Path | None = None,
+    prompt: str | None = None,
+    voice: str = DEFAULT_PROFILE,
+    seconds: float = 30,
+    workspace: Workspace | None = None,
+    style: DeliveryStyle = DeliveryStyle.default,
+    music: Path | None = None,
+    mix: AudioMix | None = None,
+) -> dict:
+    """Generate an edit guide from exactly one script, existing audio, or text prompt."""
+    if sum(value is not None for value in (script, audio_path, prompt)) != 1:
+        raise ValueError("Choose exactly one of script, audio_path or prompt.")
+    if prompt is not None and not prompt.strip():
+        raise ValueError("prompt must not be blank.")
+    root = workspace or Workspace(os.environ.get("YAPIT_WORKSPACE", "workspace"))
+    if audio_path is None:
+        return Pipeline(root).reel(
+            Brief(topic=prompt or "", seconds=seconds),
+            voice_name=voice,
+            script=script,
+            auto_script=prompt is not None,
+            style=style,
+            music=music,
+            mix=mix,
+        )
+    transcription = transcribe(Path(audio_path), data=root.data, max_seconds=180, offline=True)
+    metadata = json.loads(Path(transcription["transcript"]).read_text(encoding="utf-8"))
+    timeline = timeline_from_segments(
+        [Segment.model_validate(segment) for segment in metadata["segments"]],
+        transcription["source_seconds"],
+    )
+    settings = mix or AudioMix()
+    if music is not None and not settings.beat_music_levels:
+        settings = settings.model_copy(
+            update={"beat_music_levels": plan_music(timeline).beat_levels}
+        )
+    result = generate_video(
+        timeline,
+        Path(audio_path),
+        workspace=root,
+        music=music,
+        mix=settings,
+        actual_seconds=timeline.seconds,
+    )
+    result.update(
+        {
+            "transcript": transcription["transcript"],
+            "scripts": transcription["scripts"],
+            "review_required": True,
+        }
+    )
+    save_json(Path(result["status_file"]), result)
+    return result
 
 
 class Pipeline:

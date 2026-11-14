@@ -11,7 +11,9 @@ from yapit.yapper.cli import app as yapper_app
 
 
 @pytest.mark.parametrize("kind", ["text", "txt", "json"])
-def test_yapper_cli_accepts_text_and_script_files(enrolled, monkeypatch, kind):
+def test_yapper_cli_accepts_text_and_script_files(tmp_path, monkeypatch, kind):
+    workspace = Workspace(tmp_path / "workspace")
+    monkeypatch.setenv("YAPIT_WORKSPACE", str(workspace.root))
     calls = []
     monkeypatch.setattr(
         "yapit.yapper.cli.generate_audio",
@@ -21,7 +23,7 @@ def test_yapper_cli_accepts_text_and_script_files(enrolled, monkeypatch, kind):
     if kind == "text":
         arguments = ["--text", content]
     else:
-        path = enrolled.data.transcripts / f"source.{kind}"
+        path = workspace.data.transcripts / f"source.{kind}"
         if kind == "json":
             save_json(path, Script(title="Source", beats=[Beat(text=content)]))
         else:
@@ -29,7 +31,7 @@ def test_yapper_cli_accepts_text_and_script_files(enrolled, monkeypatch, kind):
         arguments = ["--script", str(path)]
     result = CliRunner().invoke(
         app,
-        ["audiogen", *arguments, "--voice", "test-voice", "--seconds", "7"],
+        ["generate-audio", *arguments, "--voice", "test-voice", "--seconds", "7"],
     )
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout)["status"] == "complete"
@@ -47,7 +49,7 @@ def test_yapper_cli_requires_exactly_one_input(tmp_path, arguments, entry):
         path.write_text("Words.")
         arguments = [*arguments, str(path)]
     result = (
-        CliRunner().invoke(app, ["audiogen", *arguments])
+        CliRunner().invoke(app, ["generate-audio", *arguments])
         if entry == "flat"
         else CliRunner().invoke(yapper_app, ["generate", *arguments])
     )
@@ -55,18 +57,27 @@ def test_yapper_cli_requires_exactly_one_input(tmp_path, arguments, entry):
     assert "Choose exactly one" in result.output
 
 
-def test_narration_forwards_selected_delivery_style(enrolled, monkeypatch):
-    monkeypatch.setattr("yapit.cli.workspace", lambda: enrolled)
+def test_narration_forwards_selected_delivery_style(tmp_path, monkeypatch):
+    workspace = Workspace(tmp_path / "workspace")
+    monkeypatch.setenv("YAPIT_WORKSPACE", str(workspace.root))
     calls = []
     monkeypatch.setattr(
-        "yapit.cli.generate_audio",
+        "yapit.yapper.cli.generate_audio",
         lambda *args, **kwargs: calls.append(kwargs) or {"status": "complete"},
     )
-    path = enrolled.data.transcripts / "script.json"
+    path = workspace.data.transcripts / "script.json"
     save_json(path, Script(title="Test", beats=[Beat(text="These are approved words.")]))
     result = CliRunner().invoke(
         app,
-        ["narrate", "test-voice", "--script", str(path), "--style", "lively-vlog"],
+        [
+            "generate-audio",
+            "--voice",
+            "test-voice",
+            "--script",
+            str(path),
+            "--style",
+            "lively-vlog",
+        ],
     )
     assert result.exit_code == 0, result.output
     assert calls[0]["style"].value == "lively-vlog"
@@ -74,15 +85,15 @@ def test_narration_forwards_selected_delivery_style(enrolled, monkeypatch):
 
 def test_narration_defaults_to_testuser_and_preserves_source_filename(tmp_path, monkeypatch):
     workspace = Workspace(tmp_path / "workspace")
-    monkeypatch.setattr("yapit.cli.workspace", lambda: workspace)
+    monkeypatch.setenv("YAPIT_WORKSPACE", str(workspace.root))
     calls = []
     monkeypatch.setattr(
-        "yapit.cli.generate_audio",
+        "yapit.yapper.cli.generate_audio",
         lambda *args, **kwargs: calls.append((args, kwargs)) or {"status": "complete"},
     )
     path = workspace.data.transcripts / "trip.json"
     save_json(path, Script(title="A different title", beats=[Beat(text="A short test.")]))
-    result = CliRunner().invoke(app, ["narrate", "--script", str(path)])
+    result = CliRunner().invoke(app, ["generate-audio", "--script", str(path)])
     assert result.exit_code == 0, result.output
     assert calls[0][1]["voice_name"] == "testuser"
     assert calls[0][1]["source_name"] == "trip"

@@ -252,12 +252,12 @@ def test_qwen_explicit_base_model_overrides_profile_checkpoint(voice, monkeypatc
     model.create_voice_clone_prompt.assert_called_once()
 
 
-def test_audiogen_cli_exposes_backend_and_model_without_model_execution(monkeypatch):
+def test_audio_cli_exposes_backend_and_model_without_model_execution(monkeypatch):
     generate = Mock(return_value={"status": "complete"})
     monkeypatch.setattr("yapit.yapper.cli.load_dotenv", lambda: None)
     monkeypatch.setattr("yapit.yapper.cli.generate_audio", generate)
     result = CliRunner().invoke(
-        app, ["audiogen", "--text", "Hello.", "--backend", "custom", "--model", "tiny"]
+        app, ["generate-audio", "--text", "Hello.", "--backend", "custom", "--model", "tiny"]
     )
     assert result.exit_code == 0, result.output
     assert generate.call_args.kwargs["backend_name"] == "custom"

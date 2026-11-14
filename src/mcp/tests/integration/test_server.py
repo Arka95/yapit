@@ -13,7 +13,6 @@ from mcp.client.stdio import stdio_client
 
 from yapit.common_utils.fileutils import save_json
 from yapit.common_utils.mediautils import SAMPLE_RATE, write_wav
-from yapit.models import Cue, Timeline
 from yapit.storage import DataStore
 
 
@@ -23,7 +22,7 @@ def tone(seconds=5, frequency=220):
 
 
 @pytest.mark.parametrize("entry", ["module", "console"])
-def test_stdio_mcp_handshake_tools_prompt_and_path_confinement(tmp_path, monkeypatch, entry):
+def test_stdio_mcp_handshake_tools_and_path_confinement(tmp_path, monkeypatch, entry):
     monkeypatch.setenv("YAPIT_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("YAPIT_MODELS_DIR", str(tmp_path / "models"))
     workspace = tmp_path / "workspace"
@@ -43,26 +42,12 @@ def test_stdio_mcp_handshake_tools_prompt_and_path_confinement(tmp_path, monkeyp
                     await session.initialize()
                     tools = {tool.name for tool in (await session.list_tools()).tools}
                     assert {
-                        "prepare_script_prompt",
                         "generate_script",
+                        "generate_audio",
+                        "extract_script",
                         "generate_reel",
-                        "generate_narration",
                         "enroll_voice",
-                        "render_timeline",
-                        "get_job_status",
                     } == tools
-                    prompt = await session.get_prompt("reel_script", {"topic": "A calm weekend"})
-                    assert "game changer" in prompt.messages[0].content.text
-                    result = await session.call_tool(
-                        "prepare_script_prompt",
-                        {"topic": "A practical weekend", "seconds": 20},
-                    )
-                    assert not result.isError
-                    response = json.loads(result.content[0].text)
-                    assert response["status"] == "awaiting_script"
-                    status = await session.call_tool("get_job_status", {"job_id": response["name"]})
-                    assert not status.isError
-                    assert json.loads(status.content[0].text)["status"] == "awaiting_script"
                     data = DataStore()
                     samples = []
                     for index in range(5):
@@ -76,34 +61,14 @@ def test_stdio_mcp_handshake_tools_prompt_and_path_confinement(tmp_path, monkeyp
                         {"name": "mcp-data", "manifest_path": str(manifest), "consent": True},
                     )
                     assert not enrolled.isError
-                    render_audio = data.generated_audio / "renderer-input.wav"
-                    write_wav(render_audio, tone(5))
-                    render_plan = data.transcripts / "renderer-timeline.json"
-                    save_json(
-                        render_plan,
-                        Timeline(
-                            seconds=5,
-                            cues=[
-                                Cue(start=0, end=5, text="Test narration.", visual="Test", beat=0)
-                            ],
-                        ),
-                    )
-                    rendered = await session.call_tool(
-                        "render_timeline",
-                        {"timeline_path": str(render_plan), "audio_path": str(render_audio)},
-                    )
-                    assert not rendered.isError
-                    video = json.loads(rendered.content[0].text)
-                    assert Path(video["video"]).parent == data.generated_video
-                    assert Path(video["video"]).is_file()
-                    assert not list((workspace / "outputs").glob("*.mp4"))
+                    assert json.loads(enrolled.content[0].text)["clips"] == 5
                     denied = await session.call_tool(
-                        "prepare_script_prompt",
-                        {"media_path": "..\\outside.jpg"},
+                        "extract_script",
+                        {"media_path": "..\\outside.wav"},
                     )
                     assert denied.isError
                     missing = await session.call_tool(
-                        "generate_narration",
+                        "generate_audio",
                         {
                             "voice": "not-enrolled",
                             "seconds": 5,

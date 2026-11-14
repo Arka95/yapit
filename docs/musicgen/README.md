@@ -33,7 +33,7 @@ Freesound uses its public HQ preview, not the protected original master.
 Prepared MP3 is stereo 48 kHz/192 kbps at a -23 LUFS target.
 
 ```powershell
-.\yapit.cmd reel myvoice --script data\transcripts\trip.json --music data\background_music\TRACK.mp3 --music-volume 18
+.\yapit.cmd generate-reel --voice myvoice --script data\transcripts\trip.json --music data\background_music\TRACK.mp3 --music-volume 18
 ```
 
 Rendering never triggers acquisition. Looping, fades, beat modulation and

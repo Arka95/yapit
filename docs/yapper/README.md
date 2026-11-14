@@ -22,15 +22,14 @@ script = generate_script("A relaxed weekend in Goa")
 
 CLI/MCP return the Script as JSON; Python returns a `Script` object.
 This is explicit cloud writing; see [configuration](dev.readme.md#script-planning).
-The `prompt` command only prepares writing instructions and does not call a model.
 
 ## Generate narration
 
 Enroll a profile first; choose exactly one of `--text` or `--script`:
 
 ```powershell
-.\yapit.cmd audiogen --voice myvoice --text "Take the slower route." --seconds 5
-.\yapit.cmd audiogen --voice myvoice --script .\data\transcripts\trip.json --seconds 30
+.\yapit.cmd generate-audio --voice myvoice --text "Take the slower route." --seconds 5
+.\yapit.cmd generate-audio --voice myvoice --script .\data\transcripts\trip.json --seconds 30
 ```
 
 Text/TXT input becomes sentence/paragraph beats, each with a default 180 ms
@@ -63,7 +62,7 @@ Qwen is the default when no configured/worker selection overrides it.
 | `pocket` | Optional `.[pocket]` extra/assets/access; CPU reference cloning or exported voice state, not Qwen weights |
 
 ```powershell
-.\yapit.cmd audiogen --voice myvoice --text "Enjoy the view." --seconds 5 --backend pocket --model english_2026-10
+.\yapit.cmd generate-audio --voice myvoice --text "Enjoy the view." --seconds 5 --backend pocket --model english_2026-10
 ```
 
 `YAPIT_TTS_BACKEND` / `YAPIT_TTS_MODEL` set defaults. An explicit Qwen model
@@ -79,7 +78,7 @@ separately recorded expressive reference on an existing profile:
 
 ```powershell
 .\yapit.cmd enroll-style myvoice --audio .\excited.wav --text "Look at those little faces!" --style lively-vlog
-.\yapit.cmd audiogen --voice myvoice --text "Look at those little faces!" --style lively-vlog --seconds 5
+.\yapit.cmd generate-audio --voice myvoice --text "Look at those little faces!" --style lively-vlog --seconds 5
 ```
 
 The default reference stays intact; no weights are trained. Qwen's recorded-style
@@ -103,6 +102,6 @@ unloading; `YAPIT_VOICE_WORKER=0` selects one-shot execution. A recorded but
 unavailable worker fails rather than silently loading another model.
 The worker's device remains fixed until restarted.
 
-`reel --auto-script` also uses the text writer before narration and rendering.
+`generate-reel --prompt` also uses the text writer before narration and rendering.
 Audio/intermediates land in `data\generated_audio`; normalized scripts in
 `data\transcripts`; timings/provenance/status in `workspace\outputs`.

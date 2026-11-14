@@ -64,13 +64,13 @@ def enroll_style(
     if not consent:
         raise ValueError("Confirm this is your own voice and the transcript is exact.")
     if style == DeliveryStyle.default:
-        raise ValueError("Use voice-enroll for the default voice; choose a named delivery style.")
+        raise ValueError("Use enroll-voice for the default voice; choose a named delivery style.")
     try:
         voice = load_voice(store, name)
     except FileNotFoundError as exc:
         raise ValueError(
             f"Profile {name!r} does not exist. "
-            "Create it with yapit enroll-app or yapit voice-enroll first."
+            "Create it with yapit enroll-app or yapit enroll-voice first."
         ) from exc
     if voice.checkpoint:
         raise ValueError("Reference-driven styles require Base voice cloning, not a checkpoint.")

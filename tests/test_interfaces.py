@@ -87,36 +87,34 @@ def test_training_cli_distinguishes_fresh_resume_and_inference_selection(enrolle
 
 
 @pytest.mark.parametrize(
-    "arguments,target",
+    "command",
     [
-        (["yapper", "generate", "--text", "Supplied words."], "yapit.yapper.cli.generate_audio"),
-        (["rescript", "extract_audio"], "yapit.rescript.cli.extract_audio_file"),
-        (["rescript", "transcript"], "yapit.rescript.cli.transcribe"),
+        "audiogen",
+        "narrate",
+        "transcript",
+        "reel",
+        "videogen",
+        "prompt",
+        "voice-enroll",
+        "yapper",
+        "rescript",
+        "voice-use-checkpoint",
     ],
 )
-def test_old_module_groups_remain_compatible(arguments, target, monkeypatch, tmp_path):
-    calls = []
-
-    def run(*args, **kwargs):
-        calls.append((args, kwargs))
-        return {"status": "complete"}
-
-    monkeypatch.setattr(target, run)
-    if arguments[0] == "rescript":
-        source = tmp_path / "source.wav"
-        source.touch()
-        arguments = [*arguments, str(source)]
-    result = CliRunner().invoke(app, arguments)
-    assert result.exit_code == 0, result.output
-    assert json.loads(result.stdout)["status"] == "complete"
-    assert len(calls) == 1
+def test_duplicate_and_helper_commands_are_removed(command):
+    result = CliRunner().invoke(app, [command])
+    assert result.exit_code == 2, result.output
+    assert "No such command" in result.output
 
 
 def test_cli_prompt_and_input_validation(tmp_path, monkeypatch):
     monkeypatch.setenv("YAPIT_WORKSPACE", str(tmp_path))
-    result = CliRunner().invoke(app, ["prompt", "--topic", "One weekend", "--seconds", "30"])
+    monkeypatch.setattr(
+        "yapit.cli.write_script", lambda *args, **kwargs: Script.from_text("Hello.")
+    )
+    result = CliRunner().invoke(app, ["generate-script", "One weekend", "--seconds", "30"])
     assert result.exit_code == 0, result.output
-    assert json.loads(result.stdout)["status"] == "awaiting_script"
+    assert json.loads(result.stdout)["beats"][0]["text"] == "Hello."
     with pytest.raises(ValidationError):
         Brief(seconds=float("nan"))
     with pytest.raises(ValidationError):
@@ -175,19 +173,17 @@ def test_cli_passes_settings_and_emits_json(monkeypatch, tmp_path, flags, offlin
     source.touch()
     calls = []
     monkeypatch.setattr(
-        "yapit.rescript.cli.transcribe",
+        "yapit.cli.api.extract_script",
         lambda media, **kwargs: calls.append((media, kwargs)) or {"status": "needs_review"},
     )
     result = CliRunner().invoke(
         app,
         [
-            "transcript",
+            "extract-script",
             str(source),
             "--model",
             "local-model",
             *flags,
-            "--output",
-            str(DataStore().transcripts / "export"),
         ],
     )
     assert result.exit_code == 0, result.output
@@ -203,20 +199,20 @@ def test_cli_reports_errors(monkeypatch, tmp_path):
     def fail(*args, **kwargs):
         raise ValueError("No speech was detected.")
 
-    monkeypatch.setattr("yapit.rescript.cli.transcribe", fail)
-    result = CliRunner().invoke(app, ["transcript", str(source)])
-    assert result.exit_code == 1
+    monkeypatch.setattr("yapit.cli.api.extract_script", fail)
+    result = CliRunner().invoke(app, ["extract-script", str(source)])
+    assert result.exit_code == 2
     assert "No speech" in result.output
 
 
-def test_transcript_command_and_extract_command_are_registered(monkeypatch, tmp_path):
+def test_script_and_audio_extraction_commands_are_distinct(monkeypatch, tmp_path):
     source = tmp_path / "source.wav"
     source.touch()
     monkeypatch.setattr(
-        "yapit.rescript.cli.transcribe", lambda *args, **kwargs: {"status": "needs_review"}
+        "yapit.cli.api.extract_script", lambda *args, **kwargs: {"status": "needs_review"}
     )
     runner = CliRunner()
-    result = runner.invoke(app, ["transcript", str(source)])
+    result = runner.invoke(app, ["extract-script", str(source)])
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout)["status"] == "needs_review"
     monkeypatch.setattr(
@@ -226,3 +222,60 @@ def test_transcript_command_and_extract_command_are_registered(monkeypatch, tmp_
     result = runner.invoke(app, ["extract_audio", str(source)])
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout)["action"] == "copied"
+
+
+@pytest.mark.parametrize(
+    "command,target,arguments",
+    [
+        ("generate-audio", "yapit.yapper.cli.generate_audio", ["--script"]),
+        ("extract-script", "yapit.cli.api.extract_script", []),
+        ("generate-reel", "yapit.cli.api.generate_reel", ["--audio-path"]),
+    ],
+)
+def test_canonical_commands_dispatch_to_shared_workflows(
+    monkeypatch, tmp_path, command, target, arguments
+):
+    source = tmp_path / "source.json"
+    source.write_text(Script.from_text("Hello.").model_dump_json(), encoding="utf-8")
+    calls = []
+
+    def operation(*args, **kwargs):
+        calls.append((args, kwargs))
+        return {"status": "complete"}
+
+    monkeypatch.setattr(target, operation)
+    result = CliRunner().invoke(app, [command, *arguments, str(source)])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["status"] == "complete"
+    assert len(calls) == 1
+    if command == "generate-reel":
+        assert calls[0][1]["audio_path"] == source
+
+
+def test_canonical_reel_cli_rejects_multiple_sources_before_generation(monkeypatch):
+    def unexpected(*args, **kwargs):
+        pytest.fail("Ambiguous input must not start generation.")
+
+    monkeypatch.setattr("yapit.cli.api.generate_reel", unexpected)
+    result = CliRunner().invoke(
+        app, ["generate-reel", "--prompt", "A trip", "--audio-path", "speech.wav"]
+    )
+    assert result.exit_code == 2, result.output
+    assert "exactly one" in result.output
+
+
+def test_canonical_enrollment_command_preserves_import_behavior(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    manifest = tmp_path / "samples.json"
+    manifest.write_text('{"samples":[]}', encoding="utf-8")
+    calls = []
+
+    def operation(data, name, path, consent):
+        calls.append((name, path, consent))
+        return SimpleNamespace(name=name, samples=[object()] * 5, words_per_minute=130)
+
+    monkeypatch.setattr("yapit.cli.enroll", operation)
+    result = CliRunner().invoke(app, ["enroll-voice", "myvoice", "--manifest", str(manifest)])
+    assert result.exit_code == 0, result.output
+    assert calls == [("myvoice", manifest, True)]

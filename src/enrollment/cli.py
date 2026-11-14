@@ -28,8 +28,8 @@ def enroll_app() -> None:
     main()
 
 
-@app.command("voice-enroll")
-def voice_enroll(
+@app.command("enroll-voice")
+def enroll_voice(
     name: str, manifest: Annotated[Path, typer.Option(exists=True, dir_okay=False)]
 ) -> None:
     """Create or merge a profile from at least five distinct recordings."""

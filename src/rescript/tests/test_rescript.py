@@ -10,6 +10,8 @@ from yapit.rescript.transcription import (
     Segment,
     WhisperTranscriber,
     compose_scripts,
+    extract_script,
+    timeline_from_segments,
     transcribe,
 )
 from yapit.storage import DataStore
@@ -162,3 +164,54 @@ def test_output_overrides_cannot_escape_data_buckets(tmp_path):
     with pytest.raises(ValueError, match="Output must stay inside"):
         transcribe(source, output=DataStore().generated_audio / "wrong-bucket")
     assert not (tmp_path / "outside").exists()
+
+
+def test_extraction_includes_each_script_json_without_rewriting(tmp_path, monkeypatch):
+    from yapit.common_utils.fileutils import save_json
+    from yapit.models import Script
+
+    script = Script.from_text("First thought. Last thought.")
+    path = tmp_path / "source.script.json"
+    save_json(path, script)
+    monkeypatch.setattr(
+        "yapit.rescript.transcription.transcribe",
+        lambda *args, **kwargs: {
+            "status": "needs_review",
+            "scripts": [{"script": str(path), "source_start": 2, "source_end": 10}],
+        },
+    )
+    result = extract_script(tmp_path / "source.wav")
+    assert result["status"] == "needs_review"
+    assert result["scripts"][0]["content"] == script.model_dump(mode="json")
+    assert result["scripts"][0]["source_start"] == 2
+
+
+@pytest.mark.parametrize(
+    "segments",
+    [
+        [],
+        [Segment(start=0, end=4, text="First."), Segment(start=3, end=5, text="Overlap.")],
+        [Segment(start=1, end=12, text="Past the end.")],
+    ],
+)
+def test_audio_reel_timeline_rejects_missing_or_invalid_timing(segments):
+    with pytest.raises(ValueError, match="No speech|timestamps"):
+        timeline_from_segments(segments, 10)
+
+
+def test_audio_reel_duration_limit_rejects_long_input_before_recognition(tmp_path, monkeypatch):
+    from unittest.mock import Mock
+
+    source = tmp_path / "source.wav"
+    source.touch()
+    monkeypatch.setattr(
+        "yapit.rescript.transcription.extract_audio_stream",
+        lambda *args, **kwargs: SimpleNamespace(stderr=b""),
+    )
+    monkeypatch.setattr(
+        "yapit.rescript.transcription.sf.info", lambda *args: SimpleNamespace(duration=181)
+    )
+    recognize = Mock()
+    with pytest.raises(ValueError, match="at most 180 seconds"):
+        transcribe(source, max_seconds=180, backend=SimpleNamespace(recognize=recognize))
+    recognize.assert_not_called()

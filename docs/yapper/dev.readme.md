@@ -75,7 +75,7 @@ The internal text writer retains voice-rate, duration-buffer and closing-hold
 planning for the full reel pipeline. Supplied scripts never call the writer;
 Editor owns video templates and rendering.
 
-Explicit script generation or `reel --auto-script` needs `.[cloud]`,
+Explicit script generation or `generate-reel --prompt` needs `.[cloud]`,
 `YAPIT_ALLOW_CLOUD=true` and
 `OPENAI_API_KEY`; optional `YAPIT_SCRIPT_MODEL` selects the writer.
 Only text is sent, not images, video frames or voice recordings.

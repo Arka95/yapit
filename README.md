@@ -119,7 +119,7 @@ identity, not your personal voice. A name change does not anonymize recordings.
 Create a profile such as `myvoice`, choose your microphone, record the displayed
 passages and review each take. Save **at least five distinct recordings**, then
 finish enrollment. This creates a reusable reference profile; it does not train
-model weights. Existing recordings can instead be imported with `voice-enroll`;
+model weights. Existing recordings can instead be imported with `enroll-voice`;
 see [enrollment](docs/enrollment/README.md).
 
 ```powershell
@@ -131,10 +131,10 @@ $voice = "myvoice" # Must match the profile you created.
 
 Copy the [script example](docs/yapper/dev.readme.md#narration-script) to
 `data\transcripts\trip.json`, or prepare a new script with your agent. This command
-returns a writing prompt without calling a cloud model:
+generates Script JSON with explicit cloud opt-in and credentials:
 
 ```powershell
-.\yapit.cmd prompt --topic "A calmer weekend trip" --seconds 15
+.\yapit.cmd generate-script "A calmer weekend trip" --seconds 15
 ```
 
 Save the reviewed Script JSON in `data\transcripts`.
@@ -144,10 +144,10 @@ Narration preserves the supplied words rather than rewriting them.
 
 ```powershell
 # Audio only:
-.\yapit.cmd audiogen --voice $voice --script .\data\transcripts\trip.json --seconds 15
+.\yapit.cmd generate-audio --voice $voice --script .\data\transcripts\trip.json --seconds 15
 
 # Audio plus vertical video editing guide:
-.\yapit.cmd reel $voice --script .\data\transcripts\trip.json --seconds 15
+.\yapit.cmd generate-reel --voice $voice --script .\data\transcripts\trip.json --seconds 15
 ```
 
 The default backend is Qwen. The first generation can download its model assets
@@ -169,7 +169,7 @@ expecting a finished reel to fit any length.
 Music is off by default. Supply an existing track explicitly:
 
 ```powershell
-.\yapit.cmd reel $voice --script .\data\transcripts\trip.json --seconds 15 --music .\data\background_music\TRACK.mp3
+.\yapit.cmd generate-reel --voice $voice --script .\data\transcripts\trip.json --seconds 15 --music .\data\background_music\TRACK.mp3
 ```
 
 For repeated requests, after provisioning model assets, run
@@ -180,7 +180,7 @@ it. The worker keeps one model loaded and caches unchanged speech; see
 
 ## Use YapIt from an AI agent
 
-YapIt has **one local stdio MCP server**, with seven tools and one reusable prompt.
+YapIt has **one local stdio MCP server**, with five tools.
 Use an agent/desktop client that can launch a **local stdio server on your
 machine**. A cloud-only client without local execution cannot use this server
 directly.
@@ -192,21 +192,18 @@ adapt it to your client's configuration format. The launcher runs
 `.\yapit.cmd mcp`, using your saved runtime; it waits for an MCP client rather than
 opening an interactive console.
 
-| MCP tool / prompt | What your agent can do |
+| MCP tool | What your agent can do |
 |---|---|
-| `prepare_script_prompt` | Prepare a script-writing prompt and optional local visual context, without a cloud script request |
 | `generate_script` | Generate YapIt Script JSON from `prompt` and optional `seconds` (default 30); requires cloud opt-in |
+| `generate_audio` | Generate voice audio from reviewed Script JSON; defaults to `testuser` and 30 seconds |
+| `extract_script` | Extract reviewable Script JSON and source timings from local audio/video |
 | `enroll_voice` | Import an existing recordings/transcript manifest; not operate the microphone UI |
-| `generate_narration` | Generate voice audio and measured timing from reviewed Script JSON |
-| `generate_reel` | Generate narration plus a vertical placeholder edit guide, or prepare a script prompt |
-| `render_timeline` | Render existing audio/timing without resynthesizing speech |
-| `get_job_status` | Read saved job status using the returned job name |
-| `reel_script` (prompt) | Obtain a reusable reel-script writing prompt |
+| `generate_reel` | Generate a vertical placeholder edit guide from exactly one `script`, `audio_path` or `prompt` |
 
 Tell your agent your own profile name explicitly. Files passed to MCP tools
-must be within the configured data/workspace roots. Calls are synchronous;
-`get_job_status` does not imply a background job queue. Transcription, music
-search, worker management and training currently have CLI commands, not MCP tools.
+must be within the configured data/workspace roots. Calls finish synchronously;
+there is no background job queue. Music search,
+worker management and training currently have CLI commands, not MCP tools.
 See [MCP setup](docs/mcp/README.md) for execution limits and configuration.
 
 ## Troubleshooting
@@ -244,6 +241,11 @@ Commands are flat. Below, `yapit COMMAND` means
 Narration uses selectable TTS backends (Qwen by default); transcription uses
 local Whisper.
 
+The canonical workflows are `generate-audio`, `generate-script`, `extract-script`,
+`generate-reel` and `enroll-voice`. MCP tools and public Python functions in
+`yapit.api` use the same names with underscores. Each workflow has one command;
+see [workflow inputs and examples](docs/mcp/README.md#tools-and-execution).
+
 ### All commands
 
 | Command | Functionality |
@@ -252,17 +254,14 @@ local Whisper.
 | `yapit doctor` | Dependencies and CUDA status |
 | `yapit profiles` | Saved voice profiles |
 | `yapit enroll-app` | Microphone enrollment UI |
-| `yapit voice-enroll` | Import verified recordings |
 | `yapit voice-style-prompt` | Expressive recording directions |
 | `yapit enroll-style` | Save a style reference |
 | `yapit extract_audio` | Extract, convert or copy audio |
-| `yapit transcript` | Offline transcription to Script JSON |
-| `yapit prompt` | Script-writing prompt |
 | `yapit generate-script` | Generate Script JSON from a text prompt |
-| `yapit audiogen` | Text/JSON narration and timing |
-| `yapit narrate` | File-only narration |
-| `yapit reel` | Narration and edit guide |
-| `yapit videogen` | Render existing audio/timing |
+| `yapit generate-audio` | Speak supplied text/Script JSON |
+| `yapit extract-script` | Media to reviewable inline Script JSON and saved transcripts |
+| `yapit generate-reel` | Exactly one `--script`, `--audio-path` or `--prompt` to an edit guide |
+| `yapit enroll-voice` | Import verified recordings |
 | `yapit music-plan` | Local music brief |
 | `yapit music-search` | CC0 music discovery |
 | `yapit music-download` | Source-verified CC0 download |
@@ -275,7 +274,7 @@ local Whisper.
 Reviewed text is not rewritten. Videos accept **+/-33%** of the target, including
 the default 0.75s closing hold; speech is not stretched/padded to fit.
 Music-only fades, ducking and separate 0-100 gains are available.
-`videogen` reuses existing narration/timing without synthesis.
+`generate-reel --audio-path` reuses existing narration without synthesis.
 
 ## Files, privacy and review
 

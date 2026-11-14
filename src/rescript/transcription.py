@@ -17,7 +17,7 @@ from yapit.common_utils.mediautils import extract_audio_stream, has_video, valid
 from yapit.common_utils.metrics import timed
 from yapit.common_utils.modelutils import load_model
 from yapit.constants import DEFAULT_ASR_MODEL, DEFAULT_PROFILE
-from yapit.models import Beat, Model, Script
+from yapit.models import Beat, Cue, Model, Script, Timeline
 from yapit.rescript.audio import extract_audio
 from yapit.storage import DataStore
 
@@ -193,21 +193,26 @@ def transcribe(
     offline: bool = True,
     backend: TranscriptionBackend | None = None,
     profile: str = DEFAULT_PROFILE,
+    data: DataStore | None = None,
+    max_seconds: float = MAX_INPUT_SECONDS,
 ) -> dict:
+    if not 0 < max_seconds <= MAX_INPUT_SECONDS:
+        raise ValueError(f"max_seconds must be positive and at most {MAX_INPUT_SECONDS}.")
     source = validate_media_source(media)
-    data = DataStore()
+    data = data or DataStore()
     destination = data.within(data.transcripts, output or data.transcripts)
     if destination != data.transcripts:
         raise ValueError("Transcript output must be data\\transcripts; subfolders are not created.")
     recognizer = backend or WhisperTranscriber(model, device, compute_type, language, offline)
     with tempfile.TemporaryDirectory(prefix="yapit-rescript-") as temporary:
         audio = Path(temporary) / "audio.wav"
-        decoded = extract_audio_stream(
-            source, audio, sample_rate=16000, max_seconds=MAX_INPUT_SECONDS
-        )
+        decoded = extract_audio_stream(source, audio, sample_rate=16000, max_seconds=max_seconds)
         info = sf.info(audio)
-        if not 0 < info.duration <= MAX_INPUT_SECONDS:
-            raise ValueError("Audio must be nonempty and at most one hour; no truncation allowed.")
+        if not 0 < info.duration <= max_seconds:
+            raise ValueError(
+                f"Audio must be nonempty and at most {max_seconds:g} seconds; "
+                "no truncation allowed."
+            )
         if has_video(decoded.stderr):
             archived = Path(
                 extract_audio(
@@ -249,6 +254,7 @@ def transcribe(
         "name": name,
         "transcript": str(destination / f"{name}.transcript.json"),
         "source": str(source),
+        "source_seconds": info.duration,
         "audio": str(archived),
         "model": model if backend is None else "injected",
         "language": language,
@@ -261,3 +267,52 @@ def transcribe(
         {**result, "segments": [segment.model_dump(mode="json") for segment in segments]},
     )
     return result
+
+
+def extract_script(
+    media_path: Path,
+    *,
+    model: str = DEFAULT_ASR_MODEL,
+    language: str = "en",
+    offline: bool = True,
+    data: DataStore | None = None,
+) -> dict:
+    """Extract reviewable Script JSON and source timings from local audio/video."""
+    result = transcribe(media_path, model=model, language=language, offline=offline, data=data)
+    return {
+        **result,
+        "scripts": [
+            {
+                **part,
+                "content": Script.model_validate_json(
+                    Path(part["script"]).read_text(encoding="utf-8")
+                ).model_dump(mode="json"),
+            }
+            for part in result["scripts"]
+        ],
+    }
+
+
+def timeline_from_segments(segments: list[Segment], seconds: float) -> Timeline:
+    """Retain ASR starts while including leading, inter-phrase and trailing silence."""
+    if not segments:
+        raise ValueError("No speech was detected; cannot build a reel timeline.")
+    previous = 0.0
+    for segment in segments:
+        if segment.start < previous or segment.start >= seconds or segment.end > seconds + 0.1:
+            raise ValueError("Transcript timestamps must be ordered and fit the source audio.")
+        previous = segment.end
+    return Timeline(
+        seconds=seconds,
+        timing_method="ASR segment timestamps; original audio preserved",
+        cues=[
+            Cue(
+                start=segment.start if index else 0,
+                end=segments[index + 1].start if index + 1 < len(segments) else seconds,
+                text=segment.text,
+                visual="Supporting B-roll",
+                beat=index,
+            )
+            for index, segment in enumerate(segments)
+        ],
+    )

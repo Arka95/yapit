@@ -9,44 +9,35 @@ from typing import Annotated
 import typer
 from dotenv import load_dotenv
 
+from yapit import api
 from yapit.common_utils.mediautils import ffmpeg
 from yapit.common_utils.metrics import configure_logging
 from yapit.common_utils.runtime_config import set_runtime_mode
-from yapit.constants import DEFAULT_PROFILE, DEFAULT_SPEECH_MODEL
-from yapit.editor import AudioMix, generate_video
+from yapit.constants import DEFAULT_ASR_MODEL, DEFAULT_PROFILE, DEFAULT_SPEECH_MODEL
+from yapit.editor import AudioMix
 from yapit.enrollment import enroll
 from yapit.enrollment.cli import data_store
 from yapit.enrollment.cli import profiles as profiles_command
-from yapit.enrollment.styles import STYLE_GUIDES, enroll_style, select_voice
-from yapit.models import Brief, DeliveryStyle, Timeline
+from yapit.enrollment.styles import STYLE_GUIDES, enroll_style
+from yapit.models import DeliveryStyle
 from yapit.musicgen.cli import music_download, music_search
 from yapit.musicgen.cli import music_plan as music_plan_command
-from yapit.musicgen.models import MusicPlan
-from yapit.musicgen.planner import plan_music
-from yapit.pipeline import Pipeline
-from yapit.rescript.cli import app as rescript_app
-from yapit.rescript.cli import extract_audio, transcript
+from yapit.rescript.cli import extract_audio
 from yapit.storage import Workspace
 from yapit.training import resume_checkpoint, select_checkpoint, train
-from yapit.yapper import generate_audio
 from yapit.yapper import generate_script as write_script
-from yapit.yapper.cli import app as yapper_app
-from yapit.yapper.cli import generate as audiogen_command
+from yapit.yapper.cli import generate as generate_audio_command
 from yapit.yapper.script_planner import load_script
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 PathOption = Annotated[Path | None, typer.Option()]
 
-app.command("audiogen")(audiogen_command)
+app.command("generate-audio")(generate_audio_command)
 app.command("extract_audio")(extract_audio)
-app.command("transcript")(transcript)
 app.command("profiles")(profiles_command)
 app.command("music-plan")(music_plan_command)
 app.command("music-search")(music_search)
 app.command("music-download")(music_download)
-
-app.add_typer(rescript_app, name="rescript", hidden=True)
-app.add_typer(yapper_app, name="yapper", hidden=True)
 
 
 def workspace() -> Workspace:
@@ -120,8 +111,8 @@ def voice_worker_stop() -> None:
     emit(stop_worker(data_store()))
 
 
-@app.command("voice-enroll")
-def voice_enroll(
+@app.command("enroll-voice")
+def enroll_voice(
     name: str,
     manifest: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
     consent: Annotated[bool, typer.Option(hidden=True)] = True,
@@ -180,19 +171,6 @@ def enroll_style_command(
 
 
 @app.command()
-def prompt(
-    topic: str = "",
-    seconds: float = 30,
-    kind: str = "travel",
-    facts: str = "",
-    media: PathOption = None,
-) -> None:
-    """Create a reusable script prompt plus local visual context."""
-    brief = Brief(topic=topic, seconds=seconds, kind=kind, facts=facts)
-    emit(Pipeline(workspace()).prompt(brief, media))
-
-
-@app.command()
 def generate_script(
     prompt: Annotated[str, typer.Argument(help="Text prompt for the narration script.")],
     seconds: float = 30,
@@ -207,122 +185,70 @@ def generate_script(
     emit(result.model_dump(mode="json"))
 
 
-@app.command()
-def reel(
-    voice: Annotated[str, typer.Argument()] = DEFAULT_PROFILE,
-    seconds: float = 30,
+@app.command("extract-script")
+def extract_script(
+    media_path: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
+    model: str = DEFAULT_ASR_MODEL,
+    language: str = "en",
+    offline: bool = True,
+) -> None:
+    """Extract reviewable Script JSON from local audio/video; offline by default."""
+    root = workspace()
+    try:
+        emit(
+            api.extract_script(
+                media_path, model=model, language=language, offline=offline, data=root.data
+            )
+        )
+    except (ValueError, RuntimeError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+@app.command("generate-reel")
+def generate_reel(
     script: PathOption = None,
-    topic: str = "",
-    kind: str = "travel",
-    facts: str = "",
-    media: PathOption = None,
-    auto_script: bool = False,
-    style: DeliveryStyle = DeliveryStyle.default,
-    music: Annotated[Path | None, typer.Option(exists=True, dir_okay=False)] = None,
-    music_plan: PathOption = None,
-    audio_volume: float = 100,
-    music_volume: float = 20,
-    music_fade_in: float = 0.5,
-    music_fade_out: float = 1,
-    duck_music: bool = True,
-    loop_music: bool = True,
-    end_buffer: float = 0.75,
-) -> None:
-    """Orchestrate script -> local narration -> 1080x1920 edit guide."""
-    root = workspace()
-    if script is not None and auto_script:
-        raise typer.BadParameter("Choose --script or --auto-script, not both.")
-    rate = (
-        select_voice(root.data, voice, style)[0].words_per_minute if script or auto_script else 150
-    )
-    brief = Brief(topic=topic, seconds=seconds, kind=kind, facts=facts, words_per_minute=rate)
-    result = Pipeline(root).reel(
-        brief,
-        voice,
-        load_script(script) if script else None,
-        media,
-        auto_script,
-        style=style,
-        source_name=media.stem if media else script.stem if script else None,
-        music=music,
-        mix=AudioMix(
-            audio_volume=audio_volume,
-            music_volume=music_volume,
-            music_fade_in=music_fade_in,
-            music_fade_out=music_fade_out,
-            duck_music=duck_music,
-            loop_music=loop_music,
-            end_buffer=end_buffer,
-        ),
-        music_plan=MusicPlan.model_validate_json(music_plan.read_text(encoding="utf-8"))
-        if music_plan
-        else None,
-    )
-    emit(result)
-
-
-@app.command()
-def videogen(
-    timeline: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
-    audio: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
-    music: Annotated[Path | None, typer.Option(exists=True, dir_okay=False)] = None,
-    music_plan: PathOption = None,
-    audio_volume: float = 100,
-    music_volume: float = 20,
-    music_fade_in: float = 0.5,
-    music_fade_out: float = 1,
-    duck_music: bool = True,
-    loop_music: bool = True,
-    end_buffer: float = 0.75,
-) -> None:
-    """Render existing narration/timeline with optional music; never synthesize or search."""
-    timing = Timeline.model_validate_json(timeline.read_text(encoding="utf-8"))
-    plan = None
-    if music is not None:
-        plan = (
-            MusicPlan.model_validate_json(music_plan.read_text(encoding="utf-8"))
-            if music_plan
-            else plan_music(timing)
-        )
-    emit(
-        generate_video(
-            timing,
-            audio,
-            workspace=workspace(),
-            music=music,
-            mix=AudioMix(
-                audio_volume=audio_volume,
-                music_volume=music_volume,
-                music_fade_in=music_fade_in,
-                music_fade_out=music_fade_out,
-                duck_music=duck_music,
-                loop_music=loop_music,
-                end_buffer=end_buffer,
-                beat_music_levels=plan.beat_levels if plan else {},
-            ),
-        )
-    )
-
-
-@app.command()
-def narrate(
-    script: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
-    voice: Annotated[str, typer.Argument()] = DEFAULT_PROFILE,
+    audio_path: PathOption = None,
+    prompt: str | None = None,
+    voice: str = DEFAULT_PROFILE,
     seconds: float = 30,
     style: DeliveryStyle = DeliveryStyle.default,
+    music: Annotated[Path | None, typer.Option(exists=True, dir_okay=False)] = None,
+    audio_volume: float = 100,
+    music_volume: float = 20,
+    music_fade_in: float = 0.5,
+    music_fade_out: float = 1,
+    duck_music: bool = True,
+    loop_music: bool = True,
+    end_buffer: float = 0.75,
 ) -> None:
-    """Render only narration MP3 and the measured clip timeline."""
+    """Create an edit guide from exactly one --script, --audio-path or --prompt."""
     root = workspace()
-    emit(
-        generate_audio(
-            load_script(script),
-            workspace=root,
-            voice_name=voice,
-            seconds=seconds,
-            style=style,
-            source_name=script.stem,
+    try:
+        if sum(value is not None for value in (script, audio_path, prompt)) != 1:
+            raise ValueError("Choose exactly one of --script, --audio-path or --prompt.")
+        emit(
+            api.generate_reel(
+                load_script(script) if script is not None else None,
+                audio_path=audio_path,
+                prompt=prompt,
+                voice=voice,
+                seconds=seconds,
+                workspace=root,
+                style=style,
+                music=music,
+                mix=AudioMix(
+                    audio_volume=audio_volume,
+                    music_volume=music_volume,
+                    music_fade_in=music_fade_in,
+                    music_fade_out=music_fade_out,
+                    duck_music=duck_music,
+                    loop_music=loop_music,
+                    end_buffer=end_buffer,
+                ),
+            )
         )
-    )
+    except (ValueError, RuntimeError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
 
 @app.command("voice-train")
@@ -352,7 +278,6 @@ def voice_train(
     )
 
 
-@app.command("voice-use-checkpoint", hidden=True)
 @app.command("voice-select-checkpoint")
 def voice_select_checkpoint(
     name: str,

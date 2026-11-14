@@ -7,7 +7,9 @@
 
 `audio.py` owns extraction; `transcription.py` owns recognition and script
 composition; `cli.py` adapts them to flat commands. Public Python APIs are
-`extract_audio` and `transcribe`. The optional isolated CLI is
+`extract_audio`, `transcribe` and `extract_script`. The last adds inline Script
+JSON to the existing transcript result without rewriting recognized words.
+The optional isolated CLI is
 `python -m yapit.rescript.cli extract_audio|transcript`.
 
 Media decoding/resampling, hashing and publication primitives come from
@@ -52,8 +54,16 @@ default precision. The launcher supplies GPU DLL paths.
 `WhisperTranscriber` constructs a model per recognition call using the shared
 `models\hub` disk cache. Offline defaults to true; opting into downloads
 does not upload source audio. `transcribe` accepts an injected
-`TranscriptionBackend` for units. There is no MCP transcription tool or
-cross-process GPU lock.
+`TranscriptionBackend` for units. MCP `extract_script` delegates to this module
+with confined inputs and the configured data store. There is no cross-process
+GPU lock.
+
+The sidecar/result includes full decoded `source_seconds`, separate from each
+script's spoken span. `timeline_from_segments` creates contiguous audio-reel
+cues from ordered ASR starts and the full source duration, including outer
+silence; it rejects missing, overlapping or out-of-range timing. Pipeline limits
+audio-reel decoding to 180 seconds before recognition; ordinary transcription
+retains its one-hour limit.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest src\rescript\tests -q

@@ -20,6 +20,11 @@ Module user/developer guides own their workflows and implementation details.
 | `src\training` | Qwen fine-tuning and checkpoint validation | [Training](training/dev.readme.md) |
 | `src\mcp` | Stdio protocol adapters and client example | [MCP](mcp/dev.readme.md) |
 
+`api.py` exposes `generate_audio`, `generate_script`, `extract_script`,
+`generate_reel` and `enroll_voice` as canonical customer Python functions.
+CLI names use hyphens; MCP uses the same underscore names. Each workflow has
+one public command, without compatibility aliases or helper MCP tools.
+
 `scripts` owns setup/dispatch/build helpers; root `yapit.cmd` is only a public
 shim. Module tests live under their source module; root `tests` covers shared
 storage, launchers and application interfaces. `agenttests` holds opt-in

@@ -31,23 +31,63 @@ GPU dispatch remains strict; use CPU when CUDA is unavailable.
 
 | Tool | Purpose |
 |---|---|
-| `prepare_script_prompt` | Prepare a script-writing brief |
 | `generate_script` | Text prompt to Script JSON; `seconds` defaults to 30 |
+| `generate_audio` | Speak approved Script JSON; defaults to 30 seconds and `testuser` |
+| `extract_script` | Local media to reviewable Script JSON and source timings |
 | `enroll_voice` | Create/update a profile from verified recordings |
-| `generate_narration` | Narrate an approved script |
-| `generate_reel` | Narration plus vertical edit guide |
-| `render_timeline` | Render existing audio and measured timing |
-| `get_job_status` | Read a job's saved result/status |
-
-The reusable prompt is `reel_script`. These are MCP tools, not extra CLI commands.
+| `generate_reel` | Exactly one script, existing audio, or text prompt to an edit guide |
 
 Tool execution has the same model requirements as its underlying workflow:
-prompt preparation/enrollment are model-free, narration uses the selected local backend,
-and rendering consumes existing audio/timing without loading a speech model.
+enrollment is model-free, narration uses the selected local backend,
+and audio-to-reel uses local speech recognition without generating new voice audio.
 `generate_script(prompt, seconds=30)` accepts text only, with no image/frame/media
-parameters. Cloud writing requires permission and credentials; the full reel
-pipeline additionally needs `auto_script=true` to invoke the writer.
-Rescript transcription and fine-tuning are not registered MCP tools.
+parameters. Cloud writing requires `YAPIT_ALLOW_CLOUD=true`, `OPENAI_API_KEY`
+and the cloud extra.
+
+`generate_reel` accepts exactly one of `script`, `audio_path` or `prompt`.
+Script input preserves the supplied words; prompt input runs writing, narration
+and rendering. Audio input uses offline local ASR to infer timing/captions and
+does not require a voice profile, supplied timeline, cloud writer or TTS.
+It preserves the source audio without tempo fitting; `seconds` applies only to
+script/prompt input. Audio is limited to 180 seconds; the video adds the configured
+closing hold (default 0.75 seconds). ASR captions still require review.
+Outputs are portrait placeholder edit guides, not finished footage.
+
+`extract_script(media_path, model="small.en", language="en", offline=true)`
+returns Script JSON in `scripts[*].content`, alongside each script path and
+source timing. Long recordings may yield multiple scripts. No cloud rewriting
+is performed; `offline=false` permits model downloads.
+
+The canonical CLI/Python names match the tools:
+
+| CLI | MCP / `from yapit import api` |
+|---|---|
+| `generate-audio` | `generate_audio` |
+| `generate-script` | `generate_script` |
+| `extract-script` | `extract_script` |
+| `generate-reel` | `generate_reel` |
+| `enroll-voice` | `enroll_voice` |
+
+For example:
+
+```powershell
+.\yapit.cmd generate-reel --script .\data\transcripts\trip.json --voice myvoice
+.\yapit.cmd generate-reel --audio-path .\data\audio\speech.wav
+.\yapit.cmd generate-reel --prompt "A relaxed weekend in Goa" --voice myvoice
+```
+
+```python
+from pathlib import Path
+from yapit import api
+
+result = api.extract_script(Path(r"data\audio\speech.wav"))
+# Review result["scripts"][0]["content"] against the recording before narration.
+reel = api.generate_reel(audio_path=Path(r"data\audio\speech.wav"))
+```
+
+Only these five tools are exposed; there are no helper tools, duplicate aliases
+or reusable MCP prompts. Each CLI workflow likewise has one public name.
+Fine-tuning and other distinct local utilities are CLI-only.
 
 File inputs are confined to configured workspace/data roots. Calls are synchronous;
 mutating/generation calls use a per-server busy lock, not a cross-process GPU lock

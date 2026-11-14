@@ -47,7 +47,7 @@ Shared bucket names cannot be profile names; no legacy profile lookup is used.
 
 Save this as `my-samples.json` beside your `recordings` folder. Replace the paths
 and placeholder transcripts with five real recordings and their exact words.
-Import it with `.\yapit.cmd voice-enroll myvoice --manifest .\my-samples.json`;
+Import it with `.\yapit.cmd enroll-voice myvoice --manifest .\my-samples.json`;
 see [enrollment](../enrollment/README.md#import-existing-recordings) for merge rules.
 
 ## Example of a generated Enrollment manifest as used by YapIt
