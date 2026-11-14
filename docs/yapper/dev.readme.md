@@ -72,6 +72,41 @@ Explicit `reel --auto-script` needs `.[cloud]`, `YAPIT_ALLOW_CLOUD=true` and
 Only the brief/sampled visual frames are sent, not voice recordings.
 There is one bounded estimated-duration revision, not unbounded retries.
 
+## Input examples
+
+These are examples of  generated file templates by YapIt.
+
+### Narration script
+
+Save this as `data\transcripts\trip.json`, then pass that path to `--script`.
+Each beat contains spoken words, a visual direction and a pause in milliseconds.
+This 30-word example estimates about 13 seconds at 150 words/minute; start with
+`--seconds 15`, not 30. Actual synthesized duration still depends on the voice.
+
+```json
+{
+  "title": "A calmer weekend plan",
+  "beats": [
+    {
+      "text": "Want a weekend away without spending half of it in transit?",
+      "visual": "Open on a packed bag and a nearby destination on a map.",
+      "pause_ms": 180
+    },
+    {
+      "text": "Pick one base, then group your stops around it.",
+      "visual": "Show a simple route with nearby stops grouped together.",
+      "pause_ms": 250
+    },
+    {
+      "text": "Leave one afternoon unplanned. That's your buffer, not wasted time.",
+      "visual": "A quiet cafe or a slow walk, then the route overview.",
+      "pause_ms": 180
+    }
+  ]
+}
+```
+
+
 ## Worker and timing
 
 The worker uses authenticated loopback HTTP, owner-only state, confined voice

@@ -129,24 +129,25 @@ $voice = "myvoice" # Must match the profile you created.
 
 ### 2. Review a script
 
-Edit `examples\script.json`, or prepare a new script with your agent. This command
+Copy the [script example](docs/yapper/dev.readme.md#narration-script) to
+`data\transcripts\trip.json`, or prepare a new script with your agent. This command
 returns a writing prompt without calling a cloud model:
 
 ```powershell
-.\yapit.cmd prompt --topic "A calmer weekend trip" --seconds 30
+.\yapit.cmd prompt --topic "A calmer weekend trip" --seconds 15
 ```
 
-Save the reviewed Script JSON in `data\transcripts`, or use the included example
-below. Narration preserves the supplied words rather than rewriting them.
+Save the reviewed Script JSON in `data\transcripts`.
+Narration preserves the supplied words rather than rewriting them.
 
 ### 3. Generate audio or an edit guide
 
 ```powershell
 # Audio only:
-.\yapit.cmd audiogen --voice $voice --script .\examples\script.json --seconds 30
+.\yapit.cmd audiogen --voice $voice --script .\data\transcripts\trip.json --seconds 15
 
 # Audio plus vertical video editing guide:
-.\yapit.cmd reel $voice --script .\examples\script.json --seconds 30
+.\yapit.cmd reel $voice --script .\data\transcripts\trip.json --seconds 15
 ```
 
 The default backend is Qwen. The first generation can download its model assets
@@ -168,7 +169,7 @@ expecting a finished reel to fit any length.
 Music is off by default. Supply an existing track explicitly:
 
 ```powershell
-.\yapit.cmd reel $voice --script .\examples\script.json --music .\data\background_music\TRACK.mp3
+.\yapit.cmd reel $voice --script .\data\transcripts\trip.json --seconds 15 --music .\data\background_music\TRACK.mp3
 ```
 
 For repeated requests, after provisioning model assets, run
@@ -242,8 +243,7 @@ Commands are flat. Below, `yapit COMMAND` means
 Narration uses selectable TTS backends (Qwen by default); transcription uses
 local Whisper.
 
-<details>
-<summary>All commands</summary>
+### All commands
 
 | Command | Functionality |
 |---|---|
@@ -269,8 +269,6 @@ local Whisper.
 | `yapit voice-worker-stop` | Release the resident model |
 | `yapit voice-train` | Explicit Linux/WSL2 fine-tuning |
 | `yapit voice-select-checkpoint` | Select reviewed trained weights |
-
-</details>
 
 Reviewed text is not rewritten. Videos accept **+/-33%** of the target, including
 the default 0.75s closing hold; speech is not stretched/padded to fit.

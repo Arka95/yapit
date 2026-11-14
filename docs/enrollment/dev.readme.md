@@ -44,6 +44,26 @@ These fields survive merges but currently do not affect writing or synthesis.
 Shared bucket names cannot be profile names; no legacy profile lookup is used.
 `YAPIT_DATA_DIR` selects durable data; `YAPIT_WORKSPACE` selects temporary state.
 
+
+Save this as `my-samples.json` beside your `recordings` folder. Replace the paths
+and placeholder transcripts with five real recordings and their exact words.
+Import it with `.\yapit.cmd voice-enroll myvoice --manifest .\my-samples.json`;
+see [enrollment](../enrollment/README.md#import-existing-recordings) for merge rules.
+
+## Example of a generated Enrollment manifest as used by YapIt
+
+```json
+{
+  "samples": [
+    {"audio": "recordings\\take-01.wav", "text": "Replace this with the exact words you spoke in your first recording."},
+    {"audio": "recordings\\take-02.wav", "text": "Replace this with the exact words you spoke in your second recording."},
+    {"audio": "recordings\\take-03.wav", "text": "Replace this with the exact words you spoke in your third recording."},
+    {"audio": "recordings\\take-04.wav", "text": "Replace this with the exact words you spoke in your fourth recording."},
+    {"audio": "recordings\\take-05.wav", "text": "Replace this with the exact words you spoke in your fifth recording."}
+  ]
+}
+```
+
 ## Tests
 
 ```powershell
