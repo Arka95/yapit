@@ -46,12 +46,12 @@ def create_server(root: Path | None = None) -> FastMCP:
         """Open the local voice-enrollment app; no inputs or files are required.
 
         In the app, choose or create a profile, select a microphone, record the
-        displayed passages, listen back and finish enrollment. The app manages
+        one roughly one-minute paragraph, listen back and click Enroll voice. The app manages
         recordings and transcripts; you do not supply an MP3 or manifest.
         Returns a launch receipt and process ID immediately, not a finished
         profile. Complete enrollment in the window before generating audio.
         Requires an interactive Windows desktop on the server machine.
-        No speech recognition, cloud calls or model training runs.
+        Enrollment is model-free; the separate Training tab requires an explicit Train action.
         """
         if not busy.acquire(blocking=False):
             raise ValueError("Yapit is busy; retry after the current job.")

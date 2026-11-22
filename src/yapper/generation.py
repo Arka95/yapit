@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import traceback
 from contextlib import ExitStack
 from pathlib import Path
@@ -24,6 +25,8 @@ from yapit.yapper.backends import SpeechBackend
 from yapit.yapper.timeline import build_timeline
 from yapit.yapper.worker import backend_for
 
+MAX_CHUNK_WORDS = 40
+
 
 def _synthesize_chunks(
     script: Script, speech: SpeechBackend, maximum: float | None
@@ -32,24 +35,37 @@ def _synthesize_chunks(
     durations = []
     total = 0.0
     for beat in script.beats:
-        wave = np.asarray(speech.synthesize(beat.text), dtype=np.float32).reshape(-1).copy()
-        if not len(wave) or not np.isfinite(wave).all():
-            raise ValueError("Speech backend returned empty or invalid audio.")
-        # Five-millisecond ramps soften joins without trimming speech or changing timing.
-        fade_samples = min(SAMPLE_RATE // 200, len(wave) // 2)
-        if fade_samples > 1:
-            ramp = np.linspace(0, 1, fade_samples, dtype=np.float32)
-            wave[:fade_samples] *= ramp
-            wave[-fade_samples:] *= ramp[::-1]
+        words = list(re.finditer(r"\S+", beat.text))
+        duration = 0.0
+        for start in range(0, len(words), MAX_CHUNK_WORDS):
+            end = min(start + MAX_CHUNK_WORDS, len(words))
+            text = beat.text[words[start].start() : words[end - 1].end()]
+            wave = np.asarray(speech.synthesize(text), dtype=np.float32).reshape(-1).copy()
+            if not len(wave) or not np.isfinite(wave).all():
+                raise ValueError("Speech backend returned empty or invalid audio.")
+            # Five-millisecond ramps soften joins without trimming speech or changing timing.
+            fade_samples = min(SAMPLE_RATE // 200, len(wave) // 2)
+            if fade_samples > 1:
+                ramp = np.linspace(0, 1, fade_samples, dtype=np.float32)
+                wave[:fade_samples] *= ramp
+                wave[-fade_samples:] *= ramp[::-1]
+            duration += len(wave) / SAMPLE_RATE
+            total += len(wave) / SAMPLE_RATE
+            if maximum is not None and total > maximum:
+                raise ValueError(
+                    f"Narration exceeds the {maximum:g}-second duration limit. "
+                    "Rewrite the script or omit the duration target."
+                )
+            pieces.append(wave)
         pause = np.zeros(round(beat.pause_ms * SAMPLE_RATE / 1000), dtype=np.float32)
-        duration = (len(wave) + len(pause)) / SAMPLE_RATE
-        total += duration
+        duration += len(pause) / SAMPLE_RATE
+        total += len(pause) / SAMPLE_RATE
         if maximum is not None and total > maximum:
             raise ValueError(
                 f"Narration exceeds the {maximum:g}-second duration limit. "
                 "Rewrite the script or omit the duration target."
             )
-        pieces.extend([wave, pause])
+        pieces.append(pause)
         durations.append(duration)
     return np.concatenate(pieces), durations
 

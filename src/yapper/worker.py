@@ -128,7 +128,10 @@ class WorkerSpeech:
 
 def backend_for(voice: Voice, voice_dir: Path, *, backend_name=None, model=None, fallback=None):
     name = backend_name or os.environ.get("YAPIT_TTS_BACKEND")
-    model = model if model is not None else os.environ.get("YAPIT_TTS_MODEL")
+    if model is None and (
+        backend_name is None or backend_name == os.environ.get("YAPIT_TTS_BACKEND", "qwen")
+    ):
+        model = os.environ.get("YAPIT_TTS_MODEL")
     if os.environ.get("YAPIT_VOICE_WORKER", "auto") != "0":
         state = read_state(DataStore())
         if state is not None:

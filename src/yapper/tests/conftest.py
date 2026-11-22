@@ -44,12 +44,9 @@ def script():
 @pytest.fixture
 def enrolled(tmp_path):
     workspace = Workspace(tmp_path / "workspace")
-    samples = []
-    for index in range(5):
-        path = tmp_path / f"sample-{index}.wav"
-        write_wav(path, tone(4, 180 + 30 * index))
-        samples.append({"audio": str(path), "text": f"This is clear test passage {index}."})
+    path = tmp_path / "reference.wav"
+    write_wav(path, tone(60))
     manifest = tmp_path / "samples.json"
-    save_json(manifest, {"samples": samples})
+    save_json(manifest, {"samples": [{"audio": str(path), "text": "The reference transcript."}]})
     enroll(workspace.data, "test-voice", manifest)
     return workspace

@@ -11,11 +11,12 @@ from functools import wraps
 from pathlib import Path
 from time import perf_counter
 from typing import ParamSpec, TypeVar
+from uuid import uuid4
 
 P = ParamSpec("P")
 T = TypeVar("T")
 _write_lock = threading.RLock()
-_active_roots: set[Path] = set()
+_active_roots: dict[Path, Path] = {}
 
 
 def stats_directory() -> Path:
@@ -33,16 +34,9 @@ def reset_stats(*, root: Path | None = None, enabled: bool | None = None) -> Non
         return
     directory = (root or stats_directory()).resolve()
     with _write_lock:
-        try:
-            for category in ("functions", "tests", "runs"):
-                for path in directory.glob(f"*/{category}.jsonl"):
-                    path.write_text("", encoding="utf-8")
-        except OSError:
-            logging.getLogger(__name__).debug(
-                "Could not reset repository statistics.", exc_info=True
-            )
-        _active_roots.add(directory)
-        os.environ["YAPIT_REPO_STATS_ACTIVE_ROOT"] = str(directory)
+        run = directory / f"run-{uuid4().hex}"
+        _active_roots[directory] = run
+        os.environ["YAPIT_REPO_STATS_ACTIVE_ROOT"] = str(run)
 
 
 def record_stat(
@@ -59,17 +53,19 @@ def record_stat(
         return
     try:
         directory = (root or stats_directory()).resolve()
-        path = directory / module / f"{category}.jsonl"
         if "duration_s" in value:
             value = {**value, "duration_s": round(value["duration_s"], 2)}
         row = json.dumps({"timestamp": datetime.now(UTC).isoformat(), **value}) + "\n"
         with _write_lock:
             if directory not in _active_roots:
-                if os.environ.get("YAPIT_REPO_STATS_ACTIVE_ROOT") == str(directory):
-                    _active_roots.add(directory)
+                inherited = os.environ.get("YAPIT_REPO_STATS_ACTIVE_ROOT")
+                if inherited and Path(inherited).resolve().parent == directory:
+                    _active_roots[directory] = Path(inherited).resolve()
                 else:
                     reset_stats(root=directory, enabled=True)
-            os.environ["YAPIT_REPO_STATS_ACTIVE_ROOT"] = str(directory)
+            run = _active_roots[directory]
+            os.environ["YAPIT_REPO_STATS_ACTIVE_ROOT"] = str(run)
+            path = run / module / f"{category}.jsonl"
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("a", encoding="utf-8") as output:
                 output.write(row)

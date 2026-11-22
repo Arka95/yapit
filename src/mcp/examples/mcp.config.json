@@ -2,10 +2,10 @@
   "mcpServers": {
     "yapit": {
       "command": "C:\\Windows\\System32\\cmd.exe",
-      "args": ["/d", "/c", "C:\\projects\\yapit\\yapit.cmd", "mcp"],
+      "args": ["/d", "/c", "C:\\projectWorkspace\\yapit\\yapit.cmd", "mcp"],
       "env": {
-        "YAPIT_WORKSPACE": "C:\\projects\\yapit\\workspace",
-        "YAPIT_DATA_DIR": "C:\\projects\\yapit\\data",
+        "YAPIT_WORKSPACE": "C:\\projectWorkspace\\yapit\\workspace",
+        "YAPIT_DATA_DIR": "C:\\projectWorkspace\\yapit\\data",
         "YAPIT_ALLOW_CLOUD": "false"
       }
     }

@@ -78,4 +78,5 @@ testpaths = [
   "src/mcp/tests",
   "src/common_utils/tests",
   "src/musicgen/tests",
+  "src/studio/tests",
 ]

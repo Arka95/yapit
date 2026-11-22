@@ -195,6 +195,7 @@ def transcribe(
     profile: str = DEFAULT_PROFILE,
     data: DataStore | None = None,
     max_seconds: float = MAX_INPUT_SECONDS,
+    export_scripts: bool = True,
 ) -> dict:
     if not 0 < max_seconds <= MAX_INPUT_SECONDS:
         raise ValueError(f"max_seconds must be positive and at most {MAX_INPUT_SECONDS}.")
@@ -216,7 +217,10 @@ def transcribe(
         if has_video(decoded.stderr):
             archived = Path(
                 extract_audio(
-                    source, output_dir=data.audio / "imports" / uuid.uuid4().hex, profile=profile
+                    source,
+                    output_dir=data.audio / "imports" / uuid.uuid4().hex,
+                    profile=profile,
+                    data=data,
                 )["audio"]
             )
         else:
@@ -224,7 +228,7 @@ def transcribe(
         segments = recognizer.recognize(audio)
         if any(segment.end > info.duration + 0.1 for segment in segments):
             raise ValueError("Transcript timestamps extend past the decoded audio.")
-        parts = compose_scripts(segments, source.stem or "Transcript")
+        parts = compose_scripts(segments, source.stem or "Transcript") if export_scripts else []
     name = reserve_artifact_name(
         source.stem,
         profile,

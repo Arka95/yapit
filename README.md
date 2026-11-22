@@ -116,11 +116,19 @@ identity, not your personal voice. A name change does not anonymize recordings.
 .\yapit.cmd enroll-voice
 ```
 
-Create a profile such as `myvoice`, choose your microphone, record the displayed
-passages and review each take. Save **at least five distinct recordings**, then
-finish enrollment. This creates a reusable reference profile; it does not train
-model weights. No recording files or manifest are required;
+Create a profile such as `myvoice`, choose your microphone, and record the
+**single, roughly one-minute paragraph**. Replay it, confirm the exact words,
+then click **Enroll voice**. This creates one reusable reference recording.
+No recording files or manifest are required;
 see [enrollment](docs/enrollment/README.md).
+
+The **Training** tab collects or reuses 16 short clips for a profile, provides
+training-model selection, and starts an explicit fine-tuning job in a configured
+Linux/WSL2 training runtime. Enrollment and training datasets stay separate.
+The **Audio** and **Reel** tabs let you select a TTS backend/model,
+write narration or optionally request an AI draft, generate audio, then review
+its waveform/narration cuts and generate a portrait video template.
+See the [desktop studio guide](docs/studio/README.md).
 
 ```powershell
 $voice = "myvoice" # Must match the profile you created.
@@ -228,6 +236,7 @@ See [MCP setup](docs/skills/README.md) for execution limits and configuration.
 |---|---|---|
 | [Project](README.md) | [Development](docs/dev.readme.md) | Configuration and integration |
 | [Enrollment](docs/enrollment/README.md) | [Development](docs/enrollment/dev.readme.md) | Recordings and voice profiles |
+| [Desktop studio](docs/studio/README.md) | [Development](docs/studio/dev.readme.md) | Audio generation, waveform/cut preview and reel templates |
 | [Rescript](docs/rescript/README.md) | [Development](docs/rescript/dev.readme.md) | Extraction and transcription |
 | [Yapper](docs/yapper/README.md) | [Development](docs/yapper/dev.readme.md) | Scripts, narration and warm worker |
 | [Musicgen](docs/musicgen/README.md) | [Development](docs/musicgen/dev.readme.md) | CC0 music acquisition |
@@ -282,6 +291,7 @@ Music-only fades, ducking and separate 0-100 gains are available.
 | Location | Content |
 |---|---|
 | `data\<profile>` | Accepted enrollment recordings/profile metadata and training checkpoints |
+| `data\<profile>\training` | Training-only audio/manifest and preserved legacy metadata |
 | `data\audio` | Imported/extracted source audio; external transcription archives are under `imports` |
 | `data\transcripts` | Reviewed scripts, ASR sidecars, captions and training JSONL |
 | `data\generated_audio` | Final WAV/MP3 and raw synthesis intermediates |
@@ -289,8 +299,9 @@ Music-only fades, ducking and separate 0-100 gains are available.
 | `data\background_music` | CC0 music named `emotion_videotype_songname_or_id.mp3`, with source/license/plan JSON |
 | `workspace\outputs` | Prompts, measured timelines, provenance/status, logs and temporary rendering files |
 | `workspace\enrollment` | Resumable drafts/raw takes; removed after successful enrollment |
+| `workspace\training` | Resumable training-recording drafts/raw takes |
 | `models` | Shared model assets/cache, configurable with `YAPIT_MODELS_DIR` |
-| `.repo-stats\<module>` | Git-ignored function/test timings and outcomes; no narration or credentials |
+| `.repo-stats\run-<id>\<module>` | Isolated run timings/outcomes; children share the run; no narration or credentials |
 
 Use `YAPIT_DATA_DIR`, `YAPIT_WORKSPACE` and `YAPIT_MODELS_DIR` to override roots.
 Worker state/cached speech live privately under `data\.runtime`.

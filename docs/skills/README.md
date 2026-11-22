@@ -33,7 +33,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 root = Path.cwd()
 version = (root / "VERSION").read_text(encoding="utf-8").strip()
-output = root.parent / f"yapit-skill-{version}.zip"
+output = Path(r"C:\projects") / f"yapit-skill-{version}.zip"
 with ZipFile(output, "w", compression=ZIP_DEFLATED) as archive:
     archive.write(root / "docs" / "skills" / "yapit" / "SKILL.md", "yapit/SKILL.md")
     archive.write(root / "LICENSE", "yapit/LICENSE.txt")
@@ -43,8 +43,9 @@ print(output)
 
 The explicit two-file allowlist excludes local configuration, credentials,
 recordings, models, environments, tests and application binaries. The ZIP is
-written beside the repository (`C:\projects` for this checkout), with no duplicate
-inside the repository. Update the skill's frontmatter version with the application version
+written to the requested release directory, `C:\projects`, even when the checkout
+is under `C:\projectWorkspace`, with no duplicate inside the repository.
+Update the skill's frontmatter version with the application version
 when preparing a new release. Keep its instructions consistent with the MCP
 guide; this is a skill ZIP, not the application wheel/source distribution.
 

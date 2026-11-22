@@ -1,4 +1,6 @@
+import json
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -215,3 +217,42 @@ def test_audio_reel_duration_limit_rejects_long_input_before_recognition(tmp_pat
     with pytest.raises(ValueError, match="at most 180 seconds"):
         transcribe(source, max_seconds=180, backend=SimpleNamespace(recognize=recognize))
     recognize.assert_not_called()
+
+
+@pytest.mark.parametrize("video", [False, True])
+def test_transcription_without_script_export_preserves_long_narration_and_explicit_store(
+    tmp_path, monkeypatch, video
+):
+    monkeypatch.delenv("YAPIT_DATA_DIR")
+    data = DataStore(tmp_path / "explicit-data")
+    source = tmp_path / ("source.mp4" if video else "source.wav")
+    source.write_bytes(b"original recording")
+    segment = Segment(start=0, end=90, text="An uninterrupted thought without a sentence ending")
+
+    def decode(source, destination, **kwargs):
+        destination.write_bytes(b"decoded soundtrack")
+        return SimpleNamespace(stderr=b"  Stream #0:0: Video: h264\n" if video else b"")
+
+    monkeypatch.setattr("yapit.rescript.transcription.extract_audio_stream", decode)
+    monkeypatch.setattr("yapit.rescript.audio.extract_audio_stream", decode)
+    monkeypatch.setattr(
+        "yapit.rescript.transcription.sf.info",
+        lambda *args: SimpleNamespace(duration=90, frames=90 * 16000),
+    )
+    result = transcribe(
+        source,
+        data=data,
+        backend=SimpleNamespace(recognize=lambda _: [segment]),
+        max_seconds=180,
+        export_scripts=False,
+    )
+    assert result["scripts"] == []
+    assert result["source_seconds"] == 90
+    metadata = json.loads(Path(result["transcript"]).read_text())
+    assert metadata["segments"] == [segment.model_dump(mode="json")]
+    assert Path(result["audio"]).is_relative_to(data.audio)
+    assert Path(result["audio"]).read_bytes() == (
+        b"decoded soundtrack" if video else b"original recording"
+    )
+    assert source.read_bytes() == b"original recording"
+    assert not list(data.transcripts.glob("*.script*.json"))

@@ -91,10 +91,10 @@ applyTo: "**"
 - Keep local runtime/test statistics under Git-ignored `.repo-stats`, separated
   by module. Pytest records phase durations and whole-run time, including
   collection/setup overhead; do not describe only test-call time as total time.
-- Replace previous-run statistics at every fresh pytest session or runtime
-  process's first measurement. Keep only the current run's measurements,
-  including multiple calls/phases; do not append historical runs.
-- Child processes belonging to that run must preserve the parent's statistics.
+- Start an isolated `.repo-stats\run-<id>` directory at every fresh pytest
+  session or independent runtime process's first measurement. Never truncate
+  another run's statistics. Retain previous directories for explicit cleanup.
+- Child processes belonging to that run must preserve and share the parent's statistics.
 - Store `duration_s` rounded to at most two decimal places.
 - Use the shared `@timed` decorator at meaningful operation boundaries instead
   of duplicating timing code or instrumenting trivial/high-frequency helpers.

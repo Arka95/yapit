@@ -8,13 +8,20 @@ import tempfile
 from pathlib import Path
 
 from yapit.common_utils.fileutils import file_sha256, save_json
-from yapit.common_utils.mediautils import decode_audio
+from yapit.common_utils.mediautils import SAMPLE_RATE, decode_audio
 from yapit.common_utils.metrics import timed
 from yapit.common_utils.modelutils import load_model
 from yapit.constants import DEFAULT_SPEECH_MODEL
 from yapit.enrollment import load_voice
 from yapit.storage import Workspace
 from yapit.training.checkpoints import prepare_resume_model, validate_checkpoint
+from yapit.training.dataset import (
+    MIN_TRAINING_SAMPLES,
+    MIN_TRAINING_SECONDS,
+    load_training_samples,
+)
+
+TRAINING_MODELS = (DEFAULT_SPEECH_MODEL, "Qwen/Qwen3-TTS-12Hz-0.6B-Base")
 
 
 @timed
@@ -29,7 +36,7 @@ def train(
     model: str = DEFAULT_SPEECH_MODEL,
     resume: Path | None = None,
 ) -> dict:
-    if model not in (DEFAULT_SPEECH_MODEL, "Qwen/Qwen3-TTS-12Hz-0.6B-Base"):
+    if model not in TRAINING_MODELS:
         raise ValueError("Training model must be the official Qwen3-TTS 1.7B or 0.6B Base.")
     if not 1 <= epochs <= 30 or not 1 <= batch_size <= 16 or not 1e-8 <= learning_rate <= 1e-3:
         raise ValueError("Invalid training parameters.")
@@ -74,16 +81,17 @@ def train(
         raise ValueError("Use a clean, reviewed upstream checkout for reproducible training.")
     voice = load_voice(workspace.data, name)
     name = voice.name
-    if len(voice.samples) < 10:
+    samples = load_training_samples(workspace.data, name)
+    if len(samples) < MIN_TRAINING_SAMPLES:
         raise ValueError(
-            "Fine-tuning needs at least 10 curated distinct clips (project guardrail)."
+            "Fine-tuning needs at least 10 curated distinct clips from the Training tab."
         )
     voice_dir = workspace.voice_audio_dir(name)
     job = workspace.output("training", name)
     transcript_dir = job.transcripts
     checkpoint_dir = workspace.voice_path(name).parent / "checkpoints" / job.name
     records = []
-    for sample in voice.samples:
+    for sample in samples:
         audio = workspace.inside(voice_dir / sample.audio)
         records.append(
             {
@@ -101,8 +109,10 @@ def train(
             "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
             encoding="utf-8",
         )
-    total = sum(len(decode_audio(Path(row["audio"]), max_seconds=20)) / 24000 for row in records)
-    if total < 60:
+    total = sum(
+        len(decode_audio(Path(row["audio"]), max_seconds=20)) / SAMPLE_RATE for row in records
+    )
+    if total < MIN_TRAINING_SECONDS:
         raise ValueError(
             "Fine-tuning needs at least 60 seconds; 5-15 clean minutes is recommended."
         )

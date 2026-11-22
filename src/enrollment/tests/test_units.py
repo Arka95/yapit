@@ -5,7 +5,8 @@ import pytest
 
 from yapit.common_utils.fileutils import data_filename
 from yapit.common_utils.mediautils import SAMPLE_RATE
-from yapit.enrollment import EnrollmentSession, audio_quality
+from yapit.enrollment import audio_quality
+from yapit.enrollment.session import RecordingSession
 from yapit.models import Sample
 from yapit.storage import Workspace
 
@@ -23,7 +24,7 @@ def test_unified_data_name_handles_case_prefix_and_path_like_input():
 
 
 def test_session_records_first_empty_slot_or_explicit_selection():
-    session = EnrollmentSession.__new__(EnrollmentSession)
+    session = RecordingSession.__new__(RecordingSession)
     sample = Sample(audio="saved.wav", text="Saved passage")
     session.draft = SimpleNamespace(readings=["first", "second"], samples=[sample, None])
     session._selected = None
@@ -78,3 +79,19 @@ def test_app_launcher_rejects_non_windows_without_starting_a_process(tmp_path, m
     with pytest.raises(RuntimeError, match="interactive Windows desktop"):
         launcher.enroll_voice(workspace=root)
     launch.assert_not_called()
+
+
+def test_profiles_uses_the_same_relocated_data_as_enrollment(tmp_path, monkeypatch, capsys):
+    import json
+
+    from yapit.enrollment.cli import profiles
+
+    monkeypatch.delenv("YAPIT_DATA_DIR")
+    monkeypatch.setenv("YAPIT_WORKSPACE", str(tmp_path / "relocated" / "workspace"))
+    monkeypatch.setattr("yapit.enrollment.cli.load_dotenv", lambda: None)
+    root = Workspace(tmp_path / "relocated" / "workspace")
+    profile = root.voice_path("myvoice")
+    profile.parent.mkdir()
+    profile.write_text("{}")
+    profiles()
+    assert json.loads(capsys.readouterr().out) == ["myvoice"]

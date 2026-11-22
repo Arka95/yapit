@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 from time import perf_counter
 
@@ -63,8 +64,12 @@ def unit_tests_do_not_launch_processes(request, monkeypatch):
     def forbidden(*args, **kwargs):
         pytest.fail("Unit tests must mock subprocesses; mark real external work as integration.")
 
+    class ForbiddenProcess(subprocess.Popen):
+        def __init__(self, *args, **kwargs):
+            forbidden(*args, **kwargs)
+
     monkeypatch.setattr("subprocess.run", forbidden)
-    monkeypatch.setattr("subprocess.Popen", forbidden)
+    monkeypatch.setattr("subprocess.Popen", ForbiddenProcess)
     monkeypatch.setattr("socket.create_connection", forbidden)
 
 

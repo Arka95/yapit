@@ -64,6 +64,11 @@ cues from ordered ASR starts and the full source duration, including outer
 silence; it rejects missing, overlapping or out-of-range timing. Pipeline limits
 audio-reel decoding to 180 seconds before recognition; ordinary transcription
 retains its one-hour limit.
+Audio reels call `transcribe(export_scripts=False)`: raw segments and their
+sidecar are exported without imposing Script partition limits. Their `scripts`
+list is empty; use `extract_script` separately when reviewable Script parts
+are wanted. Video soundtrack extraction uses the same explicit data store
+as its calling transcription workflow.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest src\rescript\tests -q

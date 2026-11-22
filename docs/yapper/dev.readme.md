@@ -149,8 +149,10 @@ weight loading separately. All progress goes to stderr, not CLI/MCP JSON output.
 
 Signal gates do not establish identity, transcript correctness or naturalness.
 Training overfit is not established by uneven pacing alone. Proposed improvements,
-**not implemented**: paragraph-level speech chunks independent of visual beats,
-and complete effective-settings provenance.
+**not implemented**: paragraph-level speech chunks spanning visual beats,
+and complete effective-settings provenance. Long beats are split into at most
+40-word requests while retaining one measured beat duration and one ending
+pause; adapter/worker 45-second chunk limits remain in place.
 Compare one change at a time on held-out text before claiming better speech.
 
 ```powershell

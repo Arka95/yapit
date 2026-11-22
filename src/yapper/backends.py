@@ -115,5 +115,5 @@ def normalize_audio(wave: np.ndarray, sample_rate: int) -> np.ndarray:
         raise ValueError("Speech model produced empty, invalid or silent audio.")
     data = resample(data, sample_rate)
     if len(data) / SAMPLE_RATE > MAX_CHUNK_SECONDS:
-        raise ValueError("A beat exceeded 45 seconds; split the script into shorter beats.")
+        raise ValueError("Speech chunk exceeded the 45-second backend safety limit.")
     return data

@@ -246,3 +246,39 @@ def test_invalid_audio_target_fails_before_synthesis(mocked_narration, target):
     with pytest.raises(ValueError):
         generate_audio("Reviewed words.", workspace=root, backend=speech, seconds=target)
     speech.synthesize.assert_not_called()
+
+
+@pytest.mark.parametrize("target", [None, 30])
+def test_long_beats_are_synthesized_in_bounded_chunks_without_losing_words_or_pauses(
+    mocked_narration, monkeypatch, target
+):
+    root, speech, decoder = mocked_narration
+    calls = []
+    writer = Mock()
+    monkeypatch.setattr("yapit.yapper.generation.write_wav", writer)
+
+    def synthesize(text):
+        calls.append(text)
+        seconds = len(text.split()) * 0.6
+        if seconds > 45:
+            raise ValueError("A beat exceeded 45 seconds")
+        return np.full(round(seconds * TEST_SAMPLE_RATE), 0.1, dtype=np.float32)
+
+    speech.synthesize.side_effect = synthesize
+    text = " ".join(f"word{index}" for index in range(100))
+    supplied = Script(title="Long beat", beats=[Beat(text=text, pause_ms=180)])
+    decoder.side_effect = lambda *args, **kwargs: np.full(
+        round(60.18 * TEST_SAMPLE_RATE), 0.1, dtype=np.float32
+    )
+    if target is not None:
+        with pytest.raises(ValueError, match="duration limit"):
+            generate_audio(supplied, workspace=root, backend=speech, seconds=target)
+        decoder.assert_not_called()
+        return
+    result = generate_audio(supplied, workspace=root, backend=speech)
+    assert " ".join(calls) == text
+    assert len(writer.call_args.args[1]) == round(60.18 * TEST_SAMPLE_RATE)
+    assert result["seconds"] == pytest.approx(60.18)
+    timeline = Timeline.model_validate_json(Path(result["timeline"]).read_text())
+    assert {cue.beat for cue in timeline.cues} == {0}
+    assert Script.model_validate_json(Path(result["script"]).read_text()) == supplied

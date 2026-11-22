@@ -46,7 +46,11 @@ pause, including the last. JSON gives explicit pauses and visuals:
 ```
 
 Changing text versus JSON is not a continuous-narration quality switch:
-each beat is synthesized separately. Omit `--seconds` for natural audio length
+beats are synthesized separately, with long beats split into internal chunks
+of at most 40 whitespace-separated words. Words and visual beats are preserved;
+the beat pause is added only once. Managed adapters retain a 45-second safety
+limit per internal chunk, not per beat or complete narration.
+Omit `--seconds` for natural audio length
 with no total duration cap or target validation. An explicit target (5-180
 seconds) validates natural speech within +/-33%, without stretching, padding
 or truncation. Reels keep their default 30-second target and +/-33% buffer;
@@ -72,6 +76,12 @@ overrides the profile checkpoint; another architecture does not reuse Qwen
 weights. Both adapters run in the selected CPU/GPU Python environment; choosing
 a model does not create another environment. See
 [adapter setup](dev.readme.md#model-onboarding).
+
+Reference cloning currently uses the profile's one selected recording (or
+Pocket's optional exported state), not every enrollment sample. Qwen's selected
+fine-tuned CustomVoice route uses its trained speaker instead. Automatically
+merging all samples is not established as better; see the
+[reference-conditioning decision](../analysis.md#reference-conditioning-decision---november-22-2026).
 
 ## Delivery styles
 

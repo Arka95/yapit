@@ -118,8 +118,9 @@ not need another writing call. Do not add images/frames to script-writing calls.
 ### Enroll a voice
 
 Call `enroll_voice` with `{}`. The app handles profile selection/creation,
-microphone choice, displayed passages, recording, playback and completion.
-The user must save at least five distinct recordings and finish in the app.
+microphone choice, a single roughly one-minute paragraph, recording and playback.
+The user confirms the complete recording and clicks **Enroll voice** in the app.
+The separate Training tab collects the 16 short passages for fine-tuning.
 Do not request an MP3, transcript or manifest as tool input.
 
 The return value is `status: launched` with a process ID, not completed
@@ -175,6 +176,9 @@ explicitly. Named styles require separately enrolled reference recordings.
 Supplied words are not rewritten. Omit `seconds` for natural audio with no total
 duration cap, fitting or duration-target check. An explicit target (5-180 seconds)
 validates within +/-33%; speech is not stretched, padded or truncated.
+Long beats are internally split into requests of at most 40 words; supplied
+words and beat pauses are preserved. Each internal model/worker request retains
+a 45-second safety limit, not a limit on the complete narration.
 
 The result includes MP3/WAV, saved script, timeline, provenance and status-file
 paths. It creates no video. First use may download uncached speech assets.
@@ -207,7 +211,9 @@ Call `generate_reel` with exactly one non-null source:
 
 Do not send placeholder empty strings for unused sources. On the existing-audio
 branch, input must be at most 180 seconds; `voice` and `seconds` do not alter
-the source. Captions need ASR review. The video adds a default 0.75-second closing
+the source. This branch exports raw ASR timing, not partitioned Script files
+(`scripts` is empty); use `extract_script` separately if Script parts are needed.
+Captions need ASR review. The video adds a default 0.75-second closing
 hold. On script/prompt input, the video has a +/-33% target-duration buffer,
 including its closing hold; exact duration is not promised.
 

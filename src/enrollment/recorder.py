@@ -11,6 +11,7 @@ from pathlib import Path
 from yapit.common_utils.fileutils import data_filename
 from yapit.common_utils.mediautils import SAMPLE_RATE, ffmpeg
 from yapit.common_utils.metrics import timed
+from yapit.enrollment.sample_scripts import ENROLLMENT_MAX_SECONDS
 
 
 def microphone_devices() -> list[str]:
@@ -27,7 +28,8 @@ def microphone_devices() -> list[str]:
 
 
 class MicrophoneRecorder:
-    def __init__(self):
+    def __init__(self, *, max_seconds: int = ENROLLMENT_MAX_SECONDS):
+        self.max_seconds = max_seconds
         self.process: subprocess.Popen | None = None
         self.output: Path | None = None
         self.log = None
@@ -144,12 +146,12 @@ class MicrophoneRecorder:
                 self._stop_writer()
 
     def _write(self, data: bytes) -> None:
-        remaining = 20 * SAMPLE_RATE - self._frames
+        remaining = self.max_seconds * SAMPLE_RATE - self._frames
         data = data[: remaining * 2]
         self._writer.writeframes(data)
         self._file.flush()
         self._frames += len(data) // 2
-        if self._frames == 20 * SAMPLE_RATE:
+        if self._frames == self.max_seconds * SAMPLE_RATE:
             self._stop_writer()
 
     def _stop_writer(self) -> None:

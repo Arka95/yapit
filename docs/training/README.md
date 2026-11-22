@@ -5,6 +5,33 @@
 Explicit Qwen voice fine-tuning and manual checkpoint selection.
 [Enrollment](../enrollment/README.md) and reference cloning do not train weights.
 
+## Training tab
+
+Open the desktop studio with `.\yapit.cmd enroll-voice`, which launches the app.
+Enroll a voice first, then open **Training**, select the profile, and click
+**Load profile**. Its existing training clips are reused; otherwise, record the
+16 displayed short passages. Replay/confirm each take and use **Save & Next**.
+**Save training recordings** publishes the dataset independently of enrollment.
+
+Select **Qwen3-TTS 1.7B Base** or **0.6B Base**, choose a reviewed upstream
+checkout, set epochs/batch size, and click **Train**. That action saves the
+collection and submits training. Completion exposes the produced checkpoints;
+review them before clicking **Use reviewed checkpoint**. Training never
+automatically switches the voice used for narration.
+
+Windows submission requires an existing Linux/WSL2 training environment with
+YapIt and its training dependencies installed. Configure these optional values
+in the local `.env`, then reopen the app:
+
+| Setting | Meaning |
+|---|---|
+| `YAPIT_TRAINING_PYTHON` | Absolute Linux path to Python in the existing WSL training environment |
+| `YAPIT_TRAINING_DISTRIBUTION` | WSL distribution name; blank uses the configured default |
+| `YAPIT_TRAINING_UPSTREAM` | Reviewed checkout folder, prefilled in the UI and changeable with **Browse** |
+
+Submission translates paths through WSL and preserves the configured data/model
+roots. It does not install an environment or silently change the inference stack.
+
 ## Requirements and commands
 
 Use **Linux/WSL2**, CUDA with bfloat16 support, compatible FlashAttention,
@@ -26,6 +53,13 @@ to CPU and may download a missing Base snapshot.
 `--model` selects official 1.7B (default) or 0.6B Base training weights,
 independently of inference's `YAPIT_MODEL`. Batch one does not guarantee fitting
 a particular GPU.
+
+Training recordings and their manifest live in
+`data\<profile>\training\audio` and `data\<profile>\training\<profile>.samples.json`.
+They are separate from the profile's one long enrollment reference.
+Legacy multi-clip profiles remain readable and can be migrated without decoding
+or changing recordings. The old reference remains available until the owner
+records the new enrollment paragraph.
 
 ## Continuation and review
 

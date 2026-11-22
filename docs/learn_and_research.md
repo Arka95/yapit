@@ -1367,3 +1367,173 @@ CosyVoice run: `workspace\outputs\testuser.cosyvoice2.validation.2.status.json`,
 its provenance, and session `files\cosyvoice2-validation-verification.json`.
 Official revisions, equations and research limitations are in the dated archive;
 [training/backend assessment](tts-training-and-backends.md) retains implementation detail.
+
+## Reference audio conditioning review - November 22, 2026
+
+[Back to YapIt](../README.md) | [Current decision](analysis.md)
+
+### Actual YapIt behavior
+
+Code inspection, not inference: enrollment's `profiles.enroll` retains all samples
+but selects one reference by minimizing
+`quiet_fraction + abs(seconds - 10) / 40`. This heuristic prefers relatively
+clean audio near ten seconds; it does not measure speaker similarity, phonetic
+coverage or an optimal model-specific prompt length.
+
+`PocketSpeech.load` prepares one state from `pocket_voice_state`, if configured,
+otherwise `reference_audio`. The current profile has no exported Pocket state.
+`QwenSpeech.load` supplies one `reference_audio` and matching `reference_text`
+with `x_vector_only_mode=False` only when the loaded model is Base. A selected
+CustomVoice checkpoint instead generates with its trained speaker and does not
+create a voice-clone prompt. Generic provenance still records the profile's
+reference path in that case; that field alone does not prove reference use.
+
+The inspected demo profile has 16 recordings totaling 225.91 seconds. Its selected
+reference, `testuser.audio_sample_1.wav`, is 11.24 seconds. The selected Qwen
+checkpoint is epoch 2; the latest inspected per-backend provenance also records
+Qwen fine-tuned mode and Pocket reference mode. No audio was decoded/listened to,
+no model was loaded, and neither checkpoints nor profile settings were changed.
+
+### Official interface evidence
+
+- [Qwen README](https://github.com/QwenLM/Qwen3-TTS/blob/main/README.md):
+  0.6B/1.7B Base advertise 3-second cloning. This is a demonstrated capability,
+  not an optimal duration or evidence that more audio always improves identity.
+- [Qwen prompt implementation](https://github.com/QwenLM/Qwen3-TTS/blob/main/qwen_tts/inference/qwen3_tts_model.py):
+  ICL conditions on reference text, speech codes and a speaker embedding.
+  Exact reference text is required. Speaker-embedding-only mode discards the
+  reference codes/text; it is a different conditioning mode, not a multi-take
+  aggregation feature. List arguments construct separate batch prompts.
+  No universal maximum or recommendation to concatenate 16 clips was established.
+- [Pocket Python implementation](https://github.com/kyutai-labs/pocket-tts/blob/main/pocket_tts/models/tts_model.py):
+  one audio prompt is encoded into reusable conditioning state/KV context; no
+  reference transcript is passed. `get_state_for_audio_prompt` defaults to
+  `truncate=False`; optional truncation limits path-loaded audio to 30 seconds.
+  The docstring describes this option as protection from very long-input memory
+  issues. YapIt's direct API call does not request that truncation.
+- [Pocket export CLI](https://kyutai-labs.github.io/pocket-tts/CLI%20Commands/export_voice/):
+  documents processing only the first 30 seconds. This CLI behavior must not be
+  mistaken for the current YapIt adapter's Python API behavior or an optimal
+  reference duration.
+
+Sources checked November 22, 2026. These findings concern already integrated
+model families; no new model release was selected and no runtime was provisioned.
+
+### Decision and unrun experiment
+
+Preserve the current single-reference default. Merging all 225.91 seconds is not
+supported by evidence of an improvement. The Pocket implementation's explicit
+long-input warning and sequential conditioning make blind concatenation an
+unnecessary risk; Qwen's batch support is not multi-reference pooling.
+
+A possible controlled experiment is the existing 11.24-second clip versus a
+clean continuous 15-20-second passage, then a short same-session concatenation
+as a separate condition. These lengths are suggested experiments within the
+current enrollment bounds, not upstream-prescribed optima. Preserve natural
+phrase boundaries, consistent microphone/delivery and exact ordered spoken
+text for Qwen ICL. Do not mix styles or treat silence as useful extra evidence.
+Compare identity, pronunciation, missing/repeated words and delivery with the
+same reviewed output text/model/settings; separately measure preparation cost.
+No winner or performance improvement is claimed without local listening and
+measurements. Execution remains deferred until explicitly authorized.
+
+## Likeness-first research correction - November 22, 2026
+
+[Back to YapIt](../README.md) | [Current decision](analysis.md)
+
+The owner clarified that inadequate resemblance, rather than input validity, is
+the problem. Retaining the selected reference is not a quality finding. The
+current ranking favors low quiet-frame fraction and proximity to ten seconds;
+it has never demonstrated which of the 16 takes best preserves identity.
+No new audio was listened to, synthesized or scored for this research.
+
+### Primary-source findings
+
+- [Qwen3-TTS technical report](https://arxiv.org/abs/2601.15621):
+  three-second cloning is a capability claim, not an optimal-duration result.
+- [Pocket documentation](https://kyutai-labs.github.io/pocket-tts/):
+  reference recording quality is reproduced; the authors recommend clean input.
+- [Pocket/CALM paper, Appendix F](https://arxiv.org/html/2509.06926v3):
+  audio quality and speaker resemblance are evaluated separately, on enhanced
+  reference recordings. The reported similarity rankings do not imply that
+  fluent output preserves a particular user's voice. These published results
+  do not establish the performance of YapIt's October weights on this user.
+- [Beyond the Benchmark, October 16, 2026 preprint](https://arxiv.org/html/2610.23678v1):
+  on the tested Qwen 1.7B Base setup, clean, accurately transcribed ICL references
+  favored timbre; embedding-only conditioning better matched timing in some
+  conditions. Reference-text errors impaired ICL. Prosody and domain effects
+  remained important, and automatic metrics did not substitute for listeners.
+  Findings are conditional; the small human panel limits generalization.
+- [Fish Audio Drama 3 developer report, October 13, 2026, section 5.3.1](https://arxiv.org/html/2610.18010v1):
+  a native multi-reference architecture improved its speaker-similarity metric
+  from 0.605 to 0.633 using three references instead of one on LibriSpeech-PC.
+  This supports the possibility of multi-reference benefit, not transfer of that
+  result to Qwen/Pocket concatenation. No new model is selected here.
+
+### Revised recommendation, not an implemented change
+
+Use the existing takes as a reference-candidate pool rather than declaring the
+silence-ranked take best. With execution authorization, compare a few clear,
+representative recordings on identical short unseen narration, with several
+takes to avoid choosing a lucky random result. Have the owner judge likeness,
+accent, rhythm and expression separately from word accuracy. Optional
+speaker-embedding comparisons should use held-out real clips and remain
+supporting evidence, not the sole acceptance criterion.
+
+Compare Pocket and Qwen Base references separately from the trained Qwen
+checkpoint: replacing reference audio cannot repair a CustomVoice inference
+route that does not consume it. A continuous 15-20s reference and a short,
+consistent concatenation are additional test conditions, not prescribed optima.
+Do not concatenate the entire 225.91s set by default. If reference auditions
+remain inadequate, assess the trained checkpoint/training data or a genuinely
+multi-reference adapter as a separate task, without assuming fine-tuning or a
+larger model will win. No inference, conversion, retraining, downloads or
+checkpoint/reference changes were performed for this follow-up.
+
+## Production enrollment decision - November 22, 2026
+
+[Back to YapIt](../README.md) | [Enrollment](enrollment/README.md) |
+[Training](training/README.md)
+
+The owner requires a predictable client-facing onboarding flow: one fixed,
+phonetically varied paragraph, approximately one minute, recorded once for the
+profile. The 16 short prompts belong exclusively to training collection.
+Reference auditioning and automatic selection between short clips are removed
+from the enrollment design. This is a workflow/product decision, not a measured
+claim that a one-minute prompt improves either backend's similarity or latency.
+
+### Superseded current-guide material, retained before refinement
+
+| Previous position | Evidence / proposed acceptance criterion |
+|---|---|
+| Treat the current reference as provisional, not a likeness winner. Prioritize a reference audition before preserving it as the preferred voice. | The owner reports unsatisfactory likeness. The 11.24s clip minimizes a silence/duration heuristic, which does not assess identity. The 16 clips (225.91s total) are useful candidates for comparison. |
+| Pocket and Qwen Base use one reference; the selected Qwen CustomVoice checkpoint does not use a reference prompt at inference. | Pocket prepares one audio/state prompt; Qwen Base uses matching reference text/audio in ICL mode. Qwen list inputs are separate batch entries. |
+| Compare a few representative existing takes, then a continuous 15-20s reference and a bounded merge as separate experiments. | Keep model/text/settings fixed; assess identity, accent and delivery separately from intelligibility. Verify exact reference words for Qwen ICL. Compare Base conditioning with the existing trained checkpoint separately. No experiment was run. |
+| More references can help architectures that support them; this is not evidence for blindly merging all 16 in Pocket/Qwen. | An October 2026 developer report measures improved similarity with three references in a different architecture. This corrects an overly broad "no evidence for multiple samples" interpretation, without selecting or provisioning another model. |
+
+Pocket's export CLI documents first-30s processing; its Python API defaults to
+no 30s truncation, and YapIt does not request truncation. This is not a proven
+optimal length. Qwen advertises 3-second cloning, not a guarantee that longer is
+better. The earlier reference and likeness reviews above retain their sources.
+
+### Implemented contract
+
+Enrollment records the complete fixed paragraph, accepts 45-90 seconds, and
+publishes exactly one audio/text reference. Signal checks and human transcript
+confirmation remain. The full accepted recording reaches the existing adapters;
+there is no new selection, merge or model execution during enrollment.
+Re-enrollment clears selected checkpoint/speaker/Pocket state so new reference
+conditioning is used; checkpoint files, writing metadata and training data remain.
+
+Training owns the 16 short prompts, a separate per-profile audio/manifest store,
+and explicit model/job/checkpoint controls in its own tab. Windows submission
+requires an explicitly configured existing WSL Python; it neither installs a
+runtime nor changes the selected inference environment. Existing trainer gates
+and manual checkpoint review remain.
+
+The `testuser` collection was separated into `data\testuser\training`: all 16
+recording SHA256 values were preserved, 15 originals relocated, and the active
+short reference retained alongside its training copy. Original profile,
+samples, quality and journal metadata were archived. The selected epoch-2
+checkpoint was preserved. A new one-minute enrollment still needs the owner's
+recording; existing short audio is not relabeled as the new paragraph.

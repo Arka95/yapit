@@ -91,6 +91,27 @@ def test_backend_switch_does_not_inherit_another_models_identifier():
     )
 
 
+@pytest.mark.parametrize("has_worker", [False, True])
+@pytest.mark.parametrize("requested", ["qwen", "pocket"])
+def test_audio_backend_selection_only_inherits_its_own_configured_model(
+    voice, monkeypatch, has_worker, requested
+):
+    monkeypatch.setenv("YAPIT_TTS_BACKEND", "qwen")
+    monkeypatch.setenv("YAPIT_TTS_MODEL", "qwen-model")
+    monkeypatch.setenv("YAPIT_VOICE_WORKER", "auto")
+    state = {"backend_selection": True} if has_worker else None
+    monkeypatch.setattr("yapit.yapper.worker.read_state", lambda data: state)
+    factory = Mock()
+    monkeypatch.setattr("yapit.yapper.worker.create_backend", factory)
+    selected = backend_for(*voice, backend_name=requested)
+    expected = "qwen-model" if requested == "qwen" else None
+    if has_worker:
+        assert (selected.backend, selected.model) == (requested, expected)
+        factory.assert_not_called()
+    else:
+        factory.assert_called_once_with(*voice, BackendSelection(requested, expected))
+
+
 @pytest.mark.parametrize("source", [None, "config.yaml"])
 def test_pocket_reuses_conditioning_and_normalizes_native_audio(voice, monkeypatch, source, caplog):
     caplog.set_level(logging.INFO)

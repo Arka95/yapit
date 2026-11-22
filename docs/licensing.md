@@ -39,9 +39,11 @@ scripts, footage and music retain their own rights and conditions.
 ## Marketplace skills
 
 The local YapIt runtime and any marketplace skills are different deliverables.
-No marketplace skill package is currently included or published by this repository.
+The [marketplace-neutral skill](skills/README.md) is included in this repository
+and packaged separately with the MIT license. Inclusion here does not establish
+publication or acceptance by any marketplace.
 
-For a future paid skill, keep the separately authored skill instructions and
+For a future restrictively licensed paid skill, keep separately authored instructions and
 support files under an explicit, separate license rather than publishing them
 under this repository's MIT grant if restricted redistribution is intended.
 Marketplace terms vary; review the actual platform's distribution, buyer-license

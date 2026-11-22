@@ -19,10 +19,15 @@ from yapit.storage import DataStore
 
 @timed
 def extract_audio(
-    media: Path, *, output_dir: Path | None = None, profile: str = DEFAULT_PROFILE
+    media: Path,
+    *,
+    output_dir: Path | None = None,
+    profile: str = DEFAULT_PROFILE,
+    data: DataStore | None = None,
 ) -> dict:
     source = validate_media_source(media)
-    folder = DataStore.within(DataStore().audio, output_dir)
+    data = data or DataStore()
+    folder = data.within(data.audio, output_dir)
     with tempfile.TemporaryDirectory(prefix="yapit-extract-") as temporary:
         decoded = Path(temporary) / "audio.wav"
         try:

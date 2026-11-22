@@ -13,15 +13,16 @@ from yapit.common_utils.metrics import timed
 from yapit.constants import AUDIO_SAMPLE_NAME_TEMPLATE
 from yapit.enrollment.artifacts import session_directory
 from yapit.enrollment.profiles import (
-    MIN_SAMPLES,
-    audio_name,
     audio_quality,
     enroll,
     load_voice,
-    merged_samples,
-    save_journal,
 )
-from yapit.enrollment.sample_scripts import Reading, load_readings
+from yapit.enrollment.sample_scripts import (
+    ENROLLMENT_MAX_SECONDS,
+    ENROLLMENT_MIN_SECONDS,
+    Reading,
+    load_readings,
+)
 from yapit.models import Model, Sample, Voice
 from yapit.storage import DataStore
 
@@ -39,13 +40,20 @@ class Draft(Model):
         return self
 
 
-class EnrollmentSession:
+class RecordingSession:
+    """Resumable prompt/take pairing shared by enrollment and training collection."""
+
+    training = False
+    min_seconds = ENROLLMENT_MIN_SECONDS
+    max_seconds = ENROLLMENT_MAX_SECONDS
+    minimum_samples = 1
+
     def __init__(self, store: DataStore, alias: str):
         self.store = store
         self.folder = store.profile_dir(alias)
         self.alias = self.folder.name
         self.audio_folder = self.folder / "audio"
-        self.scratch = session_directory(store, self.alias)
+        self.scratch = session_directory(store, self.alias, training=self.training)
         self.path = self.scratch / data_filename("session", self.alias, ".json")
         self._selected: int | None = None
         if self.path.exists():
@@ -53,37 +61,24 @@ class EnrollmentSession:
             if self.draft.alias.lower() != self.alias:
                 raise ValueError("The saved enrollment alias does not match this folder.")
             self.draft.alias = self.alias
-            for sample in self.draft.samples:
-                if sample:
-                    sample.audio = str(store.inside(self.folder / sample.audio))
+            for sample in filter(None, self.draft.samples):
+                path = Path(sample.audio).resolve()
+                if not path.is_relative_to(self.scratch):
+                    path = store.inside(path)
+                sample.audio = str(path)
         else:
-            readings = load_readings()
+            readings = self.load_readings()
             self.draft = Draft(
                 alias=self.alias,
                 readings=readings,
                 samples=[None] * len(readings),
-                completed=store.voice_path(self.alias).exists(),
             )
-        if store.voice_path(self.alias).exists():
-            voice = load_voice(store, self.alias)
-            directory = store.voice_audio_dir(self.alias)
-            available = {
-                audio_name(self.alias, Path(sample.audio)): sample for sample in voice.samples
-            }
+            available = {sample.text: sample for sample in self.saved_samples()}
             for index, reading in enumerate(self.draft.readings):
-                number = (
-                    reading.sample_id.removeprefix("sample_") if reading.sample_id else index + 1
-                )
-                filename = data_filename(
-                    AUDIO_SAMPLE_NAME_TEMPLATE.format(number=number), self.alias, ".wav"
-                )
-                sample = available.get(filename)
+                sample = available.get(reading.text)
                 if sample is not None:
-                    self.draft.samples[index] = (
-                        Sample(audio=str(directory / sample.audio), text=sample.text)
-                        if sample.text == reading.text
-                        else None
-                    )
+                    self.draft.samples[index] = sample
+            self.draft.completed = self.finished
         self.folder.mkdir(parents=True, exist_ok=True)
         self.persist()
 
@@ -102,13 +97,17 @@ class EnrollmentSession:
 
     @property
     def samples(self) -> list[Sample]:
-        return merged_samples(
-            self.store, self.alias, [sample for sample in self.draft.samples if sample]
-        )
+        return [sample for sample in self.draft.samples if sample]
 
     @property
     def ready(self) -> bool:
-        return len(self.samples) >= MIN_SAMPLES
+        return len(self.samples) >= self.minimum_samples
+
+    def load_readings(self) -> list[Reading]:
+        raise NotImplementedError
+
+    def saved_samples(self) -> list[Sample]:
+        raise NotImplementedError
 
     def select_sample(self, index: int) -> None:
         if not 0 <= index < len(self.draft.readings):
@@ -120,12 +119,6 @@ class EnrollmentSession:
             self.path.unlink(missing_ok=True)
         else:
             save_json(self.path, self.draft)
-        samples = self.samples
-        save_json(
-            self.folder / data_filename("samples", self.alias, ".json"),
-            {"samples": [s.model_dump() for s in samples]},
-        )
-        save_journal(self.folder, self.alias, samples)
 
     def new_take(self) -> Path:
         if self.index == len(self.draft.readings):
@@ -156,10 +149,14 @@ class EnrollmentSession:
         source = source.resolve()
         if not source.is_relative_to(self.scratch):
             raise ValueError("The recording must stay inside this enrollment session workspace.")
-        data = decode_audio(source, max_seconds=20)
-        original_quality = audio_quality(data)
-        if original_quality["seconds"] < 3:
-            raise ValueError("Record at least 3 seconds and read the complete passage.")
+        data = decode_audio(source, max_seconds=self.max_seconds)
+        original_quality = audio_quality(
+            data, min_seconds=self.min_seconds, max_seconds=self.max_seconds
+        )
+        if original_quality["seconds"] < self.min_seconds:
+            raise ValueError(
+                f"Record at least {self.min_seconds} seconds and read the complete passage."
+            )
         if original_quality["clipped_fraction"] > 0.001:
             raise ValueError("This take is clipped. Reduce microphone gain and record again.")
         gain_db = trim_start = trim_end = 0.0
@@ -175,7 +172,7 @@ class EnrollmentSession:
                 raise ValueError("No sustained sound detected. Check the microphone and try again.")
             start = max(0, int(indices[0]) * window - SAMPLE_RATE // 2)
             end = min(len(data), (int(indices[-1]) + 1) * window + SAMPLE_RATE // 2)
-            if end - start >= 3 * SAMPLE_RATE:
+            if end - start >= self.min_seconds * SAMPLE_RATE:
                 trim_start, trim_end = start / SAMPLE_RATE, (len(data) - end) / SAMPLE_RATE
                 data = data[start:end]
             gain = 0.5 / max(float(np.max(np.abs(data))), 1e-10)
@@ -185,12 +182,13 @@ class EnrollmentSession:
                 )
             data = data * gain
             gain_db = float(20 * np.log10(gain))
-        quality = audio_quality(data)
+        quality = audio_quality(data, min_seconds=self.min_seconds, max_seconds=self.max_seconds)
         if quality["reasons"]:
             raise ValueError(" ".join(quality["reasons"]))
         index = self.index
-        self.audio_folder.mkdir(parents=True, exist_ok=True)
-        prepared = self.audio_folder / data_filename(self.sample_name, self.alias, ".wav")
+        prepared = self.scratch / data_filename(
+            self.sample_name, self.alias, f".saved.{uuid.uuid4().hex}.wav"
+        )
         temporary = self.scratch / data_filename(
             self.sample_name, self.alias, f".prepared.{uuid.uuid4().hex}.wav"
         )
@@ -201,7 +199,8 @@ class EnrollmentSession:
             if any(
                 Path(sample.audio).resolve() != prepared.resolve()
                 and file_sha256(Path(sample.audio)) == digest
-                for sample in self.samples
+                for position, sample in enumerate(self.draft.samples)
+                if sample and position != index
             ):
                 raise ValueError("This duplicates a saved recording. Read the current passage.")
             shutil.copyfile(temporary, publication)
@@ -228,17 +227,41 @@ class EnrollmentSession:
         self._selected = None
         return report
 
+    def completed(self) -> None:
+        self.draft.completed = True
+        self.persist()
+
+
+class EnrollmentSession(RecordingSession):
+    """Collect and publish exactly one paragraph as the profile's voice reference."""
+
+    def load_readings(self) -> list[Reading]:
+        return load_readings()
+
+    def saved_samples(self) -> list[Sample]:
+        if not self.store.voice_path(self.alias).exists():
+            return []
+        voice = load_voice(self.store, self.alias)
+        if len(voice.samples) != 1:
+            return []
+        return [
+            Sample(
+                audio=str(self.store.inside(self.audio_folder / voice.reference_audio)),
+                text=voice.reference_text,
+            )
+        ]
+
+    @property
+    def sample_name(self) -> str:
+        return "reference"
+
     @timed
     def finish(self) -> Voice:
         if not self.ready:
-            raise ValueError(f"Save at least {MIN_SAMPLES} distinct samples before enrollment.")
-        self.persist()
-        voice = enroll(
-            self.store,
-            self.alias,
-            self.folder / data_filename("samples", self.alias, ".json"),
-            confined=True,
-        )
-        self.draft.completed = True
-        self.persist()
+            raise ValueError("Save the complete enrollment paragraph before finishing.")
+        manifest = self.scratch / data_filename("reference", self.alias, ".json")
+        save_json(manifest, {"samples": [sample.model_dump() for sample in self.samples]})
+        voice = enroll(self.store, self.alias, manifest, confined=True)
+        self.draft.samples = self.saved_samples()
+        self.completed()
         return voice

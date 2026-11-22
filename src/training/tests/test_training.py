@@ -8,16 +8,12 @@ import numpy as np
 import pytest
 
 from yapit.common_utils.fileutils import save_json
-from yapit.common_utils.mediautils import write_wav
 from yapit.constants import DEFAULT_SPEECH_MODEL
 from yapit.enrollment import load_voice
-from yapit.models import Sample
 from yapit.storage import Workspace
 from yapit.training import resume_checkpoint, select_checkpoint, train
 from yapit.training.checkpoints import prepare_resume_model
 from yapit.training.sft_runner import run_sft
-
-from .conftest import tone
 
 
 @pytest.fixture
@@ -101,7 +97,7 @@ def resume_models(tmp_path, monkeypatch):
     ],
 )
 def test_training_uses_local_snapshot_holdout_and_never_promotes_automatically(
-    enrolled,
+    training_workspace,
     monkeypatch,
     tmp_path,
     fail_sft,
@@ -109,13 +105,8 @@ def test_training_uses_local_snapshot_holdout_and_never_promotes_automatically(
     model,
     resume_models,
 ):
+    enrolled = training_workspace
     profile = load_voice(enrolled.data, "test-voice")
-    voice_dir = enrolled.voice_audio_dir(profile.name)
-    for index in range(10):
-        relative = f"training-{index}.wav"
-        write_wav(voice_dir / relative, tone(7, 250 + index * 10))
-        profile.samples.append(Sample(audio=relative, text=f"Distinct phrase number {index}."))
-    save_json(enrolled.voice_path(profile.name), profile)
     upstream = tmp_path / "upstream"
     training_dir = upstream / "finetuning"
     training_dir.mkdir(parents=True)
@@ -218,6 +209,11 @@ def test_training_uses_local_snapshot_holdout_and_never_promotes_automatically(
     ]
     assert not {row["audio"] for row in train_rows} & {row["audio"] for row in heldout}
     assert len({row["ref_audio"] for row in train_rows + heldout}) == 1
+    assert len(train_rows + heldout) == 16
+    assert all(
+        row["audio"] != str(enrolled.voice_audio_dir(profile.name) / profile.reference_audio)
+        for row in train_rows + heldout
+    )
     sft = calls[1]
     initialization = Path(sft[sft.index("--init_model_path") + 1])
     if resume_run:
@@ -232,9 +228,16 @@ def test_training_uses_local_snapshot_holdout_and_never_promotes_automatically(
     assert load_voice(enrolled.data, profile.name).checkpoint is None
 
 
-def test_training_rejects_non_base_model_choice_before_loading_dependencies(enrolled, tmp_path):
+def test_training_rejects_non_base_model_choice_before_loading_dependencies(
+    training_workspace, tmp_path
+):
     with pytest.raises(ValueError, match="official"):
-        train(enrolled, "test-voice", tmp_path, model="Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice")
+        train(
+            training_workspace,
+            "test-voice",
+            tmp_path,
+            model="Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+        )
 
 
 @pytest.mark.parametrize("fail", [False, True])
@@ -305,7 +308,8 @@ def test_sft_runner_supplies_logging_directory_and_restores_process_state(
         assert hooks[0](text, (), output).shape == (1, 2, 1024)
 
 
-def test_checkpoint_selection_checks_speaker_and_model_type(enrolled, tmp_path):
+def test_checkpoint_selection_checks_speaker_and_model_type(training_workspace, tmp_path):
+    enrolled = training_workspace
     checkpoint = tmp_path / "checkpoint"
     checkpoint.mkdir()
     save_json(checkpoint / "config.json", {"tts_model_type": "base"})

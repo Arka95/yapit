@@ -120,6 +120,7 @@ def test_audio_reel_uses_source_timing_without_loading_voice_or_resynthesizing(
     assert [cue.text for cue in timeline.cues] == ["First thought.", "Last thought."]
     assert render.call_args.kwargs["actual_seconds"] == 9
     assert recognize.call_args.kwargs["max_seconds"] == 180
+    assert recognize.call_args.kwargs["export_scripts"] is False
     assert recognize.call_args.kwargs["data"] is root.data
     select_voice.assert_not_called()
     synthesize.assert_not_called()

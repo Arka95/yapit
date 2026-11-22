@@ -51,7 +51,9 @@ def generate_reel(
             music=music,
             mix=mix,
         )
-    transcription = transcribe(Path(audio_path), data=root.data, max_seconds=180, offline=True)
+    transcription = transcribe(
+        Path(audio_path), data=root.data, max_seconds=180, offline=True, export_scripts=False
+    )
     metadata = json.loads(Path(transcription["transcript"]).read_text(encoding="utf-8"))
     timeline = timeline_from_segments(
         [Segment.model_validate(segment) for segment in metadata["segments"]],

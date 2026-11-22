@@ -15,6 +15,18 @@ on Linux/WSL2. Pocket has upstream training recipes, but no YapIt trainer.
 Sizes exclude SDKs/caches; Qwen includes an additional tokenizer weight file.
 One listening preference is not a controlled quality comparison.
 
+## Reference-conditioning decision - November 22, 2026
+
+| Current position | Implementation / acceptance criterion |
+|---|---|
+| Enroll with one fixed, phonetically varied paragraph, approximately one minute. | One 45-90s recording plus its exact transcript becomes the profile's only reference. No silence/duration ranking, merging or reference audition is performed. |
+| Pocket and Qwen Base use one reference; the selected Qwen CustomVoice checkpoint does not use a reference prompt at inference. | Pocket prepares one audio/state prompt; Qwen Base uses matching reference text/audio in ICL mode. Qwen list inputs are separate batch entries. |
+| Keep the 16 short passages in the Training module and tab. | Training targets/manifests are separate from the enrollment reference. Existing datasets/checkpoints are preserved; Train and checkpoint selection require explicit actions. |
+| Predictable onboarding is a product requirement; likeness and speed remain unmeasured. | The owner records once and confirms the transcript. No local inference, reference comparison or training was run for this change. |
+
+See the [production enrollment decision](learn_and_research.md#production-enrollment-decision---november-22-2026)
+for the superseded proposals, source-backed research and migration details.
+
 ## Implemented
 
 | Capability | Canonical guide |

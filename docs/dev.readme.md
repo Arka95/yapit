@@ -12,12 +12,13 @@ Module user/developer guides own their workflows and implementation details.
 |---|---|---|
 | `src` | Contracts, storage, configuration, CLI and Pipeline orchestration | This guide |
 | `src\common_utils` | File/media primitives, native model loading, runtime settings and metrics | This guide |
-| `src\enrollment` | Recording, curation and reusable voice profiles | [Enrollment](enrollment/dev.readme.md) |
+| `src\enrollment` | Single-paragraph voice references and shared recording controls | [Enrollment](enrollment/dev.readme.md) |
+| `src\studio` | Desktop audio/reel tabs, waveform preview and Windows transport | [Studio](studio/dev.readme.md) |
 | `src\rescript` | Extraction, recognition and script partitioning | [Rescript](rescript/dev.readme.md) |
 | `src\yapper` | Script planning, adapters, narration, worker and timeline | [Yapper](yapper/dev.readme.md) |
 | `src\editor` | Mixing, templates and video publication | [Editor](editor/dev.readme.md) |
 | `src\musicgen` | Explicit music discovery and source-verified acquisition | [Musicgen](musicgen/dev.readme.md) |
-| `src\training` | Qwen fine-tuning and checkpoint validation | [Training](training/dev.readme.md) |
+| `src\training` | 16-passage datasets, training UI/runtime submission and checkpoint validation | [Training](training/dev.readme.md) |
 | `src\mcp` | Stdio protocol adapters and client example | [MCP](mcp/dev.readme.md) |
 
 CLI and MCP call the owning modules directly: Yapper for scripts/audio, Rescript
@@ -163,10 +164,12 @@ MCP clients. Process variables override `.env`.
 | `data\background_music` | Selected CC0 tracks with source/license/plan sidecars |
 | `data\.runtime` | Private worker state and bounded speech cache |
 | `workspace\enrollment` | Resumable raw takes/drafts; removed after successful enrollment |
+| `data\<profile>\training` | Training-only recordings and manifest |
+| `workspace\training` | Resumable training-recording sessions |
 | `workspace\outputs` | Flat named prompts, timelines, provenance, status, logs and rendering intermediates |
 
-Generation/Rescript default data beside the workspace; enrollment independently
-defaults to `.\data`. Set both roots when relocating. Source files are preserved;
+Generation, Rescript, enrollment, profile listing and voice workers default data
+beside the workspace. `YAPIT_DATA_DIR` overrides that shared default. Source files are preserved;
 generated names gain numeric suffixes rather than overwriting.
 There is no durable job queue or cross-process GPU lock.
 
@@ -219,7 +222,9 @@ and never committed. Obsolete packaging checks were removed.
 Do not run inference, GPU probes, downloads or rendering for routine validation.
 
 `@timed` and source-unit pytest runs write best-effort, current-run records under ignored
-`.repo-stats`; children preserve their parent's run. Durations use at most two
+`.repo-stats\run-<id>\<module>`; children preserve their parent's run.
+Independent processes never truncate another run's files. Previous run directories
+are retained for explicit cleanup, not automatically deleted. Durations use at most two
 decimal places. `YAPIT_METRICS=0` disables records;
 `YAPIT_REPO_STATS_DIR` and `YAPIT_LOG_LEVEL` configure location/logging.
 Logs go to stderr; CLI/MCP stdout remains structured data. Record safe outcomes,
