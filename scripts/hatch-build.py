@@ -16,7 +16,7 @@ class CustomBuildHook(BuildHookInterface):
             path = Path(self.temporary.name) / filename
             path.write_text(content, encoding="utf-8")
             build_data["force_include"][str(path)] = filename
-        build_data["dependencies"].append("editables>=0.3,<1")
+        build_data["dependencies"].append("editables>=0.3")
 
     def finalize(self, version: str, build_data: dict, artifact_path: str) -> None:
         if self.target_name == "wheel" and version == "editable":

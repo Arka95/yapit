@@ -17,9 +17,9 @@ installs Qwen. Your own voice, script and selected model determine the result.
 
 ## Install locally on Windows
 
-You need **64-bit Python 3.12** with the Windows Python launcher (`py`) and
+You need **64-bit Python 3.11 or newer** with the Windows Python launcher (`py`) and
 Tkinter, **Git**, an internet connection for packages/first-use model downloads,
-and enough disk space for an isolated runtime and model weights (several GB).
+and enough disk space for the workspace runtime and model weights (several GB).
 A microphone is needed only for recording your voice. No API key or cloud
 subscription is needed for local narration.
 
@@ -28,7 +28,7 @@ In PowerShell, clone this repository into a folder you own:
 ```powershell
 git clone https://github.com/Arka95/yapit.git
 Set-Location .\yapit
-py -3.12 --version
+py -3 --version
 .\scripts\setup-mode.cmd
 ```
 
@@ -36,17 +36,21 @@ The installer already checks for an NVIDIA GPU with a bounded `nvidia-smi` probe
 
 | Detection | Installation |
 |---|---|
-| NVIDIA GPU reported by the driver | GPU runtime in `.venv-gpu` |
-| No NVIDIA GPU, missing driver tool, or failed/timed-out probe | CPU runtime in `.venv-cpu`, with a visible fallback message |
+| NVIDIA GPU reported by the driver | GPU mode in the workspace's shared `.venv` |
+| No NVIDIA GPU, missing driver tool, or failed/timed-out probe | CPU mode in the same workspace environment, with a visible fallback message |
 
 Setup saves its selected CPU/GPU runtime in your local `.env`. It installs
 the speech, transcription and MCP dependencies, matching
-PyTorch/torchaudio wheels, and checksum-verified SoX. It preserves any existing
-`.venv`; it does **not** download speech model weights, train a voice, install
+PyTorch/torchaudio wheels, and checksum-verified SoX. Setup reuses
+`..\.venv` (the parent workspace's environment) and protects
+installed Torch/torchaudio, NumPy, Transformers, Accelerate and CTranslate2 versions.
+An incompatible dependency request fails instead of replacing that stack.
+It does **not** download speech model weights, train a voice, install
 NVIDIA drivers, or configure your agent.
 
 Detection is not a GPU compatibility guarantee. GPU mode needs a driver/device
-compatible with the pinned CUDA 12.8 runtime, and validates CUDA before running.
+compatible with the installed CUDA build, and validates CUDA before running.
+New GPU setups use the CUDA 12.8 wheel index; existing CUDA stacks keep their build.
 It fails rather than silently switching devices. To choose a mode explicitly:
 
 ```powershell
@@ -99,10 +103,12 @@ models or prove generation quality. CPU is supported, but no real-time generatio
 speed is promised. Windows is the documented customer setup; this installer and
 the microphone UI are not cross-platform installers.
 
-Python 3.11 is also supported by the Python setup script. Without Python 3.12,
-use `py -3.11 .\scripts\setup-mode.py` instead of the `.cmd` setup wrapper.
+Python and package minimums are declared in `pyproject.toml`; selected SDKs and
+wheel availability can impose additional requirements. Launchers prefer a
+prepared, mode-compatible workspace environment and retain existing project
+CPU/GPU runtimes as compatibility fallbacks until shared setup succeeds.
 Advanced/offline installation and troubleshooting:
-[developer guide](docs/dev.readme.md#isolated-cpugpu-runtimes-on-windows).
+[developer guide](docs/dev.readme.md#shared-windows-runtime).
 
 ## Create your first narration and reel
 
@@ -220,7 +226,7 @@ See [MCP setup](docs/skills/README.md) for execution limits and configuration.
 
 | Problem | What to check |
 |---|---|
-| `py -3.12` is unavailable | Install Python 3.12 with its launcher/Tkinter, or use the Python 3.11 setup command above |
+| `py -3` is unavailable | Install a supported 64-bit Python with its launcher/Tkinter, or use an existing compatible environment |
 | NVIDIA hardware exists but CPU was selected | Check driver installation and `nvidia-smi`; explicit GPU setup still requires working CUDA |
 | GPU launcher rejects CUDA | Fix driver/runtime compatibility, or install CPU and run `.\yapit.cmd set-mode cpu`; it is not silently selected |
 | Changing mode appears to have no effect | Check for a process-level `YAPIT_MODE` override and restart an already-running voice worker |

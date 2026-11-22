@@ -76,17 +76,27 @@ model-specific loading or training policy.
 
 ## Configuration and dependencies
 
-### Isolated CPU/GPU runtimes on Windows
+### Shared Windows runtime
 
 `scripts\setup-mode.py` selects NVIDIA GPU using a bounded `nvidia-smi` probe,
-otherwise CPU. Explicit `cpu`/`gpu` bypass detection. Setup installs
-`requirements-cpu.txt` or `requirements-gpu.txt`, then the constrained
-`requirements-runtime.txt` plus `.[voice,rescript,mcp]`, verifies SoX and
-`pip check`, and saves `YAPIT_MODE` to `.env`. Existing `.venv` is preserved.
+otherwise CPU. Explicit `cpu`/`gpu` bypass detection. Setup reuses or creates
+the parent workspace's `.venv`. It installs `requirements-cpu.txt` or
+`requirements-gpu.txt`, then `.[voice,rescript,mcp]`, verifies SoX and
+`pip check`, and saves `YAPIT_MODE` to `.env`. Existing project runtimes remain intact.
 
-The runtime manifests are the version source of truth. GPU wheels target
-CUDA 12.8; setup does not install drivers, a system CUDA toolkit or model weights.
-CPU/GPU share model assets, not incompatible Python dependencies.
+`pyproject.toml` owns package minimums; SDK metadata owns transitive compatibility
+requirements. There is no repository-wide upper bound on Python or dependency
+versions. Torch/torchaudio resolve together instead of bypassing dependencies.
+Setup uses temporary constraints only for installed Torch, torchaudio, NumPy,
+Transformers, Accelerate and CTranslate2, preserving the existing backend stack
+without freezing the entire environment. Incompatible requests fail resolution.
+Existing CUDA builds keep their wheel index; new GPU setups use CUDA 12.8.
+Setup does not install drivers, a system CUDA toolkit or model weights.
+
+Launchers prefer the prepared shared environment when it supports the selected
+mode. Existing `.venv-cpu`/`.venv-gpu` environments remain compatibility fallbacks
+until shared setup succeeds; a CPU-only shared Torch does not displace a working
+project GPU runtime. Setup refuses to replace shared CPU Torch with CUDA.
 
 `yapit.cmd set-mode cpu|gpu` persists the choice without installing or probing.
 Selection precedence is process `YAPIT_MODE`, project `.env`, then CPU.
@@ -113,7 +123,7 @@ use a local `YAPIT_MODEL` path when appropriate.
 
 | Symptom | Action |
 |---|---|
-| No Python 3.12 launcher | Use supported Python 3.11: `py -3.11 .\scripts\setup-mode.py` |
+| No Python launcher | Run setup with an existing compatible 64-bit Python 3.11+ interpreter |
 | Missing/incompatible GPU runtime | Install/fix that runtime, or install CPU and run `yapit.cmd set-mode cpu` |
 | Saved mode appears ignored | Check process `YAPIT_MODE`; restart an existing worker |
 | Package download blocked | Use the approved feed or verified compatible wheels, not a TLS bypass |
@@ -181,11 +191,12 @@ belongs in a release.
 
 ## Development and packaging
 
-Use Python 3.11/3.12 and the existing environment. For a new core-only dev setup:
+Use Python 3.11+ and the existing compatible workspace environment. For a new
+core-only dev setup when that environment does not exist:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[dev,mcp]"
+python -m venv ..\.venv
+..\.venv\Scripts\python.exe -m pip install -e ".[dev,mcp]"
 ```
 
 Keep an existing `.env`; copy `.env.example` only when creating a new one.

@@ -1,11 +1,30 @@
 """Persist the local CPU/GPU choice without changing the caller's environment."""
 
 import os
+from importlib.metadata import Distribution
 from pathlib import Path
 
 from dotenv import dotenv_values, set_key
 
 RUNTIME_MODES = ("cpu", "gpu")
+
+
+def runtime_environment(root: Path, mode: str) -> Path:
+    """Prefer a prepared workspace environment compatible with the selected mode.
+
+    Existing project runtimes remain available without replacing their stacks.
+    """
+    if mode not in RUNTIME_MODES:
+        raise ValueError("Mode must be cpu or gpu.")
+    shared = root.parent / ".venv"
+    if (shared / "Scripts" / "yapit.exe").is_file():
+        if mode == "cpu":
+            return shared
+        site = shared / "Lib" / "site-packages"
+        for metadata in site.glob("torch-*.dist-info"):
+            if "+cu" in Distribution.at(metadata).version:
+                return shared
+    return root / f".venv-{mode}"
 
 
 def runtime_mode(root: Path) -> str:

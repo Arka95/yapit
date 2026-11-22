@@ -1,4 +1,4 @@
-"""Run YapIt in an isolated runtime; environment overrides are child-process-only."""
+"""Run YapIt in a compatible runtime with child-process-only environment overrides."""
 
 import argparse
 import json
@@ -7,7 +7,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-from yapit.common_utils.runtime_config import RUNTIME_MODES, runtime_mode, set_runtime_mode
+from yapit.common_utils.runtime_config import (
+    RUNTIME_MODES,
+    runtime_environment,
+    runtime_mode,
+    set_runtime_mode,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -30,7 +35,7 @@ def main() -> int:
         mode = runtime_mode(ROOT) if args.mode == "default" else args.mode
     except ValueError as exc:
         parser.error(str(exc))
-    environment = ROOT / f".venv-{mode}"
+    environment = runtime_environment(ROOT, mode)
     python = environment / "Scripts" / "python.exe"
     if not python.is_file():
         parser.error(f"Missing {python}; run scripts\\setup-mode.cmd {mode}.")
