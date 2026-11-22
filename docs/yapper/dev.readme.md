@@ -56,7 +56,11 @@ Cover selection, reference reuse, conversion, failure/path handling and cleanup
 with mocks; real provisioning/quality comparisons require authorization.
 
 Pocket optionally uses profile `pocket_voice_state`; otherwise the reference
-recording. Clone-weight access may require publisher approval and local sign-in.
+recording. Audio conditioning requests the SDK's `truncate=True`: Pocket processes
+at most the first 30 seconds, while enrollment retains the complete recording.
+Exported states load unchanged. The setting is part of cache identity, and
+provenance reports `reference_max_seconds` (30 for audio, null for exported states).
+Clone-weight access may require publisher approval and local sign-in.
 Custom YAML cache identity does not stamp every referenced weight: use immutable
 assets and restart after changing them.
 

@@ -40,6 +40,7 @@ def recording(session, seconds=60, level=0.1):
 def test_one_confirmed_paragraph_resumes_and_publishes_only_one_reference(reference_session):
     session = reference_session
     assert len(session.draft.readings) == 1
+    assert session.draft.readings[0].sample_id == "sample_1"
     assert not session.ready
     assert profile_names(session.store) == ["myvoice"]
     raw = recording(session)
@@ -51,6 +52,7 @@ def test_one_confirmed_paragraph_resumes_and_publishes_only_one_reference(refere
     assert resumed.ready
     voice = resumed.finish()
     assert len(voice.samples) == 1
+    assert voice.reference_audio == "myvoice.audio_sample_1.wav"
     assert voice.reference_audio == voice.samples[0].audio
     assert voice.reference_text == session.draft.readings[0].text
     assert (session.audio_folder / voice.reference_audio).is_file()
@@ -126,8 +128,41 @@ def test_saved_replacement_keeps_published_reference_until_finish(reference_sess
     session.save_take(recording(session, level=0.2), True, False)
     assert load_voice(session.store, session.alias).reference_audio == first.reference_audio
     second = session.finish()
-    assert second.reference_audio != first.reference_audio
-    assert (session.audio_folder / first.reference_audio).read_bytes() == before
+    assert second.reference_audio == first.reference_audio == "myvoice.audio_sample_1.wav"
+    assert (session.audio_folder / second.reference_audio).read_bytes() != before
+    assert len(list(session.audio_folder.glob("*.wav"))) == 1
+
+
+def test_failed_reference_replacement_restores_audio_and_inventories(
+    reference_session, monkeypatch
+):
+    session = reference_session
+    session.save_take(recording(session), True, False)
+    voice = session.finish()
+    paths = [session.audio_folder / voice.reference_audio]
+    paths.extend(session.folder.glob("*.json"))
+    originals = {path: path.read_bytes() for path in paths}
+    session.select_sample(0)
+    session.save_take(recording(session, level=0.2), True, False)
+    monkeypatch.setattr(
+        "yapit.enrollment.profiles.save_journal",
+        Mock(side_effect=OSError("Simulated publication failure")),
+    )
+    with pytest.raises(OSError, match="publication failure"):
+        session.finish()
+    assert all(path.read_bytes() == contents for path, contents in originals.items())
+
+
+def test_repeated_import_reuses_identical_numbered_reference(reference_session, tmp_path):
+    session = reference_session
+    source = tmp_path / "input.wav"
+    source.write_bytes(recording(session).read_bytes())
+    manifest = tmp_path / "reference.json"
+    save_json(manifest, {"samples": [{"audio": str(source), "text": "Reference paragraph."}]})
+    first = enroll(session.store, session.alias, manifest)
+    second = enroll(session.store, session.alias, manifest)
+    assert second.reference_audio == first.reference_audio
+    assert len(list(session.audio_folder.glob("*.wav"))) == 1
 
 
 def test_failed_microphone_start_closes_log_and_enrollment_cleans_it(

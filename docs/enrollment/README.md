@@ -19,6 +19,10 @@ accepted recordings are 45-90 seconds. Replay the take, check **Confirm before
 saving**, then click **Enroll voice**. Its exact paragraph and audio become the
 profile's single reference.
 
+The passage is `sampleScripts\sample_1.json`; the saved recording is
+`data\<profile>\audio\<profile>.audio_sample_1.wav`. Re-recording replaces this
+same passage slot after confirmation.
+
 **Record** begins capture; **Stop** ends the take. Enrollment completion or
 leaving the tab releases the microphone. **Record replacement** repeats the
 same paragraph and preserves the published reference until enrollment succeeds.

@@ -19,5 +19,5 @@ class Reading(Model):
 
 def load_readings(directory: Path | None = None) -> list[Reading]:
     """Load the fixed enrollment paragraph and its exact reference transcript."""
-    path = (directory or Path(__file__).parent) / "reference.json"
+    path = (directory or Path(__file__).parent / "sampleScripts") / "sample_1.json"
     return [Reading.model_validate_json(path.read_text(encoding="utf-8"))]

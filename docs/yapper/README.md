@@ -83,6 +83,11 @@ fine-tuned CustomVoice route uses its trained speaker instead. Automatically
 merging all samples is not established as better; see the
 [reference-conditioning decision](../analysis.md#reference-conditioning-decision---november-22-2026).
 
+Pocket processes at most the first 30 seconds of that recording using its SDK
+limit; the full enrollment recording is preserved. Exported Pocket states load
+unchanged. This avoids the early-termination failure reproduced with the
+58.84-second `testuser` reference; speech quality and likeness still need listening.
+
 ## Delivery styles
 
 Named styles (`lively-vlog`, `relaxed-travel`, `asmr-travel`) require a

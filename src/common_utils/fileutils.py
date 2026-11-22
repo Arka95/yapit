@@ -5,11 +5,12 @@ import json
 import re
 import shutil
 import uuid
+from itertools import count
 from pathlib import Path
 
 from pydantic import BaseModel
 
-from yapit.constants import DATA_FILENAME_TEMPLATE, DEFAULT_PROFILE
+from yapit.constants import AUDIO_SAMPLE_NAME_TEMPLATE, DATA_FILENAME_TEMPLATE, DEFAULT_PROFILE
 
 
 def file_sha256(path: Path) -> str:
@@ -86,3 +87,21 @@ def copy_file_exclusive(source: Path, destination: Path) -> None:
             output.close()
             destination.unlink(missing_ok=True)
             raise
+
+
+def publish_audio_sample(source: Path, folder: Path, profile: str, digest: str) -> Path:
+    """Publish a numbered sample without overwriting an earlier recording.
+
+    Identical published audio is reused; occupied numbers retain their contents.
+    """
+    folder.mkdir(parents=True, exist_ok=True)
+    for number in count(1):
+        destination = folder / data_filename(
+            AUDIO_SAMPLE_NAME_TEMPLATE.format(number=number), profile, ".wav"
+        )
+        try:
+            copy_file_exclusive(source, destination)
+        except FileExistsError:
+            if file_sha256(destination) != digest:
+                continue
+        return destination

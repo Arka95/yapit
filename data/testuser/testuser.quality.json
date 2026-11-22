@@ -2,12 +2,12 @@
   "samples": [
     {
       "audio": "testuser.audio_sample_1.wav",
-      "sha256": "8440e8d12c82c3a553488531d9bbce1e6cbb47ab7f456cf5645097c8dd71fd69",
-      "seconds": 11.24,
+      "sha256": "c6a1fd9ccfba4930b99534264a2b6fa7e6651dd1b94e67148b251871490d78d7",
+      "seconds": 58.84,
       "peak": 0.5,
       "clipped_fraction": 0.0,
-      "quiet_fraction": 0.2900355871886121,
-      "rms_dbfs": -28.205250613711833,
+      "quiet_fraction": 0.3235893949694086,
+      "rms_dbfs": -28.362492288682507,
       "reasons": []
     }
   ],

@@ -8,7 +8,13 @@ import os
 import tempfile
 from pathlib import Path
 
-from yapit.common_utils.fileutils import copy_file_exclusive, data_filename, file_sha256, save_json
+from yapit.common_utils.fileutils import (
+    copy_file_exclusive,
+    data_filename,
+    file_sha256,
+    publish_audio_sample,
+    save_json,
+)
 from yapit.common_utils.mediautils import decode_audio, write_wav
 from yapit.enrollment.profiles import audio_quality, load_voice, save_journal
 from yapit.models import Sample, SampleManifest
@@ -149,16 +155,16 @@ def save_training_samples(store: DataStore, name: str, samples: list[Sample]) ->
             seconds += quality["seconds"]
             filename = data_filename(f"training.{digest[:16]}", folder.name, ".wav")
             write_wav(staged / filename, data)
-            prepared.append(Sample(audio=str(audio_folder / filename), text=sample.text))
+            prepared.append(Sample(audio=str(staged / filename), text=sample.text))
         if seconds < MIN_TRAINING_SECONDS:
             raise ValueError(f"Training needs at least {MIN_TRAINING_SECONDS} seconds of clips.")
+        published = []
         for sample in prepared:
-            source, destination = staged / Path(sample.audio).name, Path(sample.audio)
-            if destination.exists():
-                if file_sha256(source) != file_sha256(destination):
-                    raise ValueError("Training audio collision; existing recordings preserved.")
-            else:
-                copy_file_exclusive(source, destination)
+            source = Path(sample.audio)
+            destination = publish_audio_sample(
+                source, audio_folder, folder.name, file_sha256(source)
+            )
+            published.append(Sample(audio=str(destination), text=sample.text))
         save_json(
             manifest,
             SampleManifest(
@@ -167,8 +173,8 @@ def save_training_samples(store: DataStore, name: str, samples: list[Sample]) ->
                         audio=str(Path(sample.audio).relative_to(manifest.parent)),
                         text=sample.text,
                     )
-                    for sample in prepared
+                    for sample in published
                 ]
             ),
         )
-    return prepared
+    return published

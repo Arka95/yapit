@@ -57,6 +57,9 @@ def test_training_dataset_portable_paths_and_minimum_do_not_replace_profile(trai
     session.finish()
     saved = json.loads(path.read_text())
     assert all(not Path(row["audio"]).is_absolute() for row in saved["samples"])
+    assert {Path(row["audio"]).name for row in saved["samples"]} == {
+        f"test-voice.audio_sample_{number}.wav" for number in range(1, 17)
+    }
     if os.sep == "\\":
         path.write_text(path.read_text().replace("\\\\", "/"), encoding="utf-8")
     assert all(

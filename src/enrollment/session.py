@@ -251,10 +251,6 @@ class EnrollmentSession(RecordingSession):
             )
         ]
 
-    @property
-    def sample_name(self) -> str:
-        return "reference"
-
     @timed
     def finish(self) -> Voice:
         if not self.ready:

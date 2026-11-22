@@ -9,7 +9,7 @@
 |---|---|
 | `profiles.py` | Signal gates, single-reference publication and inventories |
 | `styles.py` | Expressive references and voice/style selection |
-| `session.py`, `sample_scripts.py`, `reference.json` | Shared recording session, single-paragraph enrollment and exact transcript |
+| `session.py`, `sample_scripts.py`, `sampleScripts\sample_1.json` | Shared recording session, single-paragraph enrollment and exact transcript |
 | `artifacts.py` | Profile-owned scratch paths and successful-session cleanup |
 | `recorder.py`, `desktop.py` | FFmpeg DirectShow lifecycle, Tk UI and playback |
 | `launcher.py` | Independent app launch with configured roots and isolated streams |
@@ -41,8 +41,9 @@ to `training.sample_scripts`; training collection uses the shared recording
 session with independent scratch and publication.
 
 Prepared/raw takes use unique IDs and remain in scratch until publication.
-Accepted audio/metadata live only in `data\<profile>`; drafts, logs and curation
+Accepted audio/metadata live in `data\<profile>`; drafts, logs and curation
 staging live under the enrollment workspace, which must be outside the data root.
+The final atomic audio swap uses a transient staging directory beside its target.
 Failed sessions retain scratch state. Successful enrollment removes only the
 owning profile's scratch files, not sources or other profiles.
 
@@ -50,8 +51,12 @@ Imports require exactly one reference and validate it before copying files; JSON
 documents publish atomically. This is not a cross-file transaction or
 multi-process profile editor. Reopening retains exact saved transcripts and
 does not relabel an imported clip as a different static passage.
-Published reference filenames include a content digest, so a replacement cannot
-overwrite an active recording. Re-enrollment preserves unrelated metadata/styles
+The fixed paragraph is `sampleScripts\sample_1.json`, with ID `sample_1`;
+its recording is always `<profile>.audio_sample_1.wav`. A confirmed replacement
+atomically replaces that recording rather than incrementing its passage number.
+Publication exceptions restore the prior recording and inventories; this is
+not a multi-file atomic commit against process termination. SHA256 values remain
+in the inventories. Re-enrollment preserves unrelated metadata/styles
 and training assets, but clears selected checkpoint/speaker and exported Pocket
 state so the new reference is actually used. Checkpoint files remain selectable.
 

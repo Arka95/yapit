@@ -1,25 +1,66 @@
 from __future__ import annotations
 
 import re
+import shutil
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
 
 from yapit.common_utils.fileutils import (
-    copy_file_exclusive,
     data_filename,
     file_sha256,
     save_json,
 )
 from yapit.common_utils.mediautils import SAMPLE_RATE, decode_audio, write_wav
 from yapit.common_utils.metrics import timed
+from yapit.constants import AUDIO_SAMPLE_NAME_TEMPLATE
 from yapit.enrollment.artifacts import cleanup_session, session_directory
 from yapit.enrollment.sample_scripts import ENROLLMENT_MAX_SECONDS, ENROLLMENT_MIN_SECONDS
 from yapit.models import Sample, SampleManifest, Voice
 from yapit.storage import DataStore
 
 MIN_SAMPLES = 1
+
+
+@contextmanager
+def _reference_publication(
+    prepared: Path, destination: Path, profile: Path, name: str
+) -> Iterator[None]:
+    """Replace the fixed reference and restore its inventories if publication fails.
+
+    Stage the atomic audio swap on the destination filesystem.
+    """
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    paths = [
+        destination,
+        *(
+            profile / data_filename(kind, name, ".json")
+            for kind in ("profile", "quality", "samples", "journal")
+        ),
+    ]
+    with tempfile.TemporaryDirectory(prefix=".publish-", dir=destination.parent) as temporary:
+        staging = Path(temporary)
+        backups = {}
+        for number, path in enumerate(paths):
+            backup = staging / str(number) if path.exists() else None
+            if backup is not None:
+                shutil.copyfile(path, backup)
+            backups[path] = backup
+        incoming = staging / "incoming.wav"
+        shutil.copyfile(prepared, incoming)
+        try:
+            incoming.replace(destination)
+            yield
+        except BaseException:
+            for path, backup in backups.items():
+                if backup is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    backup.replace(path)
+            raise
 
 
 def audio_quality(data: np.ndarray, *, min_seconds: float = 3, max_seconds: float = 20) -> dict:
@@ -138,7 +179,8 @@ def enroll(
         prepared = staged / "reference.wav"
         write_wav(prepared, data)
         digest = file_sha256(prepared)
-        filename = data_filename(f"reference.{digest[:16]}", name, ".wav")
+        filename = data_filename(AUDIO_SAMPLE_NAME_TEMPLATE.format(number=1), name, ".wav")
+        destination = audio_target / filename
         reference = Sample(audio=filename, text=sample.text)
         words = len(re.findall(r"\b[\w'-]+\b", sample.text))
         voice = (
@@ -165,27 +207,21 @@ def enroll(
             from yapit.training.dataset import preserve_legacy_samples
 
             preserve_legacy_samples(store, name, existing.samples)
-        audio_target.mkdir(parents=True, exist_ok=True)
-        destination = audio_target / filename
-        if destination.exists():
-            if file_sha256(destination) != digest:
-                raise ValueError("Reference audio collision; existing recordings are preserved.")
-        else:
-            copy_file_exclusive(prepared, destination)
-        save_json(target / data_filename("profile", name, ".json"), voice)
-        save_json(
-            target / data_filename("quality", name, ".json"),
-            {
-                "samples": [{"audio": filename, "sha256": digest, **quality}],
-                "notice": "Signal checks only.",
-            },
-        )
-        exported = [Sample(audio=str(destination), text=sample.text)]
-        save_json(
-            target / data_filename("samples", name, ".json"),
-            {"samples": [sample.model_dump() for sample in exported]},
-        )
-        save_journal(target, name, exported)
+        with _reference_publication(prepared, destination, target, name):
+            save_json(target / data_filename("profile", name, ".json"), voice)
+            save_json(
+                target / data_filename("quality", name, ".json"),
+                {
+                    "samples": [{"audio": filename, "sha256": digest, **quality}],
+                    "notice": "Signal checks only.",
+                },
+            )
+            exported = [Sample(audio=str(destination), text=sample.text)]
+            save_json(
+                target / data_filename("samples", name, ".json"),
+                {"samples": [sample.model_dump() for sample in exported]},
+            )
+            save_journal(target, name, exported)
     cleanup_session(store, name)
     return voice
 

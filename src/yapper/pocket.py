@@ -29,6 +29,7 @@ class PocketSpeech:
             "model": self.source,
             "assets": asset_stamps([config, self.reference]),
             "version": package_version("pocket-tts"),
+            "truncate_audio_prompt": True,
         }
 
     def describe(self) -> dict:
@@ -39,6 +40,9 @@ class PocketSpeech:
             "device": "cpu",
             "dtype": "sdk_default",
             "inference_backend": "pocket",
+            "reference_max_seconds": (
+                None if self.reference.suffix.lower() == ".safetensors" else 30
+            ),
         }
 
     @timed
@@ -63,7 +67,7 @@ class PocketSpeech:
             else {"language": self.source}
         )
         model = TTSModel.load_model(**options)
-        state = model.get_state_for_audio_prompt(str(self.reference))
+        state = model.get_state_for_audio_prompt(str(self.reference), truncate=True)
         self.model, self.voice_state = model, state
 
     def close(self) -> None:

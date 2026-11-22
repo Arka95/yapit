@@ -1537,3 +1537,90 @@ short reference retained alongside its training copy. Original profile,
 samples, quality and journal metadata were archived. The selected epoch-2
 checkpoint was preserved. A new one-minute enrollment still needs the owner's
 recording; existing short audio is not relabeled as the new paragraph.
+
+## Pocket long-reference correction - November 22, 2026
+
+The owner subsequently recorded the enrollment paragraph: one 58.84-second,
+24 kHz mono PCM WAV. The previous section describes the earlier migration state;
+the profile now selects this new recording, with checkpoint and exported state
+cleared. Signal validation did not establish intelligibility or speaker likeness.
+
+The generated `testuser.your_commentary.5.mp3` was reported as noise. Its raw
+24 kHz WAV was already only 14.32 seconds for the complete 148-word paragraph:
+12 sentence generations lasted 0.72-1.44 seconds each, followed by application
+pauses. Thus MP3 encoding was not the origin of the premature termination.
+Provenance confirms Pocket `english_2026-10`, CPU, the full new reference, and no
+selected checkpoint. The application previously accepted this finite, nonempty
+output as complete.
+
+The owner explicitly authorized two short, offline CPU generations, without
+downloads or training. Pocket SDK 4.0.1 loaded the existing cached
+`english_2026-10` model once. Both generated the first enrollment sentence with
+PyTorch seed 42 and the same recording:
+
+| Conditioning | Output duration | Peak / RMS |
+|---|---|---|
+| Full 58.84-second reference, `truncate=False` | 1.12s | 0.1097 / 0.0217 |
+| SDK first-30-second reference, `truncate=True` | 5.60s | 0.2245 / 0.0332 |
+
+This reproduces a duration-sensitive conditioning failure and shows that the
+SDK limit avoids the reproduced premature termination for this sentence. It
+does not establish the underlying model defect, prove that all long prompts
+fail, or establish intelligibility/likeness by listening. No full paragraph
+regeneration, training, model replacement or broader benchmark was performed.
+
+YapIt's Pocket adapter now explicitly requests `truncate=True`, including it in
+cache identity and reporting the audio reference limit in provenance. The
+SDK applies the first-30-second limit only when encoding audio; exported
+`.safetensors` states load unchanged. The complete enrollment recording and
+exact transcript remain stored; Qwen behavior is unchanged. This supersedes
+the earlier statement that the full recording reaches every model unchanged.
+The cap is an implemented backend constraint, not a claim that 30 seconds is
+the optimal voice-onboarding length.
+
+Official implementation:
+<https://github.com/kyutai-labs/pocket-tts/blob/main/pocket_tts/models/tts_model.py>.
+Its API documents `truncate=True` as a first-30-second memory safeguard, with
+`False` as the Python default; it does not promise a likeness improvement.
+Upstream Windows report
+<https://github.com/kyutai-labs/pocket-tts/issues/189> describes custom-WAV noise
+and a user's 24-to-16 kHz workaround. That report was a research lead, not a
+demonstrated cause here; neither diagnostic changed the reference's sample rate.
+
+The content-hash publication filename introduced in the previous change
+violated the existing `<profile>.audio_sample_<number>.wav` convention.
+Publication now reuses identical numbered audio or reserves a free number
+through exclusive copying, preserving older recordings. The new `testuser`
+reference is `audio\testuser.audio_sample_2.wav` because sample 1 is the older
+11.24-second recording. SHA256 is retained in the inventories, not the filename;
+the full recording's digest remains
+`c6a1fd9ccfba4930b99534264a2b6fa7e6651dd1b94e67148b251871490d78d7`.
+The 16-clip training dataset and historical output provenance are unchanged.
+New training publications use the same numbered-sample publisher in their
+separate `training\audio` directory; existing dataset files are not renamed.
+
+## Stable enrollment passage numbering - November 22, 2026
+
+The owner clarified that the recording number must match the static passage,
+rather than count successive takes. This supersedes the enrollment numbering
+policy immediately above. Enrollment now loads `sampleScripts\sample_1.json`
+with ID `sample_1` and publishes `<profile>.audio_sample_1.wav`. Confirmed
+re-recording replaces that same slot. A staged atomic audio swap and inventory
+backups restore the previous state on publication exceptions; this is not a
+multi-file crash-atomic transaction or concurrent profile editor.
+
+The older `testuser` enrollment sample was removed only after verifying its
+SHA256 matched the retained training copy. The new 58.84-second paragraph was
+then renamed from sample 2 to sample 1 without altering its bytes, and all four
+current profile inventories were updated. The separate 16-clip training dataset
+and historical generation provenance remain unchanged.
+
+The owner authorized regenerating the complete original paragraph. Offline CPU
+Pocket `english_2026-10`, with the adapter's first-30-second conditioning limit,
+produced `data\generated_audio\testuser.your_commentary.6.mp3`: 54.24 seconds
+including the scripted pauses. The generation API completed in 29.27 seconds.
+The previous noisy `.5` output was retained. Generation used the new recording
+before its final rename, so historical provenance correctly records sample 2.
+Normal sentence durations replaced the prior immediate termination, but no
+auditory review or calibrated speaker-identity assessment was available through
+the current tool interface; likeness remains unverified.

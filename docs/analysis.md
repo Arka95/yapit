@@ -19,10 +19,10 @@ One listening preference is not a controlled quality comparison.
 
 | Current position | Implementation / acceptance criterion |
 |---|---|
-| Enroll with one fixed, phonetically varied paragraph, approximately one minute. | One 45-90s recording plus its exact transcript becomes the profile's only reference. No silence/duration ranking, merging or reference audition is performed. |
-| Pocket and Qwen Base use one reference; the selected Qwen CustomVoice checkpoint does not use a reference prompt at inference. | Pocket prepares one audio/state prompt; Qwen Base uses matching reference text/audio in ICL mode. Qwen list inputs are separate batch entries. |
+| Enroll with one fixed, phonetically varied paragraph, approximately one minute. | `sampleScripts\sample_1.json` pairs with `<profile>.audio_sample_1.wav`. One 45-90s recording plus its exact transcript becomes the profile's only reference; re-recording replaces that slot. No silence/duration ranking, merging or reference audition is performed. |
+| Pocket and Qwen Base use one reference; the selected Qwen CustomVoice checkpoint does not use a reference prompt at inference. | Pocket uses its SDK's first-30s audio limit; the complete enrollment recording remains stored. Exported states load unchanged. Qwen Base uses matching reference text/audio in ICL mode. Qwen list inputs are separate batch entries. |
 | Keep the 16 short passages in the Training module and tab. | Training targets/manifests are separate from the enrollment reference. Existing datasets/checkpoints are preserved; Train and checkpoint selection require explicit actions. |
-| Predictable onboarding is a product requirement; likeness and speed remain unmeasured. | The owner records once and confirms the transcript. No local inference, reference comparison or training was run for this change. |
+| Predictable onboarding is a product requirement; likeness and speed remain unmeasured. | The owner records once and confirms the transcript. Two authorized, offline Pocket diagnostics reproduced premature termination with the 58.84s reference (1.12s output); the SDK's 30s limit produced 5.60s for the same sentence/seed. This does not establish intelligibility, likeness or a general optimal duration. |
 
 See the [production enrollment decision](learn_and_research.md#production-enrollment-decision---november-22-2026)
 for the superseded proposals, source-backed research and migration details.

@@ -113,10 +113,18 @@ def test_audio_backend_selection_only_inherits_its_own_configured_model(
 
 
 @pytest.mark.parametrize("source", [None, "config.yaml"])
-def test_pocket_reuses_conditioning_and_normalizes_native_audio(voice, monkeypatch, source, caplog):
+@pytest.mark.parametrize("exported_state", [False, True])
+def test_pocket_reuses_conditioning_and_normalizes_native_audio(
+    voice, monkeypatch, source, exported_state, caplog
+):
     caplog.set_level(logging.INFO)
     speaker, directory = voice
     speaker.checkpoint = str(directory.parent / "qwen-checkpoint")
+    reference = directory / "reference.wav"
+    if exported_state:
+        reference = directory / "voice.safetensors"
+        reference.write_bytes(b"exported voice state")
+        speaker.pocket_voice_state = reference.name
     wave = Mock()
     wave.detach.return_value = wave
     wave.cpu.return_value = wave
@@ -140,10 +148,11 @@ def test_pocket_reuses_conditioning_and_normalizes_native_audio(voice, monkeypat
     loader.assert_called_once_with(
         **({"config": source} if source else {"language": "english_2026-10"})
     )
-    model.get_state_for_audio_prompt.assert_called_once_with(str(directory / "reference.wav"))
+    model.get_state_for_audio_prompt.assert_called_once_with(str(reference), truncate=True)
     assert model.generate_audio.call_count == 2
     assert resample.call_args.args[1] == 12000
     assert backend.describe()["voice_mode"] == "reference"
+    assert backend.describe()["reference_max_seconds"] == (None if exported_state else 30)
     assert caplog.text.count("Loading Pocket speech model") == 1
     assert "PocketSpeech.load completed in" in caplog.text
 
